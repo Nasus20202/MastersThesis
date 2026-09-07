@@ -4,7 +4,7 @@ BENCHMARK_DIR := benchmark
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs inference
 
 help:
 	@printf '%s\n' \
@@ -13,7 +13,11 @@ help:
 		'  make format         Format Go, Markdown, YAML, JSON, and other supported files.' \
 		'  make lint           Run Go vet, format checks, Prettier, and Renovate validation.' \
 		'  make check          Run test and lint checks.' \
-		'  make download-models Download the configured model from Hugging Face.'
+		'  make download-models Download the configured model from Hugging Face.' \
+		'  make llama-start     Start the llama.cpp model router.' \
+		'  make llama-stop      Stop the llama.cpp model router.' \
+		'  make llama-logs      Follow llama.cpp model router logs.' \
+		'  make inference       Run one inference through the Go client.'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -32,6 +36,18 @@ check: test lint
 
 download-models:
 	./scripts/download-models.sh
+
+llama-start:
+	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml up --detach
+
+llama-stop:
+	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml down
+
+llama-logs:
+	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml logs --follow llama-server
+
+inference:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/inference
 
 benchmark-go-test:
 	cd $(BENCHMARK_DIR) && $(GO) test ./...
