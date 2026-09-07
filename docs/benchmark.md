@@ -57,14 +57,14 @@ A scenario is suitable for evaluation only when its clean state, injected fault,
 
 The benchmark conditions initially have these operational differences:
 
-| Condition | Additional capability |
-|---|---|
-| Baseline | Bash access and the command-line tools required to interact with the Kubernetes environment |
-| Prompt | Baseline capabilities plus an approved troubleshooting system prompt |
-| Skill | Baseline capabilities plus approved reusable troubleshooting skills |
-| RAG | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
-| Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples |
-| Harness | Baseline capabilities plus approved structured operational tools and controlled external knowledge access |
+| Condition   | Additional capability                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline    | Bash access and the command-line tools required to interact with the Kubernetes environment                                       |
+| Prompt      | Baseline capabilities plus an approved troubleshooting system prompt                                                              |
+| Skill       | Baseline capabilities plus approved reusable troubleshooting skills                                                               |
+| RAG         | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
+| Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples                                      |
+| Harness     | Baseline capabilities plus approved structured operational tools and controlled external knowledge access                         |
 
 The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
 
