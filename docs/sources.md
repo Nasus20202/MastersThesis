@@ -12,7 +12,7 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 - Record the purpose for which each source is used.
 - Keep benchmark and training data traceable to their source material.
 - Preserve source references used to construct or validate incidents.
-- Do not expose hidden ground-truth source references to the model unless the experimental condition explicitly provides them.
+- Ground-truth source references are evaluator and analysis metadata. They must not be provided to the model or used to guide retrieval. A condition may independently retrieve the same source through its approved mechanism using only model-visible information.
 - Add a revision, release or retrieval date when a source is used for final evaluation.
 
 ## Model and inference
@@ -20,7 +20,7 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 | Source | Used for | Status |
 |---|---|---|
 | [Google Gemma 4 model overview](https://ai.google.dev/gemma/docs/core) | Gemma 4 model sizes, capabilities, quantization and local deployment guidance | Initial technical reference |
-| [Gemma 4 E4B instruction-tuned model card](https://huggingface.co/google/gemma-4-E4B-it) | Initial model checkpoint, capabilities and model metadata | Initial model candidate |
+| [Gemma 4 E4B instruction-tuned model card](https://huggingface.co/google/gemma-4-E4B-it) | Primary model checkpoint, capabilities and model metadata | Primary model reference |
 | [Gemma 4 QAT Q4_0 collection](https://huggingface.co/collections/google/gemma-4-qat-q4-0) | Official QAT artifacts, including GGUF candidates for local inference | Candidate runtime artifact source |
 | [Gemma 4 Technical Report](https://arxiv.org/abs/2607.02770) | Research and technical background for Gemma 4 | Background source |
 | [Google DeepMind Gemma repository](https://github.com/google-deepmind/gemma) | Official Gemma implementation and model-related examples | Technical reference |
@@ -31,9 +31,9 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 
 | Source | Used for | Status |
 |---|---|---|
-| [Kubernetes documentation](https://kubernetes.io/docs/home/) | Candidate documentation corpus for Kubernetes knowledge and retrieval | Corpus basis |
-| [Kubernetes concepts](https://kubernetes.io/docs/concepts/) | Kubernetes concepts and resource behaviour | Candidate corpus material |
-| [Kubernetes tasks](https://kubernetes.io/docs/tasks/) | Operational and troubleshooting procedures | Candidate corpus material |
+| [Kubernetes documentation](https://kubernetes.io/docs/home/) | Technical reference for the initial incident environment | Candidate source; corpus selection open |
+| [Kubernetes concepts](https://kubernetes.io/docs/concepts/) | Kubernetes concepts and resource behaviour | Candidate technical reference |
+| [Kubernetes tasks](https://kubernetes.io/docs/tasks/) | Operational and troubleshooting procedures | Candidate technical reference |
 | [kind documentation](https://kind.sigs.k8s.io/docs/) | Local Kubernetes cluster setup and operation | Technical reference |
 
 ## Execution environment

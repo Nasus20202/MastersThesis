@@ -8,7 +8,7 @@ The research motivation and comparison rationale are described in [research-desi
 
 ## Initial benchmark scope
 
-The initial benchmark direction is Kubernetes troubleshooting in reproducible local `kind` clusters.
+The initial benchmark direction is troubleshooting technical incidents in reproducible local `kind` clusters. The execution environment does not determine the final knowledge domain or source corpus.
 
 A benchmark scenario should require the model to inspect and modify a running system. Simple knowledge questions without an observable system state are outside the intended benchmark scope.
 
@@ -53,8 +53,8 @@ The benchmark conditions initially have these operational differences:
 | Baseline | Bash access and the command-line tools required to interact with the Kubernetes environment |
 | Prompt | Baseline capabilities plus an approved troubleshooting system prompt |
 | Skill | Baseline capabilities plus approved reusable troubleshooting skills |
-| RAG | Baseline capabilities plus context retrieved from the approved Kubernetes documentation corpus |
-| Fine-tuning | Baseline capabilities using a model adapted with separate Kubernetes troubleshooting examples |
+| RAG | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
+| Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples |
 | Harness | Baseline capabilities plus approved structured operational tools and controlled external knowledge access |
 
 The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
@@ -72,8 +72,9 @@ The model must not see:
 - the injected fault,
 - the expected root cause,
 - verifier implementation details,
-- hidden ground-truth data,
-- scenario source references unless the condition explicitly provides them through an approved retrieval or external-knowledge mechanism.
+- hidden ground-truth data, including scenario source references.
+
+Scenario source references are evaluator and analysis metadata. They must never be supplied as a hint or used to guide retrieval. RAG or Harness may independently retrieve the same source through an approved mechanism using only model-visible information, but the stored scenario reference itself must not be provided as a query, context or other external-knowledge input.
 
 ## Verification and scoring
 

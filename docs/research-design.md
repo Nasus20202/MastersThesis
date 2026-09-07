@@ -2,7 +2,7 @@
 
 ## Research goal
 
-Compare how different ways of adapting a language model affect its ability to diagnose and repair Kubernetes-related technical incidents in a controlled local environment.
+Compare how different ways of adapting a language model affect its ability to diagnose and repair technical incidents that require product-specific knowledge in a controlled local environment.
 
 The research focuses on practical troubleshooting rather than question answering. The model should use observations from a faulty system, reason about the failure and take actions that restore the expected behaviour.
 
@@ -10,7 +10,7 @@ The research focuses on practical troubleshooting rather than question answering
 
 The current research questions are:
 
-1. To what extent do different adaptation methods improve Kubernetes incident repair compared with the baseline condition?
+1. To what extent do different adaptation methods improve incident repair compared with the baseline condition?
 2. Which adaptation methods produce more complete repairs, rather than only partial recovery?
 3. How consistently does each adaptation method perform across repeated runs?
 4. What time, tool-use and computational-cost trade-offs accompany the effectiveness and stability of each method?
@@ -19,7 +19,7 @@ These questions describe the current research framing. They may be refined befor
 
 ## Initial research scope
 
-The initial domain is Kubernetes troubleshooting in reproducible local environments.
+The initial execution direction is troubleshooting technical incidents in reproducible local `kind` environments. The knowledge domain and source corpus remain open until candidate corpora are qualified.
 
 The scope is intentionally a starting point. Scope changes are recorded in the [decision log](decision-log.md).
 
@@ -30,8 +30,8 @@ The comparison is intended to include the following conditions:
 - **baseline** — model knowledge with the minimal execution capabilities needed to interact with the environment,
 - **prompt** — baseline with a carefully designed troubleshooting system prompt,
 - **skill** — baseline with reusable procedural troubleshooting knowledge,
-- **RAG** — baseline with retrieved information from an approved Kubernetes documentation corpus,
-- **fine-tuning** — a model adapted using separate Kubernetes troubleshooting examples,
+- **RAG** — baseline with retrieved information from the technical documentation corpus selected through source-corpus qualification,
+- **fine-tuning** — a model adapted using separate technical troubleshooting examples,
 - **harness** — baseline with richer structured operational tools and controlled external knowledge access.
 
 These names describe the research conditions at a high level. Their concrete capabilities and execution rules are defined in [benchmark.md](benchmark.md) and [tech-stack.md](tech-stack.md).

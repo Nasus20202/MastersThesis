@@ -24,21 +24,21 @@ The Vulkan backend is the initial execution target. The selected llama.cpp image
 
 The model-serving interface and material runtime settings must be recorded for reproducibility.
 
-## Initial model candidate
+## Primary model
 
-The initial model candidate is Gemma 4 E4B.
+Gemma 4 E4B is the primary model for the current experiment.
 
-The model is a starting point for the experiment rather than a permanent project requirement. The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it).
+The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it).
 
 An official QAT GGUF candidate for local llama.cpp execution is [google/gemma-4-E4B-it-qat-q4_0-gguf](https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf). This is a provisional runtime candidate, not yet a frozen experiment artifact.
 
 The exact model revision, file hash, quantization and runtime configuration will be selected and recorded later.
 
-## Alternative models
+## Conditional alternatives
 
-If the initial model cannot reliably use the required execution or tool-calling interface, the project may evaluate an alternative model, such as Gemma 4 12B or Qwen 3.5 9B.
+If Gemma 4 E4B cannot reliably use the required execution or tool-calling interface after the model template, llama.cpp support and the Go integration have been checked, the project may evaluate an alternative model, such as Gemma 4 12B or Qwen 3.5 9B, as a separately approved fallback.
 
-A tool-calling failure should first be checked against the model template, llama.cpp support and the Go integration. A model change must be recorded as a research decision and should not be mixed silently with results from another model.
+A fallback does not change Gemma 4 E4B as the primary model. A model change must be recorded as a research decision, and results from another model must not be mixed silently with the primary comparison.
 
 Alternative model artifacts will be recorded if the fallback plan is activated.
 
@@ -64,7 +64,7 @@ The adaptation methods may add the following components:
 
 - prompt condition: an approved system prompt,
 - skill condition: prepared procedural skill content,
-- RAG condition: an embedding and retrieval pipeline over the approved Kubernetes documentation corpus,
+- RAG condition: an embedding and retrieval pipeline over the technical documentation corpus selected through source-corpus qualification,
 - fine-tuning condition: a separately trained model adapter and its training tooling,
 - harness condition: predefined operational tools and controlled external context access.
 
