@@ -36,7 +36,7 @@ The exact model revision, file hash, quantization and runtime configuration will
 
 ## Conditional alternatives
 
-If Gemma 4 E4B cannot reliably use the required execution or tool-calling interface after the model template, llama.cpp support and the Go integration have been checked, the project may evaluate an alternative model, such as Gemma 4 12B or Qwen 3.5 9B, as a separately approved fallback.
+If Gemma 4 E4B cannot reliably use the required execution or tool-calling interface after the model template, llama.cpp support and the Go integration have been checked, the project may evaluate an alternative model, such as Qwen 3.5 4B, Qwen 3.5 9B or Gemma 4 12B, as a separately approved fallback.
 
 A fallback does not change Gemma 4 E4B as the primary model. A model change must be recorded as a research decision, and results from another model must not be mixed silently with the primary comparison.
 
