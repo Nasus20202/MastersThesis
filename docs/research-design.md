@@ -4,17 +4,52 @@
 
 Compare ways of adapting **Gemma 4 E4B** to diagnose and repair technical incidents that require product-specific knowledge in a local environment.
 
-## Conditions
+## Comparison
 
-- baseline — model knowledge and raw shell access,
-- prompt — troubleshooting guidance,
-- skill — concise prepared procedural knowledge,
-- RAG — retrieval from a frozen technical documentation corpus,
-- fine-tuning — LoRA trained on separate source-traceable troubleshooting examples,
-- harness — richer tools and external knowledge access.
+The primary comparison uses one fixed model and the same benchmark wherever possible:
 
-## Measures
+- **baseline** — model knowledge and raw shell access,
+- **prompt** — baseline with troubleshooting guidance,
+- **skill** — baseline with concise prepared procedural knowledge,
+- **RAG** — retrieval from a frozen technical documentation corpus,
+- **fine-tuning** — LoRA trained on separate source-traceable troubleshooting examples,
+- **harness** — baseline extended with richer custom tools and dynamic knowledge access such as Context7.
 
-Primary outcome: whether the incident is repaired. Secondary measures include execution cost, stability and tool use.
+Each method must be integrated as a benchmark condition before it is evaluated. Conditions should share the same model, environment, scoring and execution limits unless the method being studied requires a documented difference.
 
-The model, benchmark, source corpus and final experiment settings are frozen before final runs.
+## Environment
+
+- Gemma 4 E4B is served by **llama.cpp in Docker** with Vulkan.
+- The benchmark runner and experiment orchestration are implemented in **Go**.
+- Technical incidents run in a reproducible **kind** environment.
+- Baseline model commands run through raw Bash in an isolated disposable Docker sandbox without host access.
+- Harness may add approved structured operational tools and controlled external knowledge tools while keeping the same model and benchmark.
+- Python is limited to fine-tuning work where the training ecosystem requires it.
+
+Model artifacts, container versions and material runtime settings are recorded for reproducibility.
+
+## Evaluation
+
+Scenario scoring is deterministic and criterion-based. Partial repairs receive partial credit; complete task success is tracked separately.
+
+Each final `scenario × condition` combination is executed multiple times. Repeated runs are used to measure both effectiveness and stability.
+
+Primary and supporting measures include:
+
+- partial score and full task success,
+- variation across repeated runs,
+- execution time,
+- token and tool use where available,
+- computational cost, with fine-tuning cost reported separately from inference cost.
+
+Raw experimental results are preserved. Negative and inconclusive results are valid outcomes.
+
+## Development and final evaluation
+
+Development scenarios may be used to improve prompts, skills, retrieval, training choices and harness tools. The final benchmark and experiment protocol are frozen before final runs and are not changed in response to final results.
+
+## Sources
+
+Research and technical decisions should record the sources they rely on. Prefer stable documentation versions, releases, revisions or paper identifiers and preserve enough location information to cite the source later.
+
+Benchmark and training data must remain traceable to source material. Final benchmark incidents must not be included in fine-tuning data.
