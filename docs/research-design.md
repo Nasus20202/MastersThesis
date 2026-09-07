@@ -19,7 +19,7 @@ These questions describe the current research framing. They may be refined befor
 
 ## Initial research scope
 
-The initial execution direction is troubleshooting technical incidents in reproducible local `kind` environments. The knowledge domain and source corpus remain open until candidate corpora are qualified.
+The initial execution direction is troubleshooting technical incidents in reproducible local `kind` environments. Official vanilla Kubernetes documentation is the initial candidate source corpus. Its exact Kubernetes minor version and upstream documentation revision remain open until candidate qualification.
 
 The scope is intentionally a starting point. Scope changes are recorded in the [decision log](decision-log.md).
 

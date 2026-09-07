@@ -15,6 +15,16 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 - Ground-truth source references are evaluator and analysis metadata. They must not be provided to the model or used to guide retrieval. A condition may independently retrieve the same source through its approved mechanism using only model-visible information.
 - Add a revision, release or retrieval date when a source is used for final evaluation.
 
+## Corpus sources
+
+This table records the approved initial candidate source corpus. It does not freeze the exact Kubernetes minor version, documentation snapshot or upstream repository revision; those remain open for candidate qualification in #6.
+
+| Corpus source | Used for | Status |
+|---|---|---|
+| [Kubernetes website repository](https://github.com/kubernetes/website) | Upstream source for the full official vanilla Kubernetes documentation corpus used for RAG and fine-tuning | Approved initial candidate; exact minor version and repository revision open |
+
+The final corpus version must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation.
+
 ## Model and inference
 
 | Source | Used for | Status |
@@ -31,9 +41,9 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 
 | Source | Used for | Status |
 |---|---|---|
-| [Kubernetes documentation](https://kubernetes.io/docs/home/) | Technical reference for the initial incident environment | Candidate source; corpus selection open |
-| [Kubernetes concepts](https://kubernetes.io/docs/concepts/) | Kubernetes concepts and resource behaviour | Candidate technical reference |
-| [Kubernetes tasks](https://kubernetes.io/docs/tasks/) | Operational and troubleshooting procedures | Candidate technical reference |
+| [Kubernetes documentation](https://kubernetes.io/docs/home/) | Technical reference for the initial incident environment | Technical reference |
+| [Kubernetes concepts](https://kubernetes.io/docs/concepts/) | Kubernetes concepts and resource behaviour | Technical reference |
+| [Kubernetes tasks](https://kubernetes.io/docs/tasks/) | Operational and troubleshooting procedures | Technical reference |
 | [kind documentation](https://kind.sigs.k8s.io/docs/) | Local Kubernetes cluster setup and operation | Technical reference |
 
 ## Execution environment
@@ -63,4 +73,4 @@ The final protocol must be approved separately and recorded in [decision-log.md]
 
 ## Source status
 
-A source listed here is not automatically part of the final benchmark corpus or training dataset. Corpus membership, benchmark provenance and training-data eligibility must be decided separately.
+The Corpus sources table identifies the current candidate direction. Exact corpus membership, snapshot, benchmark provenance and training-data eligibility must be decided separately during qualification and freezing.
