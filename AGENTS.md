@@ -24,5 +24,4 @@ This is a research project. The human researcher owns the methodology and coordi
 - Preserve raw experimental results; negative and inconclusive results are valid.
 - Document only what helps the research, reproducibility or thesis writing. Do not restate code, repository structure or ticket history.
 - Avoid boilerplate, filler, repeated explanations and generic "best practices" text.
-
-When finished, briefly report what changed, what was verified and anything unresolved.
+- When finished, briefly report what changed, what was verified and anything unresolved.
