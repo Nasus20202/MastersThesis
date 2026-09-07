@@ -1,6 +1,15 @@
 GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
+BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
+COMPOSE := docker compose --env-file $(BENCHMARK_CONFIG) -f $(BENCHMARK_DIR)/docker-compose.yaml
+
+include $(BENCHMARK_CONFIG)
+
+export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_DIR LLAMA_MODEL_NAME
+export LLAMA_CONTEXT_SIZE LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
+export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
+export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 
 .DEFAULT_GOAL := help
 
@@ -38,13 +47,13 @@ download-models:
 	./scripts/download-models.sh
 
 llama-start:
-	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml up --detach
+	$(COMPOSE) up --detach
 
 llama-stop:
-	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml down
+	$(COMPOSE) down
 
 llama-logs:
-	docker compose -f $(BENCHMARK_DIR)/docker-compose.yaml logs --follow llama-server
+	$(COMPOSE) logs --follow llama-server
 
 inference:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/inference

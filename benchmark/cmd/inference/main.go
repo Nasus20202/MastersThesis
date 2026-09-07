@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	defaultHost      = "localhost"
-	defaultPort      = "8080"
-	defaultModel     = "gemma-4-e4b"
 	defaultPrompt    = "Reply with exactly: inference successful"
 	defaultMaxTokens = 32
 	defaultTimeout   = 5 * time.Minute
@@ -39,9 +36,22 @@ func run(ctx context.Context, output io.Writer) error {
 	requestCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
+	host, err := requiredEnv("LLAMA_CLIENT_HOST")
+	if err != nil {
+		return err
+	}
+	port, err := requiredEnv("LLAMA_PORT")
+	if err != nil {
+		return err
+	}
+	model, err := requiredEnv("LLAMA_MODEL_NAME")
+	if err != nil {
+		return err
+	}
+
 	client, err := llama.NewClient(llama.Config{
-		BaseURL: "http://" + envOrDefault("LLAMA_CLIENT_HOST", defaultHost) + ":" + envOrDefault("LLAMA_PORT", defaultPort),
-		Model:   envOrDefault("LLAMA_MODEL_NAME", defaultModel),
+		BaseURL: "http://" + host + ":" + port,
+		Model:   model,
 	})
 	if err != nil {
 		return err
@@ -101,6 +111,14 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func requiredEnv(name string) (string, error) {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return "", fmt.Errorf("%s is required", name)
+	}
+	return value, nil
 }
 
 func envIntOrDefault(name string, fallback int) (int, error) {

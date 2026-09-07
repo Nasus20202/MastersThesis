@@ -4,30 +4,31 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-cd "$repository_root"
+cd "$repository_root/benchmark"
 
 hf_command=${HF:-hf}
-model_repository=${LLAMA_MODEL_REPOSITORY:-google/gemma-4-E4B-it-qat-q4_0-gguf}
-model_revision=${LLAMA_MODEL_REVISION:-main}
-model_file=${LLAMA_MODEL_FILE:-gemma-4-E4B_q4_0-it.gguf}
-model_dir=${LLAMA_MODEL_DIR:-benchmark/models}
+
+: "${LLAMA_MODEL_REPOSITORY:?LLAMA_MODEL_REPOSITORY is required}"
+: "${LLAMA_MODEL_REVISION:?LLAMA_MODEL_REVISION is required}"
+: "${LLAMA_MODEL_FILE:?LLAMA_MODEL_FILE is required}"
+: "${LLAMA_MODEL_DIR:?LLAMA_MODEL_DIR is required}"
 
 if ! command -v "$hf_command" >/dev/null 2>&1; then
   printf '[download-models] error: %s was not found in PATH\n' "$hf_command" >&2
   exit 1
 fi
 
-mkdir -p "$model_dir"
+mkdir -p "$LLAMA_MODEL_DIR"
 
-printf '[download-models] repository: %s\n' "$model_repository"
-printf '[download-models] revision: %s\n' "$model_revision"
-printf '[download-models] file: %s\n' "$model_file"
-printf '[download-models] destination: %s\n' "$model_dir"
+printf '[download-models] repository: %s\n' "$LLAMA_MODEL_REPOSITORY"
+printf '[download-models] revision: %s\n' "$LLAMA_MODEL_REVISION"
+printf '[download-models] file: %s\n' "$LLAMA_MODEL_FILE"
+printf '[download-models] destination: benchmark/%s\n' "$LLAMA_MODEL_DIR"
 
 "$hf_command" download \
-  "$model_repository" \
-  "$model_file" \
-  --revision "$model_revision" \
-  --local-dir "$model_dir"
+  "$LLAMA_MODEL_REPOSITORY" \
+  "$LLAMA_MODEL_FILE" \
+  --revision "$LLAMA_MODEL_REVISION" \
+  --local-dir "$LLAMA_MODEL_DIR"
 
 printf '[download-models] download complete\n'

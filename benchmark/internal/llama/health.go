@@ -6,9 +6,9 @@ import (
 	"net/http"
 )
 
-// Ready checks whether llama-server has finished loading its model. A loading
-// server returns (false, nil); transport failures and unexpected statuses are
-// returned as errors.
+// Ready checks whether the llama-server router accepts requests. A router that
+// is still starting returns (false, nil); transport failures and unexpected
+// statuses are returned as errors.
 func (c *Client) Ready(ctx context.Context) (bool, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(healthPath), nil)
 	if err != nil {

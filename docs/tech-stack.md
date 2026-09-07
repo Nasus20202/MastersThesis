@@ -20,7 +20,7 @@ The initial implementation should remain a sensible CLI tool with a small and un
 
 The model will be served locally through `llama.cpp` in Docker.
 
-The Vulkan backend is the initial execution target. The selected llama.cpp image, revision and runtime parameters will be recorded before evaluation.
+The Vulkan backend is the initial execution target. The current reproducible implementation uses `ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524` at digest `sha256:1f834a5e0248d83c4cc459591a53250499592742f3c33f8830054e9ccb1c4c5b`. Its runtime parameters are maintained in `benchmark/config.env`; they remain provisional for final evaluation.
 
 The model-serving interface and material runtime settings must be recorded for reproducibility.
 
@@ -30,9 +30,9 @@ Gemma 4 E4B is the primary model for the current experiment.
 
 The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it).
 
-An official QAT GGUF candidate for local llama.cpp execution is [google/gemma-4-E4B-it-qat-q4_0-gguf](https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf). This is a provisional runtime candidate, not yet a frozen experiment artifact.
+The current reproducible implementation uses `gemma-4-E4B_q4_0-it.gguf` from [google/gemma-4-E4B-it-qat-q4_0-gguf](https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf) at repository revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`. The downloaded file has SHA-256 `676c35070db6dbe52f93e9c864ee0fba4eddea94b9c875d9cb10daff453fbaee`. This artifact remains provisional for final evaluation and may be superseded through a recorded decision.
 
-The exact model revision, file hash, quantization and runtime configuration will be selected and recorded later.
+The selected artifact and runtime configuration are maintained in `benchmark/config.env`.
 
 ## Conditional alternatives
 

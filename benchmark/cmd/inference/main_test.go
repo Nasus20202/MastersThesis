@@ -75,3 +75,19 @@ func TestEnvIntOrDefault(t *testing.T) {
 		t.Fatal("invalid environment integer succeeded")
 	}
 }
+
+func TestRequiredEnv(t *testing.T) {
+	t.Setenv("TEST_REQUIRED", " configured ")
+	value, err := requiredEnv("TEST_REQUIRED")
+	if err != nil {
+		t.Fatalf("read required environment variable: %v", err)
+	}
+	if value != "configured" {
+		t.Fatalf("value = %q, want configured", value)
+	}
+
+	t.Setenv("TEST_REQUIRED", "")
+	if _, err := requiredEnv("TEST_REQUIRED"); err == nil {
+		t.Fatal("missing required environment variable succeeded")
+	}
+}
