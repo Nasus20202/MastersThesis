@@ -2,7 +2,18 @@ GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
 
-.PHONY: test format lint check download-models prettier prettier-check renovate-check benchmark-go-test benchmark-go-vet benchmark-go-format benchmark-go-format-check
+.DEFAULT_GOAL := help
+
+.PHONY: help test format lint check download-models
+
+help:
+	@printf '%s\n' \
+		'Available commands:' \
+		'  make test           Run the benchmark Go tests.' \
+		'  make format         Format Go, Markdown, YAML, JSON, and other supported files.' \
+		'  make lint           Run Go vet, format checks, Prettier, and Renovate validation.' \
+		'  make check          Run test and lint checks.' \
+		'  make download-models Download the configured model from Hugging Face.'
 
 test:
 	$(MAKE) benchmark-go-test
