@@ -2,6 +2,17 @@
 
 This is a research project. The human researcher owns the methodology and coordinates the work.
 
+## Workflow
+
+1. Start from a ticket and move it to **In Progress**.
+2. Analyze the task and discuss research or design decisions with the human before implementation.
+3. Implement only the agreed scope.
+4. Move to **In Review** and review the code and results.
+5. If changes are requested, return to **In Progress** and address them.
+6. After code approval, update only documentation explicitly agreed with the human.
+7. Review and approve the documentation. Do not add documentation just to satisfy the workflow.
+8. Merge only after code and required documentation are approved.
+
 - Work only on the requested task.
 - Keep changes small and easy to review.
 - Prefer the smallest clear solution; avoid speculative abstractions, structure and documentation.
