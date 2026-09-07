@@ -1,55 +1,64 @@
 # Research design
 
-## Goal
+## Research goal
 
-Compare ways of adapting **Gemma 4 E4B** to diagnose and repair technical incidents that require product-specific knowledge in a local environment.
+Compare how different ways of adapting a language model affect its ability to diagnose and repair technical incidents that require product-specific knowledge in a controlled local environment.
 
-## Comparison
+The research focuses on practical troubleshooting rather than question answering. The model should use observations from a faulty system, reason about the failure and take actions that restore the expected behaviour.
 
-The primary comparison uses one fixed model and the same benchmark wherever possible:
+## Research questions
 
-- **baseline** — model knowledge and raw shell access,
-- **prompt** — baseline with troubleshooting guidance,
-- **skill** — baseline with concise prepared procedural knowledge,
-- **RAG** — retrieval from a frozen technical documentation corpus,
-- **fine-tuning** — LoRA trained on separate source-traceable troubleshooting examples,
-- **harness** — baseline extended with richer custom tools and dynamic knowledge access such as Context7.
+The current research questions are:
 
-Each method must be integrated as a benchmark condition before it is evaluated. Conditions should share the same model, environment, scoring and execution limits unless the method being studied requires a documented difference.
+1. To what extent do different adaptation methods improve incident repair compared with the baseline condition?
+2. Which adaptation methods produce more complete repairs, rather than only partial recovery?
+3. How consistently does each adaptation method perform across repeated runs?
+4. What time, tool-use and computational-cost trade-offs accompany the effectiveness and stability of each method?
 
-## Environment
+These questions describe the current research framing. They may be refined before the final evaluation protocol is frozen.
 
-- Gemma 4 E4B is served by **llama.cpp in Docker** with Vulkan.
-- The benchmark runner and experiment orchestration are implemented in **Go**.
-- Technical incidents run in a reproducible **kind** environment.
-- Baseline model commands run through raw Bash in an isolated disposable Docker sandbox without host access.
-- Harness may add approved structured operational tools and controlled external knowledge tools while keeping the same model and benchmark.
-- Python is limited to fine-tuning work where the training ecosystem requires it.
+## Initial research scope
 
-Model artifacts, container versions and material runtime settings are recorded for reproducibility.
+The initial execution direction is troubleshooting technical incidents in reproducible local `kind` environments. The knowledge domain and source corpus remain open until candidate corpora are qualified.
 
-## Evaluation
+The scope is intentionally a starting point. Scope changes are recorded in the [decision log](decision-log.md).
 
-Scenario scoring is deterministic and criterion-based. Partial repairs receive partial credit; complete task success is tracked separately.
+## Adaptation methods
 
-Each final `scenario × condition` combination is executed multiple times. Repeated runs are used to measure both effectiveness and stability.
+The comparison is intended to include the following conditions:
 
-Primary and supporting measures include:
+- **baseline** — model knowledge with the minimal execution capabilities needed to interact with the environment,
+- **prompt** — baseline with a carefully designed troubleshooting system prompt,
+- **skill** — baseline with reusable procedural troubleshooting knowledge,
+- **RAG** — baseline with retrieved information from the technical documentation corpus selected through source-corpus qualification,
+- **fine-tuning** — a model adapted using separate technical troubleshooting examples,
+- **harness** — baseline with richer structured operational tools and controlled external knowledge access.
 
-- partial score and full task success,
-- variation across repeated runs,
-- execution time,
-- token and tool use where available,
-- computational cost, with fine-tuning cost reported separately from inference cost.
+These names describe the research conditions at a high level. Their concrete capabilities and execution rules are defined in [benchmark.md](benchmark.md) and [tech-stack.md](tech-stack.md).
 
-Raw experimental results are preserved. Negative and inconclusive results are valid outcomes.
+## Research outcomes
+
+The comparison should examine:
+
+- how often incidents are repaired,
+- how completely and consistently they are repaired,
+- how much time and model/tool usage each condition requires,
+- what trade-offs are introduced by each adaptation method.
+
+The benchmark defines the observable scoring and result format. Fine-tuning cost should be considered separately from inference-time cost.
+
+## Comparison principles
+
+The conditions should use the same benchmark and evaluation process wherever possible. The intended experimental difference is the adaptation method, not an unrelated change in the task or scoring.
+
+Any necessary difference in model, runtime, tools or limits must be recorded and considered when interpreting the results.
+
+The study should preserve raw results, including negative and inconclusive outcomes. Conclusions should be based on repeated runs rather than on a single model execution.
 
 ## Development and final evaluation
 
-Development scenarios may be used to improve prompts, skills, retrieval, training choices and harness tools. The final benchmark and experiment protocol are frozen before final runs and are not changed in response to final results.
+Development scenarios may be used to improve prompts, skills, retrieval, training data and harness tools.
 
-## Sources
+The final benchmark, conditions and evaluation protocol should be frozen before final evaluation. Final results must not be used to change the protocol retrospectively.
 
-Research and technical decisions should record the sources they rely on. Prefer stable documentation versions, releases, revisions or paper identifiers and preserve enough location information to cite the source later.
-
-Benchmark and training data must remain traceable to source material. Final benchmark incidents must not be included in fine-tuning data.
+Research and technical decisions are recorded in the [decision log](decision-log.md), with supporting references collected in [sources.md](sources.md).

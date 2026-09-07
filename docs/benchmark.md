@@ -1,50 +1,120 @@
 # Benchmark
 
-The benchmark consists of reproducible technical incidents in a controlled environment. A scenario starts from a known-good state, injects a real fault, lets the model attempt a repair and then verifies the resulting system behaviour.
+## Document scope
+
+This document defines how benchmark incidents are represented, executed and verified.
+
+The research motivation and comparison rationale are described in [research-design.md](research-design.md). Technology choices are described in [tech-stack.md](tech-stack.md).
+
+## Initial benchmark scope
+
+The initial benchmark direction is troubleshooting technical incidents in reproducible local `kind` clusters. The execution environment does not determine the final knowledge domain or source corpus.
+
+A benchmark scenario should require the model to inspect and modify a running system. Simple knowledge questions without an observable system state are outside the intended benchmark scope.
+
+Changes to the benchmark scope are recorded in the [decision log](decision-log.md).
+
+## Scenario definition
+
+Each scenario should define:
+
+- a known-good Kubernetes environment,
+- an application or workload with expected behaviour,
+- a controlled injected fault,
+- a task description visible to the model,
+- observable criteria for the expected repaired state,
+- a reset procedure,
+- source references used during construction and validation.
+
+The source references, injected fault, expected diagnosis and verifier details must not be exposed to the model.
 
 ## Scenario lifecycle
 
-A scenario follows the same high-level lifecycle:
+Every scenario should follow the same lifecycle:
 
-1. prepare a known-good state,
-2. inject the fault,
-3. give the model the task and capabilities of its experimental condition,
-4. let the model inspect and modify the environment,
-5. verify the final state,
-6. preserve the result and reset the environment.
+1. prepare a known-good environment,
+2. verify that the clean state behaves as expected,
+3. inject the fault,
+4. verify that the fault produces an observable failure,
+5. provide the task and condition-specific capabilities to the model,
+6. allow the model to inspect and modify the environment,
+7. verify the resulting system behaviour,
+8. preserve the raw result and supporting evidence,
+9. reset the environment before the next run.
 
-A scenario is accepted only when the clean state passes, the injected fault lowers the score, an approved repair restores the expected state and the lifecycle is repeatable.
+A scenario is suitable for evaluation only when its clean state, injected fault, repair verification and reset procedure are repeatable.
 
-## Scoring
+## Condition capabilities
 
-Scoring is deterministic and criterion-based. Independent observable outcomes contribute to the final score, so a partial repair receives partial credit.
+The benchmark conditions initially have these operational differences:
 
-Verification should prefer system behaviour over one exact command or configuration representation. Full task success is tracked separately from the partial score.
+| Condition | Additional capability |
+|---|---|
+| Baseline | Bash access and the command-line tools required to interact with the Kubernetes environment |
+| Prompt | Baseline capabilities plus an approved troubleshooting system prompt |
+| Skill | Baseline capabilities plus approved reusable troubleshooting skills |
+| RAG | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
+| Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples |
+| Harness | Baseline capabilities plus approved structured operational tools and controlled external knowledge access |
+
+The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
 
 ## Model visibility
 
-The model sees only the task and the capabilities available in the current condition. It must not see the injected fault, expected root cause, verifier logic or ground-truth source references.
+The model may see:
 
-Each adaptation method is implemented as a benchmark condition so that the same scenarios, scoring and result format can be reused across baseline, prompt, skill, RAG, fine-tuning and harness evaluations.
+- the troubleshooting task,
+- the capabilities available in its condition,
+- command output and other observations produced during execution.
 
-## Sources and separation
+The model must not see:
 
-Documentation-dependent scenarios must be traceable to the frozen source corpus.
+- the injected fault,
+- the expected root cause,
+- verifier implementation details,
+- hidden ground-truth data, including scenario source references.
 
-RAG searches the complete approved corpus rather than scenario-specific excerpts. Ground-truth source references are used for validation and analysis only and must not guide retrieval.
+Scenario source references are evaluator and analysis metadata. They must never be supplied as a hint or used to guide retrieval. RAG or Harness may independently retrieve the same source through an approved mechanism using only model-visible information, but the stored scenario reference itself must not be provided as a query, context or other external-knowledge input.
 
-Fine-tuning data must remain separate from benchmark incidents. Final benchmark incidents must not appear in the training data.
+## Verification and scoring
 
-Sources used to construct or validate scenarios should retain enough version, revision and location information to support later citation.
+Verification should be deterministic and based on observable system behaviour.
 
-## Coverage
+Independent criteria may award partial credit for partial repairs. Complete task success must be recorded separately from the partial score.
 
-The benchmark should cover varied technical areas and fault types rather than many variants of the same mistake. It should include general, documentation-dependent, multi-source and version-specific incidents.
+Verification should evaluate whether the expected behaviour has been restored. It should not require one exact command sequence or configuration representation.
 
-Development scenarios are used while building and evaluating the methods. The final benchmark is frozen before the final experiment.
+The current status of scoring decisions is recorded in the [decision log](decision-log.md).
 
-## Repeated evaluation
+## Repeated runs
 
-LLM behaviour is stochastic. Final `scenario × condition` combinations are therefore executed multiple times.
+Each scenario and condition should be executed multiple times because model behaviour is stochastic.
 
-Each run preserves the deterministic criterion results, final score, full-success status, model/tool transcript and material runtime metadata needed to explain and reproduce the result.
+The current repetition decision is recorded in the [decision log](decision-log.md).
+
+Each run should preserve, where available:
+
+- scenario and condition identifiers,
+- model and runtime identifiers,
+- criterion-level verification results,
+- partial score,
+- complete-success status,
+- execution time,
+- token and tool usage,
+- model and tool transcript,
+- relevant runtime metadata,
+- failure and reset information.
+
+Raw results must be preserved, including negative and inconclusive results.
+
+## Scenario acceptance
+
+A scenario should be accepted only when:
+
+- the clean environment passes verification,
+- the injected fault produces an observable failure,
+- an approved repair restores the expected behaviour,
+- scoring is deterministic,
+- the lifecycle can be repeated from a reset state.
+
+Operational benchmark decisions are maintained in the [decision log](decision-log.md).
