@@ -19,7 +19,7 @@ This is a research project. The human researcher owns the methodology and coordi
 - Prefer the smallest clear solution. Do not add speculative abstractions, structure, configuration or documentation.
 - Work only on the requested ticket; avoid unrelated cleanup and future-proofing.
 - Do not change research decisions, frozen data, sources, conditions or metrics without explicit human approval.
-- Never invent sources, citations, ground truth or results. Record sources used, including a stable revision or version when possible.
+- Never invent sources, citations, ground truth or results. Record research and technical sources used, including stable revision/version and location when possible, so they can be cited later.
 - Keep benchmark and training data traceable to source material.
 - Preserve raw experimental results; negative and inconclusive results are valid.
 - Document only what helps the research, reproducibility or thesis writing. Do not restate code, repository structure or ticket history.
