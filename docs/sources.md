@@ -19,51 +19,51 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 
 This table records the approved initial candidate source corpus.
 
-| Corpus source | Used for | Status |
-|---|---|---|
+| Corpus source                                                          | Used for                                                                                                                                                    | Status                     |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | [Kubernetes website repository](https://github.com/kubernetes/website) | Upstream source for the full official vanilla Kubernetes documentation corpus used directly by RAG and as source material for separate fine-tuning examples | Approved initial candidate |
 
 The final corpus version must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation.
 
 ## Model and inference
 
-| Source | Used for | Status |
-|---|---|---|
-| [Google Gemma 4 model overview](https://ai.google.dev/gemma/docs/core) | Gemma 4 model sizes, capabilities, quantization and local deployment guidance | Initial technical reference |
-| [Gemma 4 E4B instruction-tuned model card](https://huggingface.co/google/gemma-4-E4B-it) | Primary model checkpoint, capabilities and model metadata | Primary model reference |
-| [Gemma 4 QAT Q4_0 collection](https://huggingface.co/collections/google/gemma-4-qat-q4-0) | Official QAT artifacts, including GGUF candidates for local inference | Candidate runtime artifact source |
-| [Gemma 4 Technical Report](https://arxiv.org/abs/2607.02770) | Research and technical background for Gemma 4 | Background source |
-| [Google DeepMind Gemma repository](https://github.com/google-deepmind/gemma) | Official Gemma implementation and model-related examples | Technical reference |
-| [llama.cpp repository](https://github.com/ggml-org/llama.cpp) | Local model inference implementation and runtime source | Runtime source |
-| [llama.cpp function-calling documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md) | Tool-calling support and runtime/template considerations | Technical reference |
+| Source                                                                                                                 | Used for                                                                      | Status                            |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------- |
+| [Google Gemma 4 model overview](https://ai.google.dev/gemma/docs/core)                                                 | Gemma 4 model sizes, capabilities, quantization and local deployment guidance | Initial technical reference       |
+| [Gemma 4 E4B instruction-tuned model card](https://huggingface.co/google/gemma-4-E4B-it)                               | Primary model checkpoint, capabilities and model metadata                     | Primary model reference           |
+| [Gemma 4 QAT Q4_0 collection](https://huggingface.co/collections/google/gemma-4-qat-q4-0)                              | Official QAT artifacts, including GGUF candidates for local inference         | Candidate runtime artifact source |
+| [Gemma 4 Technical Report](https://arxiv.org/abs/2607.02770)                                                           | Research and technical background for Gemma 4                                 | Background source                 |
+| [Google DeepMind Gemma repository](https://github.com/google-deepmind/gemma)                                           | Official Gemma implementation and model-related examples                      | Technical reference               |
+| [llama.cpp repository](https://github.com/ggml-org/llama.cpp)                                                          | Local model inference implementation and runtime source                       | Runtime source                    |
+| [llama.cpp function-calling documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md) | Tool-calling support and runtime/template considerations                      | Technical reference               |
 
 ## Kubernetes and cluster environment
 
-| Source | Used for | Status |
-|---|---|---|
+| Source                                                       | Used for                                                 | Status              |
+| ------------------------------------------------------------ | -------------------------------------------------------- | ------------------- |
 | [Kubernetes documentation](https://kubernetes.io/docs/home/) | Technical reference for the initial incident environment | Technical reference |
-| [Kubernetes concepts](https://kubernetes.io/docs/concepts/) | Kubernetes concepts and resource behaviour | Technical reference |
-| [Kubernetes tasks](https://kubernetes.io/docs/tasks/) | Operational and troubleshooting procedures | Technical reference |
-| [kind documentation](https://kind.sigs.k8s.io/docs/) | Local Kubernetes cluster setup and operation | Technical reference |
+| [Kubernetes concepts](https://kubernetes.io/docs/concepts/)  | Kubernetes concepts and resource behaviour               | Technical reference |
+| [Kubernetes tasks](https://kubernetes.io/docs/tasks/)        | Operational and troubleshooting procedures               | Technical reference |
+| [kind documentation](https://kind.sigs.k8s.io/docs/)         | Local Kubernetes cluster setup and operation             | Technical reference |
 
 ## Execution environment
 
-| Source | Used for | Status |
-|---|---|---|
-| [Docker documentation](https://docs.docker.com/) | Container execution and sandboxing concepts | Technical reference |
-| [Docker Engine security documentation](https://docs.docker.com/engine/security/) | Sandbox isolation and security boundaries | Technical reference |
-| [Go documentation](https://go.dev/doc/) | Go language and tooling used by the benchmark runner | Technical reference |
+| Source                                                                           | Used for                                             | Status              |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------- |
+| [Docker documentation](https://docs.docker.com/)                                 | Container execution and sandboxing concepts          | Technical reference |
+| [Docker Engine security documentation](https://docs.docker.com/engine/security/) | Sandbox isolation and security boundaries            | Technical reference |
+| [Go documentation](https://go.dev/doc/)                                          | Go language and tooling used by the benchmark runner | Technical reference |
 
 ## Research-method sources
 
-| Source | Used for | Relation to this project |
-|---|---|---|
-| [AgentBench: Evaluating LLMs as Agents](https://arxiv.org/abs/2308.03688) | Interactive environments, multi-turn agent evaluation and task-specific environments | Directly relevant evaluation analogy; not Kubernetes-specific |
-| [KubeLLM and KubeLLMBench](https://www.cs.utsa.edu/~plama/papers/KubeLLM_CameraReady.pdf) | Related Kubernetes troubleshooting agents, remediation tasks and operational metrics | Closest domain-related work; its multi-agent design is not adopted automatically |
-| [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629) | Reasoning-and-action loops for models interacting with external environments | Conceptual reference for agent interaction, not a scoring protocol |
-| [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) | Parametric and retrieved knowledge, provenance and retrieval-based adaptation | Foundation for the RAG condition; original task differs from this benchmark |
-| [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) | Parameter-efficient model adaptation for the fine-tuning condition | Foundation for a possible training approach, not a complete training protocol |
-| [Towards Reproducible LLM Evaluation: Quantifying Uncertainty in LLM Benchmark Scores](https://arxiv.org/abs/2410.03492) | Stochastic model outputs, repeated runs and uncertainty in benchmark scores | Direct support for repetition and reliability considerations |
+| Source                                                                                                                   | Used for                                                                             | Relation to this project                                                         |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| [AgentBench: Evaluating LLMs as Agents](https://arxiv.org/abs/2308.03688)                                                | Interactive environments, multi-turn agent evaluation and task-specific environments | Directly relevant evaluation analogy; not Kubernetes-specific                    |
+| [KubeLLM and KubeLLMBench](https://www.cs.utsa.edu/~plama/papers/KubeLLM_CameraReady.pdf)                                | Related Kubernetes troubleshooting agents, remediation tasks and operational metrics | Closest domain-related work; its multi-agent design is not adopted automatically |
+| [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)                           | Reasoning-and-action loops for models interacting with external environments         | Conceptual reference for agent interaction, not a scoring protocol               |
+| [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)                     | Parametric and retrieved knowledge, provenance and retrieval-based adaptation        | Foundation for the RAG condition; original task differs from this benchmark      |
+| [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)                                   | Parameter-efficient model adaptation for the fine-tuning condition                   | Foundation for a possible training approach, not a complete training protocol    |
+| [Towards Reproducible LLM Evaluation: Quantifying Uncertainty in LLM Benchmark Scores](https://arxiv.org/abs/2410.03492) | Stochastic model outputs, repeated runs and uncertainty in benchmark scores          | Direct support for repetition and reliability considerations                     |
 
 ## Methodological interpretation
 
