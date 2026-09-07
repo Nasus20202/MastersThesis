@@ -12,16 +12,18 @@ The primary comparison uses one fixed model and the same benchmark wherever poss
 - **prompt** — baseline with troubleshooting guidance,
 - **skill** — baseline with concise prepared procedural knowledge,
 - **RAG** — retrieval from a frozen technical documentation corpus,
-- **fine-tuning** — LoRA trained on separate source-traceable troubleshooting examples.
+- **fine-tuning** — LoRA trained on separate source-traceable troubleshooting examples,
+- **harness** — baseline extended with richer custom tools and dynamic knowledge access such as Context7.
 
-Each method must be integrated as a benchmark condition before it is evaluated.
+Each method must be integrated as a benchmark condition before it is evaluated. Conditions should share the same model, environment, scoring and execution limits unless the method being studied requires a documented difference.
 
 ## Environment
 
 - Gemma 4 E4B is served by **llama.cpp in Docker** with Vulkan.
 - The benchmark runner and experiment orchestration are implemented in **Go**.
 - Technical incidents run in a reproducible **kind** environment.
-- Model commands run through raw Bash in an isolated disposable Docker sandbox without host access.
+- Baseline model commands run through raw Bash in an isolated disposable Docker sandbox without host access.
+- Harness may add approved structured operational tools and controlled external knowledge tools while keeping the same model and benchmark.
 - Python is limited to fine-tuning work where the training ecosystem requires it.
 
 Model artifacts, container versions and material runtime settings are recorded for reproducibility.
@@ -44,7 +46,7 @@ Raw experimental results are preserved. Negative and inconclusive results are va
 
 ## Development and final evaluation
 
-Development scenarios may be used to improve prompts, skills, retrieval and training choices. The final benchmark and experiment protocol are frozen before final runs and are not changed in response to final results.
+Development scenarios may be used to improve prompts, skills, retrieval, training choices and harness tools. The final benchmark and experiment protocol are frozen before final runs and are not changed in response to final results.
 
 ## Sources
 
