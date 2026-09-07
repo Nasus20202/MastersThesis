@@ -21,9 +21,22 @@ This table records the approved initial candidate source corpus. It does not fre
 
 | Corpus source | Used for | Status |
 |---|---|---|
-| [Kubernetes website repository](https://github.com/kubernetes/website) | Upstream source for the full official vanilla Kubernetes documentation corpus used for RAG and fine-tuning | Approved initial candidate; exact minor version and repository revision open |
+| [Kubernetes website repository](https://github.com/kubernetes/website) | Upstream source for the full official vanilla Kubernetes documentation corpus used directly by RAG and as source material for separate fine-tuning examples | Approved initial candidate; exact minor version and repository revision open |
 
 The final corpus version must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation.
+
+## Corpus qualification requirements
+
+Candidate qualification for #6 should verify that the corpus:
+
+- provides product- and version-specific knowledge that adds value beyond Gemma 4 E4B pretraining, especially version changes, configuration semantics and operational procedures;
+- has sufficient breadth across Kubernetes concepts, configuration, workloads, networking, storage, security, observability, troubleshooting and release behavior to support varied incidents;
+- has traceable provenance, including the upstream source, document path, version or revision, acquisition date and reproducible snapshot;
+- has clear licensing and attribution requirements, with the Kubernetes website documentation recorded as CC BY 4.0 and embedded third-party material or code samples reviewed separately;
+- provides stable references that can support later citations at document or section level;
+- supports realistic, observable and resettable incidents that can be exercised in `kind` without proprietary infrastructure;
+- is suitable for RAG retrieval from the complete corpus; and
+- can support separate, human-reviewed, source-traceable troubleshooting examples for fine-tuning without using raw documentation directly or leaking final benchmark incidents.
 
 ## Model and inference
 
