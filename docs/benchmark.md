@@ -14,6 +14,12 @@ A benchmark scenario should require the model to inspect and modify a running sy
 
 Changes to the benchmark scope are recorded in the [decision log](decision-log.md).
 
+## Source corpus status
+
+Official vanilla Kubernetes documentation is the initial candidate source corpus. The exact Kubernetes minor version and documentation revision remain open and are selected during candidate qualification.
+
+Before qualification and evaluation, the final corpus must match the benchmark Kubernetes minor version and be frozen to an exact revision of the upstream Kubernetes documentation repository. This requirement preserves version alignment and reproducibility without selecting a runtime version in this document.
+
 ## Scenario definition
 
 Each scenario should define:

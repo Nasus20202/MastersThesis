@@ -27,9 +27,10 @@ Detailed descriptions belong in the linked project documents. Historical decisio
 | D-008 | 2026-09-07 | If Gemma 4 E4B cannot reliably use the required execution or tool-calling interface after checking the model template, runtime and integration, an alternative model may be evaluated as a separately approved fallback. | Separates model capability failures from runtime or integration failures without changing the primary comparison silently. | Provisional conditional fallback | [tech-stack.md](tech-stack.md) |
 | D-009 | 2026-09-07 | Scenario verification should be deterministic, support partial credit and track complete task success separately. | Makes repairs auditable and captures progress from incomplete repairs. | Approved, evaluation principle | [benchmark.md](benchmark.md) |
 | D-010 | 2026-09-07 | Benchmark conditions must be executed repeatedly because model behaviour is stochastic, while preserving raw results. | Allows effectiveness and stability to be compared instead of relying on one run. | Approved, evaluation principle | [research-design.md](research-design.md) |
-| D-011 | 2026-09-07 | The RAG condition will search the complete approved corpus once the knowledge domain and corpus have been qualified and selected. | Prevents scenario-specific retrieval while leaving corpus selection to the source-corpus work. | Open; pending #3/#6 | [benchmark.md](benchmark.md) |
+| D-011 | 2026-09-07 | The RAG condition will search the complete approved corpus once the knowledge domain and corpus have been qualified and selected. | Prevents scenario-specific retrieval while leaving corpus selection to the source-corpus work. | Open; pending #6 | [benchmark.md](benchmark.md) |
 | D-012 | 2026-09-07 | Fine-tuning data must remain separate from benchmark incidents, and final benchmark incidents must not be included in training data. | Prevents direct benchmark leakage into the adapted model. | Approved, data-separation principle | [benchmark.md](benchmark.md) |
 | D-013 | 2026-09-07 | The research and technical documentation will extend the existing files and add focused files for the benchmark, technology stack, decisions, glossary and sources. | Keeps each document focused while preserving a clear project entrypoint. | Approved, documentation structure | [research-design.md](research-design.md) |
+| D-014 | 2026-09-07 | Official vanilla Kubernetes documentation is the initial candidate source corpus. The exact Kubernetes minor version and documentation revision remain open; the final corpus must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation. | Provides broad, product-specific and versioned operational knowledge with traceable upstream provenance while preserving the later corpus-selection decision. | Approved, initial source-corpus direction | [sources.md](sources.md), [benchmark.md](benchmark.md) |
 
 ## Open decisions
 
@@ -42,7 +43,7 @@ Open decisions are maintained only in this section. Other documents should descr
 - repeated-run count,
 - execution, resource and network limits,
 - final scoring criteria and aggregation,
-- knowledge domain and documentation corpus snapshot,
+- exact benchmark Kubernetes minor version and documentation corpus snapshot/revision,
 - embedding and retrieval configuration,
 - fine-tuning dataset and training configuration,
 - final harness tools,
