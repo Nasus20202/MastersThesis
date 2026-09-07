@@ -22,17 +22,20 @@ Before qualification and evaluation, the final corpus must match the benchmark K
 
 ## Scenario definition
 
-Each scenario should define:
+Each scenario should record the following fields in a small, human-readable form:
 
+- a stable scenario identifier and title,
 - a known-good Kubernetes environment,
 - an application or workload with expected behaviour,
 - a controlled injected fault,
 - a task description visible to the model,
-- observable criteria for the expected repaired state,
+- observable repair criteria for the expected repaired state,
 - a reset procedure,
-- source references used during construction and validation.
+- source references and ground-truth metadata used during construction and validation.
 
-The source references, injected fault, expected diagnosis and verifier details must not be exposed to the model.
+The task description is the model-facing part of the scenario. The injected fault, expected diagnosis, repair criteria, verifier implementation details, reset procedure and source/ground-truth metadata are evaluator data. They must not disclose the fault or answer to the model.
+
+Repair criteria should be observable, binary and distinct. Criteria should not check the same outcome more than once where practical. Each criterion should have an explicit positive weight reflecting its importance to the repaired state; criteria therefore need not contribute equally to the score. A criterion may use bounded deterministic waiting or polling when Kubernetes convergence is asynchronous; its timeout, polling interval and success condition must be fixed and recorded as part of the verifier.
 
 ## Scenario lifecycle
 
@@ -84,11 +87,19 @@ Scenario source references are evaluator and analysis metadata. They must never 
 
 ## Verification and scoring
 
-Verification should be deterministic and based on observable system behaviour.
+Verification should be deterministic and based on observable system behaviour. It should check whether the expected behaviour has been restored, rather than require one exact command sequence or configuration representation.
 
-Independent criteria may award partial credit for partial repairs. Complete task success must be recorded separately from the partial score.
+The clean-state and fault-injection checks validate that the scenario is usable: the clean state must pass before fault injection, and the injected fault must produce the intended observable failure. These checks do not award repair credit.
 
-Verification should evaluate whether the expected behaviour has been restored. It should not require one exact command sequence or configuration representation.
+After the model attempt, each repair criterion is evaluated independently as pass or fail. If repair criterion `i` has positive weight `w_i` and pass value `p_i` (`1` for pass and `0` for fail), the partial score is:
+
+`partial score = sum(w_i * p_i) / sum(w_i)`
+
+The score is therefore normalized to `[0, 1]`. Full task success is recorded separately as a boolean and is true only when every repair criterion passes, regardless of the weights. A scenario must have at least one repair criterion, and its total criterion weight must be positive.
+
+Primary scoring does not use an LLM judge. The verifier may use bounded polling for convergence, but it must use a fixed bound and deterministic pass/fail condition rather than an unbounded wait or subjective interpretation.
+
+Each run should preserve the outcome and raw evidence for every repair criterion, together with the aggregate partial score and full-success result. Verifier internals and hidden scenario metadata remain evaluator-side data and must not be included in the model-visible task, capabilities or execution transcript.
 
 The current status of scoring decisions is recorded in the [decision log](decision-log.md).
 

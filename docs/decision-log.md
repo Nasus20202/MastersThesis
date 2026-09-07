@@ -31,6 +31,7 @@ Detailed descriptions belong in the linked project documents. Historical decisio
 | D-012 | 2026-09-07 | Fine-tuning data must remain separate from benchmark incidents, and final benchmark incidents must not be included in training data. | Prevents direct benchmark leakage into the adapted model. | Approved, data-separation principle | [benchmark.md](benchmark.md) |
 | D-013 | 2026-09-07 | The research and technical documentation will extend the existing files and add focused files for the benchmark, technology stack, decisions, glossary and sources. | Keeps each document focused while preserving a clear project entrypoint. | Approved, documentation structure | [research-design.md](research-design.md) |
 | D-014 | 2026-09-07 | Official vanilla Kubernetes documentation is the initial candidate source corpus. The exact Kubernetes minor version and documentation revision remain open; the final corpus must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation. | Provides broad, product-specific and versioned operational knowledge with traceable upstream provenance while preserving the later corpus-selection decision. | Approved, initial source-corpus direction | [sources.md](sources.md), [benchmark.md](benchmark.md) |
+| D-015 | 2026-09-07 | A scenario records its identity, model-visible task, environment setup, injected fault, expected behaviour, weighted repair criteria, reset procedure and hidden source/ground-truth metadata. Verification uses distinct observable binary criteria, excludes clean/fault checks from repair credit, computes weighted partial score as passed weight divided by total weight, records full success separately only when all criteria pass, uses no LLM judge, permits bounded deterministic polling and preserves criterion outcomes with raw evidence outside the model-visible context. | Reflects criterion importance while preserving complete-success measurement and auditability. | Approved, scoring semantics | [benchmark.md](benchmark.md) |
 
 ## Open decisions
 
@@ -42,7 +43,6 @@ Open decisions are maintained only in this section. Other documents should descr
 - benchmark scenario set and size,
 - repeated-run count,
 - execution, resource and network limits,
-- final scoring criteria and aggregation,
 - exact benchmark Kubernetes minor version and documentation corpus snapshot/revision,
 - embedding and retrieval configuration,
 - fine-tuning dataset and training configuration,
