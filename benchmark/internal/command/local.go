@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
@@ -24,6 +25,11 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 	if len(spec.Env) > 0 {
 		process.Env = mergeEnvironment(os.Environ(), spec.Env)
 	}
+	logger := slog.With("program", spec.Program)
+	logger.DebugContext(ctx, "running command",
+		"args", spec.Args,
+		"dir", spec.Dir,
+	)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -39,12 +45,28 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 		Duration: time.Since(started),
 	}
 	if err == nil {
+		logger.InfoContext(ctx, "command completed",
+			"exit_code", result.ExitCode,
+			"duration", result.Duration,
+		)
 		return result, nil
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return result, fmt.Errorf("run %q: %w", spec.Program, ctxErr)
+		runErr := fmt.Errorf("run %q: %w", spec.Program, ctxErr)
+		logger.ErrorContext(ctx, "command failed",
+			"exit_code", result.ExitCode,
+			"duration", result.Duration,
+			"error", runErr,
+		)
+		return result, runErr
 	}
-	return result, fmt.Errorf("run %q: %w", spec.Program, err)
+	runErr := fmt.Errorf("run %q: %w", spec.Program, err)
+	logger.ErrorContext(ctx, "command failed",
+		"exit_code", result.ExitCode,
+		"duration", result.Duration,
+		"error", runErr,
+	)
+	return result, runErr
 }
 
 func exitCode(err error) int {

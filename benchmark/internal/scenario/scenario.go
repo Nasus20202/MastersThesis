@@ -25,7 +25,7 @@ func (c Command) Spec() command.Spec {
 
 type Step []Command
 
-func (s Step) setDirectory(dir string) {
+func (s Step) setDir(dir string) {
 	for index := range s {
 		s[index].dir = dir
 	}
@@ -40,22 +40,24 @@ func (s Step) Specs() []command.Spec {
 }
 
 type Definition struct {
-	ID          string `yaml:"id" validate:"required,notblank"`
-	Title       string `yaml:"title" validate:"required,notblank"`
-	Task        string `yaml:"task" validate:"required,notblank"`
-	Prepare     Step   `yaml:"prepare" validate:"required,min=1,dive"`
-	VerifyClean Step   `yaml:"verify_clean" validate:"required,min=1,dive"`
-	InjectFault Step   `yaml:"inject_fault" validate:"required,min=1,dive"`
-	VerifyFault Step   `yaml:"verify_fault" validate:"required,min=1,dive"`
-	Reset       Step   `yaml:"reset" validate:"required,min=1,dive"`
+	ID          string        `yaml:"id" validate:"required,notblank"`
+	Title       string        `yaml:"title" validate:"required,notblank"`
+	Task        string        `yaml:"task" validate:"required,notblank"`
+	Cluster     ClusterConfig `yaml:"cluster,omitempty"`
+	Prepare     Step          `yaml:"prepare" validate:"required,min=1,dive"`
+	VerifyClean Step          `yaml:"verify_clean" validate:"required,min=1,dive"`
+	InjectFault Step          `yaml:"inject_fault" validate:"required,min=1,dive"`
+	VerifyFault Step          `yaml:"verify_fault" validate:"required,min=1,dive"`
+	Reset       Step          `yaml:"reset" validate:"required,min=1,dive"`
 }
 
-func (d *Definition) setDirectory(dir string) {
-	d.Prepare.setDirectory(dir)
-	d.VerifyClean.setDirectory(dir)
-	d.InjectFault.setDirectory(dir)
-	d.VerifyFault.setDirectory(dir)
-	d.Reset.setDirectory(dir)
+func (d *Definition) setDir(dir string) {
+	d.Cluster.setDir(dir)
+	d.Prepare.setDir(dir)
+	d.VerifyClean.setDir(dir)
+	d.InjectFault.setDir(dir)
+	d.VerifyFault.setDir(dir)
+	d.Reset.setDir(dir)
 }
 
 var definitionValidator = mustNewValidator()

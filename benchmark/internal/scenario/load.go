@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,6 +13,8 @@ import (
 )
 
 func Load(path string) (Definition, error) {
+	logger := slog.With("path", path)
+	logger.Debug("loading scenario")
 	absolutePath, err := filepath.Abs(path)
 	if err != nil {
 		return Definition{}, fmt.Errorf("resolve scenario %q: %w", path, err)
@@ -26,7 +29,8 @@ func Load(path string) (Definition, error) {
 	if err != nil {
 		return Definition{}, fmt.Errorf("load scenario %q: %w", path, err)
 	}
-	definition.setDirectory(filepath.Dir(absolutePath))
+	definition.setDir(filepath.Dir(absolutePath))
+	logger.Info("scenario loaded", "id", definition.ID, "resolved_path", absolutePath)
 	return definition, nil
 }
 
