@@ -4,11 +4,28 @@ Paired evaluation of Gemma 4 E4B's Kubernetes troubleshooting knowledge with and
 
 ## Method
 
-Twenty-four frozen probes were run once without documentation and once with audited, fixed excerpts. Prompts and D/E/R/C criteria were unchanged. Both conditions used Gemma 4 E4B, the pinned llama.cpp runtime, reasoning enabled with a 4096-token budget, temperature 0, seed 42, maximum output 6144, no live cluster, tools, or retrieval.
+This paired evaluation measures how a fixed documentation excerpt changes a small model's answers to Kubernetes troubleshooting questions. The same 24 frozen probes (`K01`–`K24`) were run once unaided and once with provided context. Prompts and question-specific D/E/R/C criteria were unchanged between conditions.
 
-The context condition supplied 112 exact excerpts from `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15` across 20 official source files. Each excerpt was checked against its recorded path, blob SHA, revision and line range. Raw API responses and timing/token metadata are preserved in [raw.jsonl](raw.jsonl) and [context-raw.jsonl](context-raw.jsonl); prompts, criteria and excerpts are in [tasks.json](tasks.json) and [context-tasks.json](context-tasks.json).
+The unaided condition received only the common troubleshooting wrapper and probe. The context condition additionally received audited excerpts from the pinned official English Kubernetes 1.37 documentation corpus. Excerpts were selected before the rerun, checked against their recorded source paths, blob SHAs, revisions and line ranges, and not adapted to earlier model responses. No live cluster, tools, retrieval or benchmark incident execution was used.
 
-`D/E/R/C` denotes Diagnosis, Evidence, Repair and Caveats. `1` means the frozen question-specific criterion was met. Scores are not combined into a single benchmark metric.
+Raw API responses with timing and token metadata are preserved in [raw.jsonl](raw.jsonl) and [context-raw.jsonl](context-raw.jsonl). Prompts, criteria and supplied excerpts are in [tasks.json](tasks.json) and [context-tasks.json](context-tasks.json).
+
+| Parameter                         | Value                                                                      |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| Probes                            | 24, `K01`–`K24`                                                            |
+| Responses per probe and condition | 1                                                                          |
+| Model                             | Gemma 4 E4B                                                                |
+| Runtime                           | llama.cpp Vulkan                                                           |
+| Reasoning                         | Enabled; budget 4096 tokens                                                |
+| Temperature                       | 0                                                                          |
+| Seed                              | 42                                                                         |
+| Maximum output                    | 6144 tokens                                                                |
+| Documentation context             | None (unaided) or fixed provided excerpts (context)                        |
+| Live cluster                      | No                                                                         |
+| Tools / retrieval                 | None                                                                       |
+| Scoring                           | Binary, question-specific Diagnosis / Evidence / Repair / Caveats criteria |
+
+`1` means the frozen question-specific criterion was met. Percentages are reported per criterion; scores are not combined into a single benchmark metric.
 
 ## Results
 
