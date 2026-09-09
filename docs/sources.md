@@ -17,13 +17,13 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 
 ## Corpus sources
 
-This table records the approved initial candidate source corpus.
+This table records the frozen common experiment corpus.
 
-| Corpus source                                                          | Used for                                                                                                                                                    | Status                     |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| [Kubernetes website repository](https://github.com/kubernetes/website) | Upstream source for the full official vanilla Kubernetes documentation corpus used directly by RAG and as source material for separate fine-tuning examples | Approved initial candidate |
+| Corpus source                                                                                                                                        | Used for                                                                                                                                                    | Status                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| [Kubernetes website repository at the 1.37 evaluation snapshot](https://github.com/kubernetes/website/tree/ea639c1d22a60365d07b78692b1b1a2eb866bd15) | Upstream source for the full official English Kubernetes documentation corpus used directly by RAG and as source material for separate fine-tuning examples | Frozen common experiment corpus |
 
-The final corpus version must match the benchmark Kubernetes minor version and be frozen to an exact upstream repository revision before qualification and evaluation.
+The common experiment corpus is the official English Kubernetes 1.37 documentation at `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15`. Source excerpts and task references preserve exact file revisions, blob SHAs and line ranges.
 
 ## Model and inference
 
@@ -73,4 +73,4 @@ The final protocol must be approved separately and recorded in [decision-log.md]
 
 ## Source status
 
-The Corpus sources table identifies the current candidate direction. Exact corpus membership, snapshot, benchmark provenance and training-data eligibility must be decided separately during qualification and freezing.
+The corpus source, language, Kubernetes minor version and upstream revision are frozen for the common experiment conditions. Benchmark provenance and training-data eligibility remain governed by the relevant experiment decisions.

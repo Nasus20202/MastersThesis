@@ -22,6 +22,8 @@ The model will be served locally through `llama.cpp` in Docker.
 
 The Vulkan backend is the initial execution target. The current reproducible implementation uses `ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524` at digest `sha256:1f834a5e0248d83c4cc459591a53250499592742f3c33f8830054e9ccb1c4c5b`. Its runtime parameters are maintained in `benchmark/config.env`; they remain provisional for final evaluation.
 
+The current execution host has an AMD Ryzen 5 3600 CPU (6 cores, 12 threads), 32 GiB RAM and an AMD Radeon RX 5700 GPU with 8 GiB VRAM.
+
 The model-serving interface and material runtime settings must be recorded for reproducibility.
 
 ## Primary model
@@ -64,7 +66,7 @@ The adaptation methods may add the following components:
 
 - prompt condition: an approved system prompt,
 - skill condition: prepared procedural skill content,
-- RAG condition: an embedding and retrieval pipeline over the technical documentation corpus selected through source-corpus qualification,
+- RAG condition: an embedding and retrieval pipeline over the frozen common experiment corpus recorded in [sources.md](sources.md),
 - fine-tuning condition: a separately trained model adapter and its training tooling,
 - harness condition: predefined operational tools and controlled external context access.
 

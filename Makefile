@@ -18,10 +18,10 @@ export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 help:
 	@printf '%s\n' \
 		'Available commands:' \
-		'  make test           Run the benchmark Go tests.' \
-		'  make format         Format Go, Markdown, YAML, JSON, and other supported files.' \
-		'  make lint           Run Go vet, format checks, Prettier, and Renovate validation.' \
-		'  make check          Run test and lint checks.' \
+		'  make test            Run the benchmark Go tests.' \
+		'  make format          Format Go, Markdown, YAML, JSON, and other supported files.' \
+		'  make lint            Run Go vet, format checks, Prettier, and Renovate validation.' \
+		'  make check           Run test and lint checks.' \
 		'  make download-models Download the configured model from Hugging Face.' \
 		'  make llama-start     Start the llama.cpp model router.' \
 		'  make llama-stop      Stop the llama.cpp model router.' \

@@ -16,9 +16,9 @@ Changes to the benchmark scope are recorded in the [decision log](decision-log.m
 
 ## Source corpus status
 
-Official vanilla Kubernetes documentation is the initial candidate source corpus. The exact Kubernetes minor version and documentation revision remain open and are selected during candidate qualification.
+The common experiment corpus is the official English Kubernetes 1.37 documentation at the immutable `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15` revision recorded in [sources.md](sources.md) and [the knowledge check](research/kubernetes-knowledge-check/README.md).
 
-Before qualification and evaluation, the final corpus must match the benchmark Kubernetes minor version and be frozen to an exact revision of the upstream Kubernetes documentation repository. This requirement preserves version alignment and reproducibility without selecting a runtime version in this document.
+All experiment conditions that use the common corpus must use this exact revision. This requirement preserves version alignment and reproducibility without selecting the runtime Kubernetes cluster configuration in this document.
 
 ## Scenario definition
 
