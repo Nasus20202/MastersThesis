@@ -25,8 +25,7 @@ type ToolCallFunction struct {
 	Arguments string `json:"arguments"`
 }
 
-// Tool describes a function that can be made available to the model. The
-// benchmark tool loop will use this type in a later issue.
+// Tool describes a function that can be made available to the model.
 type Tool struct {
 	Type     string             `json:"type"`
 	Function FunctionDefinition `json:"function"`
