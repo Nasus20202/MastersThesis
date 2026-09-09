@@ -19,11 +19,15 @@ Sources should be recorded with a stable URL and, when applicable, a version, re
 
 This table records the frozen common experiment corpus.
 
-| Corpus source                                                                                                                                        | Used for                                                                                                                                                    | Status                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| [Kubernetes website repository at the 1.37 evaluation snapshot](https://github.com/kubernetes/website/tree/ea639c1d22a60365d07b78692b1b1a2eb866bd15) | Upstream source for the full official English Kubernetes documentation corpus used directly by RAG and as source material for separate fine-tuning examples | Frozen common experiment corpus |
+| Corpus source                                                                                                                                                                   | Used for                                                                                                                                                                | Status                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| [Kubernetes website documentation subtree at the 1.37 evaluation snapshot](https://github.com/kubernetes/website/tree/ea639c1d22a60365d07b78692b1b1a2eb866bd15/content/en/docs) | Frozen corpus of English Markdown documentation pages under `content/en/docs/**/*.md`, used as source material for qualification, RAG and separate fine-tuning examples | Frozen common experiment corpus |
 
 The common experiment corpus is the official English Kubernetes 1.37 documentation at `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15`. Source excerpts and task references preserve exact file revisions, blob SHAs and line ranges.
+
+### Kubernetes corpus licensing
+
+The pinned Kubernetes website repository is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0), as stated in its root [LICENSE](https://github.com/kubernetes/website/blob/ea639c1d22a60365d07b78692b1b1a2eb866bd15/LICENSE).
 
 ## Model and inference
 
