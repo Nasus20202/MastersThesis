@@ -2,6 +2,7 @@ GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
 BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
+SCENARIO ?= scenarios/image-pull-failure/scenario.yaml
 COMPOSE := docker compose --env-file $(BENCHMARK_CONFIG) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 include $(BENCHMARK_CONFIG)
@@ -26,7 +27,8 @@ help:
 		'  make llama-start     Start the llama.cpp model router.' \
 		'  make llama-stop      Stop the llama.cpp model router.' \
 		'  make llama-logs      Follow llama.cpp model router logs.' \
-		'  make benchmark       Run the benchmark command.'
+		'  make benchmark       Run the default benchmark scenario.' \
+		'  make benchmark SCENARIO=PATH  Run a selected scenario.'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -56,7 +58,7 @@ llama-logs:
 	$(COMPOSE) logs --follow llama-server
 
 benchmark:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO)
 
 benchmark-go-test:
 	cd $(BENCHMARK_DIR) && $(GO) test ./... -cover
