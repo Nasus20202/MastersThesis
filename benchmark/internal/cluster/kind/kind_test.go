@@ -48,14 +48,15 @@ func TestClusterRunsCreateAndDelete(t *testing.T) {
 	if len(executor.specs) != 2 {
 		t.Fatalf("got %d command specs, want 2", len(executor.specs))
 	}
-	if got := executor.specs[0]; got.Program != program || !slices.Equal(got.Args, []string{"create", "cluster", "--name", "benchmark"}) {
+	kubeconfigPath := cluster.KubeconfigPath()
+	if got := executor.specs[0]; got.Program != program || !slices.Equal(got.Args, []string{"create", "cluster", "--name", "benchmark", "--kubeconfig", kubeconfigPath}) {
 		t.Fatalf("create spec = %#v", got)
 	}
 	if got := executor.specs[1]; got.Program != program || !slices.Equal(got.Args, []string{"delete", "cluster", "--name", "benchmark"}) {
 		t.Fatalf("delete spec = %#v", got)
 	}
-	if got := cluster.Context(); got != "kind-benchmark" {
-		t.Fatalf("Context() = %q, want %q", got, "kind-benchmark")
+	if got := cluster.KubeconfigContext(); got != "kind-benchmark" {
+		t.Fatalf("KubeconfigContext() = %q, want %q", got, "kind-benchmark")
 	}
 }
 
@@ -70,7 +71,8 @@ func TestClusterUsesConfigFile(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	if got := executor.specs[0]; got.Program != program || got.Dir != "/tmp" || !slices.Equal(got.Args, []string{"create", "cluster", "--name", "benchmark", "--config", "/tmp/kind.yaml"}) {
+	kubeconfigPath := cluster.KubeconfigPath()
+	if got := executor.specs[0]; got.Program != program || got.Dir != "/tmp" || !slices.Equal(got.Args, []string{"create", "cluster", "--name", "benchmark", "--kubeconfig", kubeconfigPath, "--config", "/tmp/kind.yaml"}) {
 		t.Fatalf("create spec = %#v", got)
 	}
 }

@@ -3,6 +3,7 @@ package scenario
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -40,7 +41,7 @@ func (s Step) Specs() []command.Spec {
 }
 
 type Definition struct {
-	ID          string        `yaml:"id" validate:"required,notblank"`
+	ID          string        `yaml:"id" validate:"required,scenarioid,max=32"`
 	Title       string        `yaml:"title" validate:"required,notblank"`
 	Task        string        `yaml:"task" validate:"required,notblank"`
 	Cluster     ClusterConfig `yaml:"cluster,omitempty"`
@@ -60,6 +61,7 @@ func (d *Definition) setDir(dir string) {
 	d.Reset.setDir(dir)
 }
 
+var scenarioIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 var definitionValidator = mustNewValidator()
 
 func (d Definition) Validate() error {
@@ -73,6 +75,11 @@ func mustNewValidator() *validator.Validate {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	if err := validate.RegisterValidation("notblank", func(field validator.FieldLevel) bool {
 		return strings.TrimSpace(field.Field().String()) != ""
+	}); err != nil {
+		panic(fmt.Sprintf("register scenario validator: %v", err))
+	}
+	if err := validate.RegisterValidation("scenarioid", func(field validator.FieldLevel) bool {
+		return scenarioIDPattern.MatchString(field.Field().String())
 	}); err != nil {
 		panic(fmt.Sprintf("register scenario validator: %v", err))
 	}

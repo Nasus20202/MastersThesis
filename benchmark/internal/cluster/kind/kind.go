@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,7 +13,10 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/lifecycle"
 )
 
-const program = "kind"
+const (
+	program           = "kind"
+	kindContextPrefix = "kind-"
+)
 
 type Config struct {
 	Name       string
@@ -20,9 +24,10 @@ type Config struct {
 }
 
 type Cluster struct {
-	executor   command.Executor
-	name       string
-	configPath string
+	executor       command.Executor
+	name           string
+	configPath     string
+	kubeconfigPath string
 }
 
 // Ensure Cluster implements lifecycle.Cluster at compile time.
@@ -38,7 +43,12 @@ func New(executor command.Executor, config Config) (*Cluster, error) {
 	if config.ConfigPath != "" && strings.TrimSpace(config.ConfigPath) == "" {
 		return nil, errors.New("kind cluster config path is invalid")
 	}
-	return &Cluster{executor: executor, name: config.Name, configPath: config.ConfigPath}, nil
+	return &Cluster{
+		executor:       executor,
+		name:           config.Name,
+		configPath:     config.ConfigPath,
+		kubeconfigPath: filepath.Join(os.TempDir(), config.Name+".kubeconfig"),
+	}, nil
 }
 
 func (c *Cluster) Create(ctx context.Context) error {
@@ -48,12 +58,17 @@ func (c *Cluster) Create(ctx context.Context) error {
 		logger.ErrorContext(ctx, "kind cluster creation failed", "error", err)
 		return err
 	}
-	logger.InfoContext(ctx, "kind cluster created", "context", c.Context())
+	logger.InfoContext(ctx, "kind cluster created")
 	return nil
 }
 
 func (c *Cluster) Delete(ctx context.Context) error {
 	logger := slog.With("cluster", c.name)
+	defer func() {
+		if err := os.Remove(c.kubeconfigPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			logger.WarnContext(ctx, "kind kubeconfig cleanup failed", "error", err)
+		}
+	}()
 	logger.InfoContext(ctx, "deleting kind cluster")
 	if err := c.run(ctx, "delete", "cluster", "--name", c.name); err != nil {
 		logger.ErrorContext(ctx, "kind cluster deletion failed", "error", err)
@@ -63,16 +78,24 @@ func (c *Cluster) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (c *Cluster) Context() string {
-	return "kind-" + c.name
+func (c *Cluster) KubeconfigPath() string {
+	return c.kubeconfigPath
+}
+
+func (c *Cluster) KubeconfigContext() string {
+	return kindContextPrefix + c.name
 }
 
 func (c *Cluster) run(ctx context.Context, args ...string) error {
 	spec := command.Spec{Program: program, Args: args}
 	if c.configPath != "" && args[0] == "create" {
+		args = append(args, "--kubeconfig", c.kubeconfigPath)
 		args = append(args, "--config", c.configPath)
 		spec.Args = args
 		spec.Dir = filepath.Dir(c.configPath)
+	} else if args[0] == "create" {
+		args = append(args, "--kubeconfig", c.kubeconfigPath)
+		spec.Args = args
 	}
 	_, err := c.executor.Run(ctx, spec)
 	if err != nil {

@@ -95,6 +95,24 @@ func TestValidateRejectsBlankProgram(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInvalidID(t *testing.T) {
+	definition := validDefinition(t)
+	definition.ID = "Image Pull Failure"
+
+	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "scenarioid") {
+		t.Fatalf("validation error = %v, want scenarioid validation error", err)
+	}
+}
+
+func TestValidateRejectsLongID(t *testing.T) {
+	definition := validDefinition(t)
+	definition.ID = strings.Repeat("a", 33)
+
+	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "max") {
+		t.Fatalf("validation error = %v, want max validation error", err)
+	}
+}
+
 func TestParseRejectsUnknownNestedField(t *testing.T) {
 	data := strings.Replace(validScenarioYAML, "    args: [manifest.yaml]", "    args: [manifest.yaml]\n    extra: value", 1)
 	_, err := Parse([]byte(data))
