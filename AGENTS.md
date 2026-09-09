@@ -13,6 +13,11 @@ This is a research project. The human researcher owns the methodology and coordi
 7. Review and approve the documentation.
 8. Merge only after code and required documentation are approved.
 
+## Useful commands
+
+Run `make` from the repository root to list available commands. Before committing, run
+`make test`, `make format`, and `make lint`.
+
 ## Documentation
 
 - Update documentation when an approved research or technical decision changes the content it describes.

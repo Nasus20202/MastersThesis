@@ -10,3 +10,7 @@ This directory contains the research design, benchmark definition, technology ch
 - [Decision log](decision-log.md) — canonical record of approved, provisional, open and superseded decisions.
 - [Sources](sources.md) — technical documentation, papers and related work.
 - [Glossary](glossary.md) — project terminology and links to further information.
+
+## Research evaluations
+
+- [Kubernetes knowledge check](research/kubernetes-knowledge-check/README.md) — evaluated Gemma 4 E4B on Kubernetes troubleshooting probes without documentation context and with fixed excerpts from the pinned Kubernetes 1.37 documentation, preserving the prompts, criteria, raw responses and runtime metadata.
