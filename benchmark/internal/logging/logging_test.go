@@ -6,14 +6,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewCreatesConfiguredHandler(t *testing.T) {
 	var output bytes.Buffer
 	logger, err := New(&output, FormatJSON, slog.LevelInfo)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 
 	logger.Debug("hidden")
 	logger.Info("visible", "component", "test")
@@ -26,9 +25,7 @@ func TestNewCreatesConfiguredHandler(t *testing.T) {
 func TestNewAddsSourceAtDebugLevel(t *testing.T) {
 	var output bytes.Buffer
 	logger, err := New(&output, FormatJSON, slog.LevelDebug)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 
 	logger.Debug("visible")
 
@@ -42,16 +39,13 @@ func TestNewRejectsUnknownFormat(t *testing.T) {
 
 func TestParseLevel(t *testing.T) {
 	level, err := ParseLevel(" WARN ")
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, slog.LevelWarn, level)
 
 	_, err = ParseLevel("trace")
 	assert.Error(t, err)
+
 	level, err = ParseLevel("")
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, slog.LevelInfo, level)
 }
