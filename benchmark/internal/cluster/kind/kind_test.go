@@ -75,12 +75,13 @@ func TestClusterCreateGeneratesInternalKubeconfig(t *testing.T) {
 	assert.Equal(t, "apiVersion: v1\n", string(contents))
 	info, err := os.Stat(cluster.InternalKubeconfigPath())
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 }
 
 func TestClusterRejectsEmptyInternalKubeconfig(t *testing.T) {
 	cluster, err := New(&fakeExecutor{results: []command.Result{{}, {}}}, Config{Name: "benchmark-empty"})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(cluster.InternalKubeconfigPath()) })
 
 	err = cluster.Create(context.Background())
 	assert.EqualError(t, err, "get internal kubeconfig for cluster \"benchmark-empty\": command returned empty output")
@@ -106,6 +107,7 @@ func TestClusterReturnsExecutorError(t *testing.T) {
 	wantErr := errors.New("kind failed")
 	cluster, err := New(&fakeExecutor{err: wantErr}, Config{Name: "benchmark"})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(cluster.InternalKubeconfigPath()) })
 
 	err = cluster.Create(context.Background())
 	assert.ErrorIs(t, err, wantErr)

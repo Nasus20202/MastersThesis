@@ -102,7 +102,8 @@ func (c *Cluster) generateInternalKubeconfig(ctx context.Context) error {
 	if strings.TrimSpace(result.Stdout) == "" {
 		return fmt.Errorf("get internal kubeconfig for cluster %q: command returned empty output", c.name)
 	}
-	if err := os.WriteFile(c.internalKubeconfigPath, []byte(result.Stdout), 0o600); err != nil {
+	// The container's benchmark UID is intentionally independent of the host UID.
+	if err := os.WriteFile(c.internalKubeconfigPath, []byte(result.Stdout), 0o644); err != nil {
 		return fmt.Errorf("write internal kubeconfig for cluster %q: %w", c.name, err)
 	}
 	return nil
