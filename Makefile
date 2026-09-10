@@ -14,21 +14,22 @@ export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs benchmark
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs docker-cleanup benchmark
 
 help:
-	@printf '%s\n' \
-		'Available commands:' \
-		'  make test            Run the benchmark Go tests.' \
-		'  make format          Format Go, Markdown, YAML, JSON, and other supported files.' \
-		'  make lint            Run Go vet, format checks, Prettier, and Renovate validation.' \
-		'  make check           Run test and lint checks.' \
-		'  make download-models Download the configured model from Hugging Face.' \
-		'  make llama-start     Start the llama.cpp model router.' \
-		'  make llama-stop      Stop the llama.cpp model router.' \
-		'  make llama-logs      Follow llama.cpp model router logs.' \
-		'  make benchmark       Run the default benchmark scenario.' \
-		'  make benchmark SCENARIO=PATH  Run a selected scenario.'
+	@printf '%s\n' 'Available commands:'
+	@printf '  %-28s %s\n' \
+		'make test' 'Run the benchmark Go tests.' \
+		'make format' 'Format Go, Markdown, YAML, JSON, and other supported files.' \
+		'make lint' 'Run Go vet, format checks, Prettier, and Renovate validation.' \
+		'make check' 'Run test and lint checks.' \
+		'make download-models' 'Download the configured model from Hugging Face.' \
+		'make llama-start' 'Start the llama.cpp model router.' \
+		'make llama-stop' 'Stop the llama.cpp model router.' \
+		'make llama-logs' 'Follow llama.cpp model router logs.' \
+		'make docker-cleanup' 'Remove benchmark Kind clusters and sandbox containers.' \
+		'make benchmark' 'Run the default benchmark scenario.' \
+		'make benchmark SCENARIO=PATH' 'Run a selected scenario.'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -56,6 +57,9 @@ llama-stop:
 
 llama-logs:
 	$(COMPOSE) logs --follow llama-server
+
+docker-cleanup:
+	./scripts/docker-cleanup.sh
 
 benchmark:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO)

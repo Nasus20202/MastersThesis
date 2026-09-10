@@ -15,6 +15,7 @@ import (
 
 type Runner struct {
 	ClusterFactory ClusterFactory
+	SandboxFactory SandboxFactory
 	Executor       command.Executor
 	CleanupTimeout time.Duration
 }
@@ -61,6 +62,20 @@ func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result
 	if err := r.createCluster(ctx, cluster, clusterName, logger); err != nil {
 		return RunResult{}, err
 	}
+	if r.SandboxFactory != nil {
+		sandbox, err := r.newSandbox(clusterName, cluster.InternalKubeconfigPath(), logger)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if err := r.startSandbox(ctx, sandbox, logger); err != nil {
+			return RunResult{}, err
+		}
+		defer func() {
+			if err := r.cleanupSandbox(sandbox, logger); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+		}()
+	}
 	grading, err := r.runPhases(ctx, definition, cluster.KubeconfigPath(), logger)
 	return RunResult{ScenarioID: definition.ID, Grading: grading}, err
 }
@@ -83,6 +98,43 @@ func (r Runner) createCluster(ctx context.Context, cluster Cluster, name string,
 		return fmt.Errorf("create cluster %q: %w", name, err)
 	}
 	logger.Info("scenario cluster created")
+	return nil
+}
+
+func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (Sandbox, error) {
+	sandbox, err := r.SandboxFactory(name, kubeconfigPath)
+	if err != nil {
+		logger.Error("sandbox factory failed", "error", err)
+		return nil, fmt.Errorf("create sandbox: %w", err)
+	}
+	if sandbox == nil {
+		return nil, errors.New("create sandbox: factory returned a nil sandbox")
+	}
+	return sandbox, nil
+}
+
+func (r Runner) startSandbox(ctx context.Context, sandbox Sandbox, logger *slog.Logger) error {
+	if err := sandbox.Build(ctx); err != nil {
+		logger.Error("sandbox image build failed", "error", err)
+		return fmt.Errorf("build sandbox image: %w", err)
+	}
+	if err := sandbox.Start(ctx); err != nil {
+		logger.Error("sandbox start failed", "error", err)
+		return fmt.Errorf("start sandbox: %w", err)
+	}
+	logger.Info("sandbox started")
+	return nil
+}
+
+func (r Runner) cleanupSandbox(sandbox Sandbox, logger *slog.Logger) error {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), r.cleanupTimeout())
+	defer cancel()
+	logger.Info("stopping sandbox")
+	if err := sandbox.Stop(cleanupCtx); err != nil {
+		logger.Error("sandbox stop failed", "error", err)
+		return fmt.Errorf("stop sandbox: %w", err)
+	}
+	logger.Info("sandbox stopped")
 	return nil
 }
 

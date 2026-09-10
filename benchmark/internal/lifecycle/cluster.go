@@ -6,6 +6,7 @@ type Cluster interface {
 	Create(context.Context) error
 	Delete(context.Context) error
 	KubeconfigPath() string
+	InternalKubeconfigPath() string
 	KubeconfigContext() string
 }
 

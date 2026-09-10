@@ -14,7 +14,14 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/lifecycle"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/logging"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
+)
+
+const (
+	sandboxImage          = "masters-thesis-sandbox:ubuntu-26.04"
+	sandboxDockerfilePath = "sandbox/Dockerfile"
+	sandboxBuildContext   = "sandbox"
 )
 
 func main() {
@@ -58,6 +65,18 @@ func run(args []string, logOutput, resultOutput io.Writer) error {
 			return kind.New(executor, kind.Config{
 				Name:       name,
 				ConfigPath: definition.Cluster.Kind.ConfigPath(),
+			})
+		},
+		SandboxFactory: func(name, kubeconfigPath string) (lifecycle.Sandbox, error) {
+			return sandbox.New(executor, sandbox.Config{
+				Name:           name + "-sandbox",
+				Image:          sandboxImage,
+				DockerfilePath: sandboxDockerfilePath,
+				BuildContext:   sandboxBuildContext,
+				KubeconfigPath: kubeconfigPath,
+				Network:        name + "-sandbox-network",
+				NetworkTarget:  name + "-control-plane",
+				Layout:         sandbox.DefaultImageLayout(),
 			})
 		},
 	}

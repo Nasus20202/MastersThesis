@@ -13,63 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeCluster struct {
-	events         *[]string
-	createErr      error
-	deleteErr      error
-	deleteCtx      context.Context
-	kubeconfigPath string
-	kubeconfigCtx  string
-}
-
-func (c *fakeCluster) Create(context.Context) error {
-	*c.events = append(*c.events, "create")
-	return c.createErr
-}
-
-func (c *fakeCluster) Delete(ctx context.Context) error {
-	*c.events = append(*c.events, "delete")
-	c.deleteCtx = ctx
-	return c.deleteErr
-}
-
-func (c *fakeCluster) KubeconfigPath() string {
-	return c.kubeconfigPath
-}
-
-func (c *fakeCluster) KubeconfigContext() string {
-	return c.kubeconfigCtx
-}
-
-type recordingExecutor struct {
-	events   *[]string
-	specs    []command.Spec
-	failWith error
-	failAt   int
-	results  []command.Result
-	errors   []error
-}
-
-func (e *recordingExecutor) Run(_ context.Context, spec command.Spec) (command.Result, error) {
-	e.specs = append(e.specs, spec)
-	*e.events = append(*e.events, spec.Program)
-	if e.failAt == len(e.specs) {
-		return command.Result{}, e.failWith
-	}
-	resultIndex := len(e.specs) - 1
-	if resultIndex >= len(e.results) {
-		return command.Result{}, e.errorAt(resultIndex)
-	}
-	return e.results[resultIndex], e.errorAt(resultIndex)
-}
-
-func (e *recordingExecutor) errorAt(index int) error {
-	if index >= len(e.errors) {
-		return nil
-	}
-	return e.errors[index]
-}
-
 func testDefinition() scenario.Definition {
 	return scenario.Definition{
 		ID:          "test-scenario",
@@ -120,6 +63,40 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	assert.Equal(t, "/tmp/test.kubeconfig", executor.specs[0].Env["KUBECONFIG"])
 	_, hasDeadline := cluster.deleteCtx.Deadline()
 	assert.True(t, hasDeadline)
+}
+
+func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	executor := &recordingExecutor{events: &events}
+	runner := Runner{
+		ClusterFactory: func(name string) (Cluster, error) {
+			events = append(events, "factory")
+			return cluster, nil
+		},
+		SandboxFactory: func(name, kubeconfigPath string) (Sandbox, error) {
+			assert.True(t, strings.HasPrefix(name, "benchmark-test-scenario-"))
+			assert.Equal(t, "/tmp/test.internal.kubeconfig", kubeconfigPath)
+			events = append(events, "sandbox-factory")
+			return sandbox, nil
+		},
+		Executor:       executor,
+		CleanupTimeout: time.Second,
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"factory", "create", "sandbox-factory", "sandbox-build", "sandbox-start",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"sandbox-stop", "delete",
+	}, events)
 }
 
 func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
