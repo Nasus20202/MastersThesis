@@ -128,11 +128,12 @@ func withKubeconfig(spec command.Spec, kubeconfigPath string) command.Spec {
 		return spec
 	}
 
-	spec.Env = make(map[string]string, len(spec.Env)+1)
+	env := make(map[string]string, len(spec.Env)+1)
 	for key, value := range spec.Env {
-		spec.Env[key] = value
+		env[key] = value
 	}
-	spec.Env[kubeconfigEnv] = kubeconfigPath
+	env[kubeconfigEnv] = kubeconfigPath
+	spec.Env = env
 	return spec
 }
 

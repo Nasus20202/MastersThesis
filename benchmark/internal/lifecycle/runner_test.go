@@ -110,6 +110,21 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	}
 }
 
+func TestWithKubeconfigPreservesEnvironment(t *testing.T) {
+	spec := command.Spec{Env: map[string]string{"EXISTING": "value"}}
+	got := withKubeconfig(spec, "/tmp/test.kubeconfig")
+
+	if got.Env["EXISTING"] != "value" {
+		t.Fatalf("EXISTING = %q, want value", got.Env["EXISTING"])
+	}
+	if got.Env[kubeconfigEnv] != "/tmp/test.kubeconfig" {
+		t.Fatalf("KUBECONFIG = %q, want %q", got.Env[kubeconfigEnv], "/tmp/test.kubeconfig")
+	}
+	if _, ok := spec.Env[kubeconfigEnv]; ok {
+		t.Fatal("withKubeconfig modified the original environment")
+	}
+}
+
 func TestClusterNameUsesScenarioID(t *testing.T) {
 	name := clusterNameFor("image-pull-failure")
 	if !strings.HasPrefix(name, "benchmark-image-pull-failure-") {
