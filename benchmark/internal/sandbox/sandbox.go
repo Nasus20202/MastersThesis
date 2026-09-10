@@ -24,6 +24,8 @@ const (
 type Config struct {
 	Name           string
 	Image          string
+	DockerfilePath string
+	BuildContext   string
 	KubeconfigPath string
 }
 
@@ -42,6 +44,12 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	if strings.TrimSpace(config.Image) == "" {
 		return nil, errors.New("sandbox image is required")
 	}
+	if strings.TrimSpace(config.DockerfilePath) == "" {
+		return nil, errors.New("sandbox Dockerfile path is required")
+	}
+	if strings.TrimSpace(config.BuildContext) == "" {
+		return nil, errors.New("sandbox build context is required")
+	}
 	if strings.TrimSpace(config.KubeconfigPath) == "" {
 		return nil, errors.New("sandbox kubeconfig path is required")
 	}
@@ -49,6 +57,30 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 		return nil, errors.New("sandbox kubeconfig path must be absolute")
 	}
 	return &Sandbox{executor: executor, config: config}, nil
+}
+
+func (s *Sandbox) Build(ctx context.Context) error {
+	logger := slog.With("sandbox_image", s.config.Image)
+	logger.InfoContext(ctx, "building sandbox image",
+		"dockerfile", s.config.DockerfilePath,
+		"context", s.config.BuildContext,
+	)
+	_, err := s.executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args: []string{
+			"build",
+			"--pull",
+			"--file", s.config.DockerfilePath,
+			"--tag", s.config.Image,
+			s.config.BuildContext,
+		},
+	})
+	if err != nil {
+		logger.ErrorContext(ctx, "sandbox image build failed", "error", err)
+		return fmt.Errorf("build sandbox image %q: %w", s.config.Image, err)
+	}
+	logger.InfoContext(ctx, "sandbox image built")
+	return nil
 }
 
 func (s *Sandbox) Start(ctx context.Context) error {
