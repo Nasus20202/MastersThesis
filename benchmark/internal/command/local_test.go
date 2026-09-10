@@ -2,17 +2,16 @@ package command
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSpecValidateRejectsBlankProgram(t *testing.T) {
-	if err := (Spec{Program: "  "}).Validate(); err == nil {
-		t.Fatal("blank program passed validation")
-	}
+	assert.Error(t, (Spec{Program: "  "}).Validate())
 }
 
 func TestLocalExecutorCapturesOutput(t *testing.T) {
@@ -20,15 +19,12 @@ func TestLocalExecutorCapturesOutput(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "printf stdout; printf stderr >&2"},
 	})
-	if err != nil {
-		t.Fatalf("run command: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
-	if result.ExitCode != 0 {
-		t.Fatalf("exit code = %d, want 0", result.ExitCode)
-	}
-	if result.Stdout != "stdout" || result.Stderr != "stderr" {
-		t.Fatalf("output = %#v, want stdout/stderr", result)
-	}
+	assert.Equal(t, 0, result.ExitCode)
+	assert.Equal(t, "stdout", result.Stdout)
+	assert.Equal(t, "stderr", result.Stderr)
 }
 
 func TestLocalExecutorReturnsExitCodeAndOutput(t *testing.T) {
@@ -36,15 +32,9 @@ func TestLocalExecutorReturnsExitCodeAndOutput(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "printf failed >&2; exit 7"},
 	})
-	if err == nil {
-		t.Fatal("non-zero command succeeded")
-	}
-	if result.ExitCode != 7 {
-		t.Fatalf("exit code = %d, want 7", result.ExitCode)
-	}
-	if result.Stderr != "failed" {
-		t.Fatalf("stderr = %q, want failed", result.Stderr)
-	}
+	assert.Error(t, err)
+	assert.Equal(t, 7, result.ExitCode)
+	assert.Equal(t, "failed", result.Stderr)
 }
 
 func TestLocalExecutorUsesDirectoryAndEnvironment(t *testing.T) {
@@ -55,21 +45,15 @@ func TestLocalExecutorUsesDirectoryAndEnvironment(t *testing.T) {
 		Dir:     directory,
 		Env:     map[string]string{"TEST_VALUE": "configured"},
 	})
-	if err != nil {
-		t.Fatalf("run command: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
-	if got, want := strings.TrimSpace(result.Stdout), directory+":configured"; got != want {
-		t.Fatalf("output = %q, want %q", got, want)
-	}
+	assert.Equal(t, directory+":configured", strings.TrimSpace(result.Stdout))
 }
 
 func TestSpecValidateRejectsInvalidEnvironment(t *testing.T) {
-	if err := (Spec{Program: "sh", Env: map[string]string{"BAD=KEY": "value"}}).Validate(); err == nil {
-		t.Fatal("invalid environment key passed validation")
-	}
-	if err := (Spec{Program: "sh", Env: map[string]string{"KEY": "bad\x00value"}}).Validate(); err == nil {
-		t.Fatal("NUL environment value passed validation")
-	}
+	assert.Error(t, (Spec{Program: "sh", Env: map[string]string{"BAD=KEY": "value"}}).Validate())
+	assert.Error(t, (Spec{Program: "sh", Env: map[string]string{"KEY": "bad\x00value"}}).Validate())
 }
 
 func TestLocalExecutorHonorsContext(t *testing.T) {
@@ -80,12 +64,8 @@ func TestLocalExecutorHonorsContext(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "sleep 1"},
 	})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("error = %v, want deadline exceeded", err)
-	}
-	if result.ExitCode != -1 {
-		t.Fatalf("exit code = %d, want -1", result.ExitCode)
-	}
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, -1, result.ExitCode)
 }
 
 func TestLocalExecutorPreservesInheritedEnvironment(t *testing.T) {
@@ -95,10 +75,8 @@ func TestLocalExecutorPreservesInheritedEnvironment(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "printf '%s' \"$COMMAND_TEST_INHERITED\""},
 	})
-	if err != nil {
-		t.Fatalf("run command: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
-	if result.Stdout != os.Getenv("COMMAND_TEST_INHERITED") {
-		t.Fatalf("output = %q, want inherited value", result.Stdout)
-	}
+	assert.Equal(t, os.Getenv("COMMAND_TEST_INHERITED"), result.Stdout)
 }

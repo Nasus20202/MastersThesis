@@ -3,6 +3,8 @@ package scenario
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const validScenarioYAML = `
@@ -37,44 +39,37 @@ grading:
 
 func TestParseValidScenario(t *testing.T) {
 	definition, err := Parse([]byte(validScenarioYAML))
-	if err != nil {
-		t.Fatalf("parse scenario: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
 
-	if definition.ID != "test-scenario" {
-		t.Fatalf("ID = %q, want test-scenario", definition.ID)
+	assert.Equal(t, "test-scenario", definition.ID)
+	if !assert.Len(t, definition.Prepare, 1) {
+		return
 	}
-	if len(definition.Prepare) != 1 || definition.Prepare[0].Program != "prepare" {
-		t.Fatalf("prepare = %#v, want one prepare command", definition.Prepare)
+	assert.Equal(t, "prepare", definition.Prepare[0].Program)
+	if !assert.Equal(t, []string{"manifest.yaml"}, definition.Prepare[0].Spec().Args) {
+		return
 	}
-	if got := definition.Prepare[0].Spec().Args; len(got) != 1 || got[0] != "manifest.yaml" {
-		t.Fatalf("prepare command args = %#v, want manifest.yaml", got)
-	}
-	if got := definition.Prepare[0].Spec().Env["CHECK_MODE"]; got != "strict" {
-		t.Fatalf("prepare command environment = %q, want strict", got)
-	}
+	assert.Equal(t, "strict", definition.Prepare[0].Spec().Env["CHECK_MODE"])
 }
 
 func TestParseRejectsUnknownField(t *testing.T) {
 	_, err := Parse([]byte(validScenarioYAML + "\nunknown: value\n"))
-	if err == nil || !strings.Contains(err.Error(), "unknown") {
-		t.Fatalf("parse error = %v, want unknown-field error", err)
-	}
+	assert.ErrorContains(t, err, "unknown")
 }
 
 func TestParseReportsValidationErrors(t *testing.T) {
 	_, err := Parse([]byte("id: scenario\ntitle: Test\ntask: \" \"\n"))
-	if err == nil || !strings.Contains(err.Error(), "Task") {
-		t.Fatalf("validation error = %v, want Task validation error", err)
-	}
+	assert.ErrorContains(t, err, "Task")
 }
 
 func validDefinition(t *testing.T) Definition {
 	t.Helper()
 
 	definition, err := Parse([]byte(validScenarioYAML))
-	if err != nil {
-		t.Fatalf("parse scenario: %v", err)
+	if !assert.NoError(t, err) {
+		return Definition{}
 	}
 	return definition
 }
@@ -83,36 +78,28 @@ func TestValidateRejectsMissingPhase(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Prepare = nil
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "Prepare") {
-		t.Fatalf("validation error = %v, want Prepare validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "Prepare")
 }
 
 func TestValidateRejectsEmptyPhase(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Prepare = Step{}
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "Prepare") {
-		t.Fatalf("validation error = %v, want Prepare validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "Prepare")
 }
 
 func TestValidateRejectsBlankProgram(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Prepare = Step{{Program: "  "}}
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "Program") {
-		t.Fatalf("validation error = %v, want Program validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "Program")
 }
 
 func TestValidateRejectsInvalidID(t *testing.T) {
 	definition := validDefinition(t)
 	definition.ID = "Image Pull Failure"
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "scenarioid") {
-		t.Fatalf("validation error = %v, want scenarioid validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "scenarioid")
 }
 
 func TestValidateRejectsInvalidCriterion(t *testing.T) {
@@ -149,9 +136,7 @@ func TestValidateRejectsInvalidCriterion(t *testing.T) {
 			definition := validDefinition(t)
 			test.change(&definition)
 
-			if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("validation error = %v, want %s validation error", err, test.want)
-			}
+			assert.ErrorContains(t, definition.Validate(), test.want)
 		})
 	}
 }
@@ -160,40 +145,30 @@ func TestValidateRejectsMissingGrading(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Grading = nil
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "Grading") {
-		t.Fatalf("validation error = %v, want Grading validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "Grading")
 }
 
 func TestValidateRejectsDuplicateCriterionIDs(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Grading = append(definition.Grading, definition.Grading[0])
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate grading criterion id") {
-		t.Fatalf("validation error = %v, want duplicate criterion ID error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "duplicate grading criterion id")
 }
 
 func TestValidateRejectsLongID(t *testing.T) {
 	definition := validDefinition(t)
 	definition.ID = strings.Repeat("a", 33)
 
-	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "max") {
-		t.Fatalf("validation error = %v, want max validation error", err)
-	}
+	assert.ErrorContains(t, definition.Validate(), "max")
 }
 
 func TestParseRejectsUnknownNestedField(t *testing.T) {
 	data := strings.Replace(validScenarioYAML, "    args: [manifest.yaml]", "    args: [manifest.yaml]\n    extra: value", 1)
 	_, err := Parse([]byte(data))
-	if err == nil || !strings.Contains(err.Error(), "extra") {
-		t.Fatalf("parse error = %v, want nested unknown-field error", err)
-	}
+	assert.ErrorContains(t, err, "extra")
 }
 
 func TestParseRejectsMultipleDocuments(t *testing.T) {
 	_, err := Parse([]byte(validScenarioYAML + "\n---\n" + validScenarioYAML))
-	if err == nil || !strings.Contains(err.Error(), "exactly one document") {
-		t.Fatalf("parse error = %v, want multiple-document error", err)
-	}
+	assert.ErrorContains(t, err, "exactly one document")
 }

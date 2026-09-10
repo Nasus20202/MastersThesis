@@ -5,43 +5,37 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadReadsScenarioFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scenario.yaml")
-	if err := os.WriteFile(path, []byte(validScenarioYAML), 0o600); err != nil {
-		t.Fatalf("write scenario: %v", err)
+	if !assert.NoError(t, os.WriteFile(path, []byte(validScenarioYAML), 0o600)) {
+		return
 	}
 
 	definition, err := Load(path)
-	if err != nil {
-		t.Fatalf("load scenario: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
-	if definition.Title != "Test scenario" {
-		t.Fatalf("title = %q, want Test scenario", definition.Title)
-	}
-	if got, want := definition.Prepare[0].Spec().Dir, filepath.Dir(path); got != want {
-		t.Fatalf("command directory = %q, want %q", got, want)
-	}
-	if got, want := definition.Grading[0].Check.Spec().Dir, filepath.Dir(path); got != want {
-		t.Fatalf("grading command directory = %q, want %q", got, want)
-	}
+	assert.Equal(t, "Test scenario", definition.Title)
+	assert.Equal(t, filepath.Dir(path), definition.Prepare[0].Spec().Dir)
+	assert.Equal(t, filepath.Dir(path), definition.Grading[0].Check.Spec().Dir)
 }
 
 func TestLoadResolvesKindConfigPath(t *testing.T) {
 	data := strings.Replace(validScenarioYAML, "task: Restore the test workload.", "task: Restore the test workload.\n\ncluster:\n  kind:\n    config: kind/cluster.yaml", 1)
 	path := filepath.Join(t.TempDir(), "scenario.yaml")
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatalf("write scenario: %v", err)
+	if !assert.NoError(t, os.WriteFile(path, []byte(data), 0o600)) {
+		return
 	}
 
 	definition, err := Load(path)
-	if err != nil {
-		t.Fatalf("load scenario: %v", err)
+	if !assert.NoError(t, err) {
+		return
 	}
 
 	want := filepath.Join(filepath.Dir(path), "kind", "cluster.yaml")
-	if got := definition.Cluster.Kind.ConfigPath(); got != want {
-		t.Fatalf("kind config path = %q, want %q", got, want)
-	}
+	assert.Equal(t, want, definition.Cluster.Kind.ConfigPath())
 }
