@@ -3,7 +3,9 @@ package scenario
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -11,16 +13,18 @@ import (
 )
 
 type Command struct {
-	Program string   `yaml:"program" validate:"required,notblank"`
-	Args    []string `yaml:"args,omitempty"`
+	Program string            `yaml:"program" validate:"required,notblank"`
+	Args    []string          `yaml:"args,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
 	dir     string
 }
 
 func (c Command) Spec() command.Spec {
 	return command.Spec{
 		Program: c.Program,
-		Args:    append([]string(nil), c.Args...),
+		Args:    slices.Clone(c.Args),
 		Dir:     c.dir,
+		Env:     maps.Clone(c.Env),
 	}
 }
 
@@ -40,6 +44,12 @@ func (s Step) Specs() []command.Spec {
 	return specs
 }
 
+type Criterion struct {
+	ID     string  `yaml:"id" validate:"required,scenarioid,max=32"`
+	Weight float64 `yaml:"weight" validate:"gt=0"`
+	Check  Command `yaml:"check" validate:"required"`
+}
+
 type Definition struct {
 	ID          string        `yaml:"id" validate:"required,scenarioid,max=32"`
 	Title       string        `yaml:"title" validate:"required,notblank"`
@@ -50,6 +60,7 @@ type Definition struct {
 	InjectFault Step          `yaml:"inject_fault" validate:"required,min=1,dive"`
 	VerifyFault Step          `yaml:"verify_fault" validate:"required,min=1,dive"`
 	Reset       Step          `yaml:"reset" validate:"required,min=1,dive"`
+	Grading     []Criterion   `yaml:"grading" validate:"required,min=1,dive"`
 }
 
 func (d *Definition) setDir(dir string) {
@@ -59,6 +70,9 @@ func (d *Definition) setDir(dir string) {
 	d.InjectFault.setDir(dir)
 	d.VerifyFault.setDir(dir)
 	d.Reset.setDir(dir)
+	for index := range d.Grading {
+		d.Grading[index].Check.dir = dir
+	}
 }
 
 var scenarioIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -67,6 +81,14 @@ var definitionValidator = mustNewValidator()
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
 		return formatValidationError(err)
+	}
+
+	seenIDs := make(map[string]struct{}, len(d.Grading))
+	for _, criterion := range d.Grading {
+		if _, exists := seenIDs[criterion.ID]; exists {
+			return fmt.Errorf("invalid scenario: duplicate grading criterion id %q", criterion.ID)
+		}
+		seenIDs[criterion.ID] = struct{}{}
 	}
 	return nil
 }

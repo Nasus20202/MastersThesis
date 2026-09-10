@@ -61,7 +61,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 		return result, runErr
 	}
 	runErr := fmt.Errorf("run %q: %w", spec.Program, err)
-	logger.ErrorContext(ctx, "command failed",
+	logger.WarnContext(ctx, "command exited with non-zero status",
 		"exit_code", result.ExitCode,
 		"duration", result.Duration,
 		"error", runErr,

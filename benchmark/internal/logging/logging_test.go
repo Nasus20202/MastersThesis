@@ -3,68 +3,49 @@ package logging
 import (
 	"bytes"
 	"log/slog"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewCreatesConfiguredHandler(t *testing.T) {
 	var output bytes.Buffer
 	logger, err := New(&output, FormatJSON, slog.LevelInfo)
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	logger.Debug("hidden")
 	logger.Info("visible", "component", "test")
 
-	if strings.Contains(output.String(), "hidden") {
-		t.Fatal("debug record was not filtered")
-	}
-	if !strings.Contains(output.String(), `"msg":"visible"`) {
-		t.Fatalf("output = %q, want visible JSON record", output.String())
-	}
-	if strings.Contains(output.String(), `"source"`) {
-		t.Fatalf("output = %q, did not expect source at info level", output.String())
-	}
+	assert.NotContains(t, output.String(), "hidden")
+	assert.Contains(t, output.String(), `"msg":"visible"`)
+	assert.NotContains(t, output.String(), `"source"`)
 }
 
 func TestNewAddsSourceAtDebugLevel(t *testing.T) {
 	var output bytes.Buffer
 	logger, err := New(&output, FormatJSON, slog.LevelDebug)
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	logger.Debug("visible")
 
-	if !strings.Contains(output.String(), `"source"`) {
-		t.Fatalf("output = %q, want source at debug level", output.String())
-	}
+	assert.Contains(t, output.String(), `"source"`)
 }
 
 func TestNewRejectsUnknownFormat(t *testing.T) {
-	if _, err := New(&bytes.Buffer{}, Format("xml"), slog.LevelInfo); err == nil {
-		t.Fatal("expected unsupported format error")
-	}
+	_, err := New(&bytes.Buffer{}, Format("xml"), slog.LevelInfo)
+	assert.Error(t, err)
 }
 
 func TestParseLevel(t *testing.T) {
 	level, err := ParseLevel(" WARN ")
-	if err != nil {
-		t.Fatalf("ParseLevel() error = %v", err)
-	}
-	if level != slog.LevelWarn {
-		t.Fatalf("ParseLevel() = %v, want %v", level, slog.LevelWarn)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, slog.LevelWarn, level)
 
-	if _, err := ParseLevel("trace"); err == nil {
-		t.Fatal("expected unsupported level error")
-	}
+	_, err = ParseLevel("trace")
+	assert.Error(t, err)
+
 	level, err = ParseLevel("")
-	if err != nil {
-		t.Fatalf("ParseLevel() empty error = %v", err)
-	}
-	if level != slog.LevelInfo {
-		t.Fatalf("ParseLevel() empty = %v, want %v", level, slog.LevelInfo)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, slog.LevelInfo, level)
 }

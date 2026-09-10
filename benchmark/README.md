@@ -23,6 +23,8 @@ cluster:
 prepare:
   - program: kubectl
     args: [apply, -f, manifests/app.yaml]
+    env:
+      EXAMPLE_MODE: strict
 
 verify_clean:
   - program: kubectl
@@ -34,12 +36,28 @@ inject_fault:
 verify_fault:
   - program: ./scripts/verify-fault.sh
 
+grading:
+  - id: workload-ready
+    weight: 1
+    check:
+      program: ./scripts/check-restored.sh
+
 reset:
   - program: kubectl
     args: [apply, -f, manifests/app.yaml]
   - program: kubectl
     args: [rollout, status, deployment/app, --timeout=60s]
 ```
+
+The runner performs these steps in order:
+
+1. prepare;
+2. verify the clean state;
+3. inject the fault;
+4. verify the fault;
+5. leave a boundary for future agent repair;
+6. grade the repaired state;
+7. reset the scenario.
 
 Command paths, manifest paths and the optional Kind config path are resolved
 relative to the scenario file. Without a Kind config, Kind uses its default
