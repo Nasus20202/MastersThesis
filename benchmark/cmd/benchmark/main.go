@@ -14,7 +14,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/lifecycle"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/logging"
-	sandboxruntime "github.com/Nasus20202/MastersThesis/benchmark/internal/sandbox"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
@@ -68,7 +68,7 @@ func run(args []string, logOutput, resultOutput io.Writer) error {
 			})
 		},
 		SandboxFactory: func(name, kubeconfigPath string) (lifecycle.Sandbox, error) {
-			return sandboxruntime.New(executor, sandboxruntime.Config{
+			return sandbox.New(executor, sandbox.Config{
 				Name:           name + "-sandbox",
 				Image:          sandboxImage,
 				DockerfilePath: sandboxDockerfilePath,
