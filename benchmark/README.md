@@ -8,8 +8,8 @@ restored after a fault is injected.
 ## Scenarios
 
 Scenarios define the workload setup, clean-state verification, fault injection,
-fault verification and reset steps. A complete generic scenario looks like
-this:
+fault verification, weighted repair criteria and reset steps. A complete generic
+scenario looks like this:
 
 ```yaml
 id: example-incident
@@ -34,6 +34,12 @@ inject_fault:
 verify_fault:
   - program: ./scripts/verify-fault.sh
 
+grading:
+  - id: workload-ready
+    weight: 1
+    check:
+      program: ./scripts/check-restored.sh
+
 reset:
   - program: kubectl
     args: [apply, -f, manifests/app.yaml]
@@ -41,9 +47,49 @@ reset:
     args: [rollout, status, deployment/app, --timeout=60s]
 ```
 
-Command paths, manifest paths and the optional Kind config path are resolved
-relative to the scenario file. Without a Kind config, Kind uses its default
-single control-plane node configuration.
+Each command may also define an optional `env` mapping. Command paths, manifest
+paths and the optional Kind config path are resolved relative to the scenario
+file. Without a Kind config, Kind uses its default single control-plane node
+configuration.
+
+The runner executes the lifecycle in this order:
+
+1. prepare;
+2. verify the clean state;
+3. inject and verify the fault;
+4. leave a boundary for future agent repair execution;
+5. run every grading check independently;
+6. reset the scenario.
+
+Each grading check passes when its command exits with status `0`. The result
+contains the criterion ID, weight, pass/fail value, stdout, stderr, exit code
+and duration. The aggregate score is the passed weight divided by total weight;
+`full_success` is true only when every criterion passes.
+
+The command writes a pretty-printed JSON result to stdout and logs to stderr:
+
+```json
+{
+  "grading": {
+    "criteria": [
+      {
+        "id": "workload-ready",
+        "weight": 1,
+        "passed": true,
+        "stdout": "healthy\n",
+        "stderr": "",
+        "exit_code": 0,
+        "duration": 1234567
+      }
+    ],
+    "score": 1,
+    "full_success": true
+  }
+}
+```
+
+`duration` is encoded as an integer number of nanoseconds because it is a Go
+`time.Duration`.
 
 ## Development
 
