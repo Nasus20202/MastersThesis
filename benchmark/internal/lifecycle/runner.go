@@ -29,22 +29,22 @@ const (
 	phaseReset            = "reset"
 )
 
-func (r Runner) Run(ctx context.Context, definition scenario.Definition) (runErr error) {
+func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result GradingResult, runErr error) {
 	if r.ClusterFactory == nil {
-		return errors.New("lifecycle cluster factory is required")
+		return GradingResult{}, errors.New("lifecycle cluster factory is required")
 	}
 	if r.Executor == nil {
-		return errors.New("lifecycle command executor is required")
+		return GradingResult{}, errors.New("lifecycle command executor is required")
 	}
 	if err := definition.Validate(); err != nil {
-		return err
+		return GradingResult{}, err
 	}
 
 	clusterName := clusterNameFor(definition.ID)
 	logger := slog.With("scenario", definition.ID, "cluster", clusterName)
 	cluster, err := r.newCluster(clusterName, logger)
 	if err != nil {
-		return err
+		return GradingResult{}, err
 	}
 
 	defer func() {
@@ -54,7 +54,7 @@ func (r Runner) Run(ctx context.Context, definition scenario.Definition) (runErr
 	}()
 
 	if err := r.createCluster(ctx, cluster, clusterName, logger); err != nil {
-		return err
+		return GradingResult{}, err
 	}
 	return r.runPhases(ctx, definition, cluster.KubeconfigPath(), logger)
 }
@@ -92,7 +92,7 @@ func (r Runner) cleanupCluster(cluster Cluster, logger *slog.Logger) error {
 	return nil
 }
 
-func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, kubeconfigPath string, logger *slog.Logger) error {
+func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, kubeconfigPath string, logger *slog.Logger) (GradingResult, error) {
 	phases := []struct {
 		name string
 		step scenario.Step
@@ -107,11 +107,19 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, k
 		logger.Info("running scenario phase", "phase", phase.name)
 		if err := r.runStep(ctx, phase.name, phase.step, kubeconfigPath); err != nil {
 			logger.Error("scenario phase failed", "phase", phase.name, "error", err)
-			return err
+			return GradingResult{}, err
 		}
 		logger.Info("scenario phase completed", "phase", phase.name)
 	}
-	return nil
+
+	logger.Info("running scenario grading")
+	result, err := r.runGrading(ctx, definition.Grading, kubeconfigPath)
+	if err != nil {
+		logger.Error("scenario grading failed", "error", err)
+		return GradingResult{}, err
+	}
+	logger.Info("scenario grading completed", "score", result.Score, "full_success", result.FullSuccess)
+	return result, nil
 }
 
 func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, kubeconfigPath string) error {
@@ -122,6 +130,23 @@ func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, k
 		}
 	}
 	return nil
+}
+
+func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, kubeconfigPath string) (GradingResult, error) {
+	results := make([]CriterionResult, 0, len(criteria))
+	for _, criterion := range criteria {
+		result, _ := r.Executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
+		results = append(results, CriterionResult{
+			ID:       criterion.ID,
+			Weight:   criterion.Weight,
+			Passed:   result.ExitCode == 0,
+			Stdout:   result.Stdout,
+			Stderr:   result.Stderr,
+			ExitCode: result.ExitCode,
+			Duration: result.Duration,
+		})
+	}
+	return calculateGradingResult(results)
 }
 
 func withKubeconfig(spec command.Spec, kubeconfigPath string) command.Spec {

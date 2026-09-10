@@ -60,7 +60,8 @@ func run(args []string, output io.Writer) error {
 			})
 		},
 	}
-	return runner.Run(context.Background(), definition)
+	_, err = runner.Run(context.Background(), definition)
+	return err
 }
 
 func newLogger(output io.Writer) (*slog.Logger, error) {
