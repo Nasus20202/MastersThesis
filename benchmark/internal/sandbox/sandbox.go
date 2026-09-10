@@ -15,7 +15,6 @@ import (
 
 const (
 	dockerProgram = "docker"
-	kindNetwork   = "kind"
 	tmpfsMode     = ":rw,mode=1777"
 )
 
@@ -39,6 +38,8 @@ type Config struct {
 	DockerfilePath string
 	BuildContext   string
 	KubeconfigPath string
+	Network        string
+	NetworkTarget  string
 	Layout         ImageLayout
 }
 
@@ -69,6 +70,12 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	if !filepath.IsAbs(config.KubeconfigPath) {
 		return nil, errors.New("sandbox kubeconfig path must be absolute")
 	}
+	if strings.TrimSpace(config.Network) == "" {
+		return nil, errors.New("sandbox network is required")
+	}
+	if strings.TrimSpace(config.NetworkTarget) == "" {
+		return nil, errors.New("sandbox network target is required")
+	}
 	if strings.TrimSpace(config.Layout.User) == "" {
 		return nil, errors.New("sandbox image user is required")
 	}
@@ -97,7 +104,6 @@ func (s *Sandbox) Build(ctx context.Context) error {
 		Program: dockerProgram,
 		Args: []string{
 			"build",
-			"--pull",
 			"--file", s.config.DockerfilePath,
 			"--tag", s.config.Image,
 			s.config.BuildContext,
@@ -114,14 +120,29 @@ func (s *Sandbox) Build(ctx context.Context) error {
 func (s *Sandbox) Start(ctx context.Context) error {
 	logger := slog.With("sandbox", s.config.Name)
 	logger.InfoContext(ctx, "starting sandbox")
-	_, err := s.executor.Run(ctx, command.Spec{
+	if _, err := s.executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "create", "--internal", s.config.Network},
+	}); err != nil {
+		logger.ErrorContext(ctx, "sandbox network creation failed", "error", err)
+		return fmt.Errorf("create sandbox network %q: %w", s.config.Network, err)
+	}
+	if _, err := s.executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "connect", s.config.Network, s.config.NetworkTarget},
+	}); err != nil {
+		_ = s.removeNetwork(ctx)
+		logger.ErrorContext(ctx, "sandbox network connection failed", "error", err)
+		return fmt.Errorf("connect sandbox network %q to %q: %w", s.config.Network, s.config.NetworkTarget, err)
+	}
+	if _, err := s.executor.Run(ctx, command.Spec{
 		Program: dockerProgram,
 		Args: []string{
 			"run",
 			"--detach",
 			"--rm",
 			"--name", s.config.Name,
-			"--network", kindNetwork,
+			"--network", s.config.Network,
 			"--user", s.config.Layout.User,
 			"--workdir", s.config.Layout.Workdir,
 			"--cap-drop", "ALL",
@@ -133,10 +154,18 @@ func (s *Sandbox) Start(ctx context.Context) error {
 			s.config.Image,
 			"sleep", "infinity",
 		},
-	})
-	if err != nil {
+	}); err != nil {
+		_ = s.disconnectNetwork(ctx)
+		_ = s.removeNetwork(ctx)
 		logger.ErrorContext(ctx, "sandbox start failed", "error", err)
 		return fmt.Errorf("start sandbox %q: %w", s.config.Name, err)
+	}
+	if _, err := s.Exec(ctx, command.Spec{Program: "kubectl", Args: []string{"get", "nodes"}}); err != nil {
+		cleanupErr := s.Stop(context.Background())
+		if cleanupErr != nil {
+			return errors.Join(fmt.Errorf("validate sandbox Kubernetes access: %w", err), cleanupErr)
+		}
+		return fmt.Errorf("validate sandbox Kubernetes access: %w", err)
 	}
 	logger.InfoContext(ctx, "sandbox started")
 	return nil
@@ -176,7 +205,37 @@ func (s *Sandbox) Stop(ctx context.Context) error {
 		logger.ErrorContext(ctx, "sandbox stop failed", "error", err)
 		return fmt.Errorf("stop sandbox %q: %w", s.config.Name, err)
 	}
+	if err := s.disconnectNetwork(ctx); err != nil {
+		logger.ErrorContext(ctx, "sandbox network disconnection failed", "error", err)
+		return err
+	}
+	if err := s.removeNetwork(ctx); err != nil {
+		logger.ErrorContext(ctx, "sandbox network removal failed", "error", err)
+		return err
+	}
 	logger.InfoContext(ctx, "sandbox stopped")
+	return nil
+}
+
+func (s *Sandbox) disconnectNetwork(ctx context.Context) error {
+	_, err := s.executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "disconnect", "--force", s.config.Network, s.config.NetworkTarget},
+	})
+	if err != nil {
+		return fmt.Errorf("disconnect sandbox network %q from %q: %w", s.config.Network, s.config.NetworkTarget, err)
+	}
+	return nil
+}
+
+func (s *Sandbox) removeNetwork(ctx context.Context) error {
+	_, err := s.executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "rm", s.config.Network},
+	})
+	if err != nil {
+		return fmt.Errorf("remove sandbox network %q: %w", s.config.Network, err)
+	}
 	return nil
 }
 

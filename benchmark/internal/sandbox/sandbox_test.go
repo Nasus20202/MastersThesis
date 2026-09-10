@@ -28,6 +28,8 @@ func newSandbox(t *testing.T, executor command.Executor) *Sandbox {
 		DockerfilePath: "/tmp/Dockerfile",
 		BuildContext:   "/tmp/context",
 		KubeconfigPath: "/tmp/benchmark.kubeconfig",
+		Network:        "benchmark-sandbox-network",
+		NetworkTarget:  "benchmark-control-plane",
 		Layout:         DefaultImageLayout(),
 	})
 	require.NoError(t, err)
@@ -61,7 +63,7 @@ func TestBuildUsesHostDockerCommand(t *testing.T) {
 	assert.Equal(t, command.Spec{
 		Program: dockerProgram,
 		Args: []string{
-			"build", "--pull", "--file", "/tmp/Dockerfile",
+			"build", "--file", "/tmp/Dockerfile",
 			"--tag", "masters-thesis-sandbox:increment-1", "/tmp/context",
 		},
 	}, executor.specs[0])
@@ -73,12 +75,20 @@ func TestStartUsesRestrictedHostDockerCommand(t *testing.T) {
 
 	assert.NoError(t, sandbox.Start(context.Background()))
 
-	require.Len(t, executor.specs, 1)
+	require.Len(t, executor.specs, 4)
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "create", "--internal", "benchmark-sandbox-network"},
+	}, executor.specs[0])
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"network", "connect", "benchmark-sandbox-network", "benchmark-control-plane"},
+	}, executor.specs[1])
 	assert.Equal(t, command.Spec{
 		Program: dockerProgram,
 		Args: []string{
 			"run", "--detach", "--rm", "--name", "benchmark-sandbox",
-			"--network", "kind",
+			"--network", "benchmark-sandbox-network",
 			"--user", "benchmark",
 			"--workdir", "/workspace",
 			"--cap-drop", "ALL",
@@ -89,8 +99,15 @@ func TestStartUsesRestrictedHostDockerCommand(t *testing.T) {
 			"--mount", "type=bind,src=/tmp/benchmark.kubeconfig,dst=/home/benchmark/.kube/config,readonly",
 			"masters-thesis-sandbox:increment-1", "sleep", "infinity",
 		},
-	}, executor.specs[0])
-	assert.NotContains(t, executor.specs[0].Args, "/var/run/docker.sock")
+	}, executor.specs[2])
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args: []string{
+			"exec", "--user", "benchmark", "--workdir", "/workspace",
+			"benchmark-sandbox", "kubectl", "get", "nodes",
+		},
+	}, executor.specs[3])
+	assert.NotContains(t, executor.specs[2].Args, "/var/run/docker.sock")
 }
 
 func TestExecUsesDockerExecWithStableEnvironmentAndWorkdir(t *testing.T) {
@@ -137,8 +154,10 @@ func TestStopUsesHostDockerCommand(t *testing.T) {
 
 	assert.NoError(t, sandbox.Stop(context.Background()))
 
-	require.Len(t, executor.specs, 1)
+	require.Len(t, executor.specs, 3)
 	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"stop", "benchmark-sandbox"}}, executor.specs[0])
+	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"network", "disconnect", "--force", "benchmark-sandbox-network", "benchmark-control-plane"}}, executor.specs[1])
+	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"network", "rm", "benchmark-sandbox-network"}}, executor.specs[2])
 }
 
 func TestSandboxReturnsDockerErrors(t *testing.T) {

@@ -15,3 +15,10 @@ while IFS= read -r container; do
     docker rm --force "$container"
   fi
 done <<< "$containers"
+
+networks=$(docker network ls -q --filter name=sandbox-network)
+while IFS= read -r network; do
+  if [[ -n "$network" ]]; then
+    docker network rm "$network"
+  fi
+done <<< "$networks"

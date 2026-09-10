@@ -74,6 +74,8 @@ func run(args []string, logOutput, resultOutput io.Writer) error {
 				DockerfilePath: sandboxDockerfilePath,
 				BuildContext:   sandboxBuildContext,
 				KubeconfigPath: kubeconfigPath,
+				Network:        name + "-sandbox-network",
+				NetworkTarget:  name + "-control-plane",
 				Layout:         sandbox.DefaultImageLayout(),
 			})
 		},
