@@ -3,70 +3,58 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-type fakeCluster struct {
-	events         *[]string
-	createErr      error
-	deleteErr      error
-	deleteCtx      context.Context
-	kubeconfigPath string
-	kubeconfigCtx  string
+type mockCluster struct {
+	mock.Mock
 }
 
-func (c *fakeCluster) Create(context.Context) error {
-	*c.events = append(*c.events, "create")
-	return c.createErr
+func (c *mockCluster) Create(ctx context.Context) error {
+	return c.Called(ctx).Error(0)
 }
 
-func (c *fakeCluster) Delete(ctx context.Context) error {
-	*c.events = append(*c.events, "delete")
-	c.deleteCtx = ctx
-	return c.deleteErr
+func (c *mockCluster) Delete(ctx context.Context) error {
+	return c.Called(ctx).Error(0)
 }
 
-func (c *fakeCluster) KubeconfigPath() string {
-	return c.kubeconfigPath
+func (c *mockCluster) KubeconfigPath() string {
+	return c.Called().String(0)
 }
 
-func (c *fakeCluster) KubeconfigContext() string {
-	return c.kubeconfigCtx
+func (c *mockCluster) KubeconfigContext() string {
+	return c.Called().String(0)
 }
 
-type recordingExecutor struct {
-	events   *[]string
-	specs    []command.Spec
-	failWith error
-	failAt   int
-	results  []command.Result
-	errors   []error
+type mockExecutor struct {
+	mock.Mock
 }
 
-func (e *recordingExecutor) Run(_ context.Context, spec command.Spec) (command.Result, error) {
-	e.specs = append(e.specs, spec)
-	*e.events = append(*e.events, spec.Program)
-	if e.failAt == len(e.specs) {
-		return command.Result{}, e.failWith
-	}
-	resultIndex := len(e.specs) - 1
-	if resultIndex >= len(e.results) {
-		return command.Result{}, e.errorAt(resultIndex)
-	}
-	return e.results[resultIndex], e.errorAt(resultIndex)
+func (e *mockExecutor) Run(ctx context.Context, spec command.Spec) (command.Result, error) {
+	args := e.Called(ctx, spec)
+	result, _ := args.Get(0).(command.Result)
+	return result, args.Error(1)
 }
 
-func (e *recordingExecutor) errorAt(index int) error {
-	if index >= len(e.errors) {
-		return nil
-	}
-	return e.errors[index]
+func commandSpec(program string, args ...string) interface{} {
+	return mock.MatchedBy(func(spec command.Spec) bool {
+		if spec.Program != program || len(spec.Args) != len(args) {
+			return false
+		}
+		for index, arg := range args {
+			if spec.Args[index] != arg {
+				return false
+			}
+		}
+		return spec.Env[kubeconfigEnv] == "/tmp/test.kubeconfig"
+	})
 }
 
 func testDefinition() scenario.Definition {
@@ -88,18 +76,25 @@ func testDefinition() scenario.Definition {
 }
 
 func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
-	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
-	executor := &recordingExecutor{events: &events}
+	cluster := &mockCluster{}
+	create := cluster.On("Create", mock.Anything).Return(nil).Once()
+	kubeconfigPath := cluster.On("KubeconfigPath").Return("/tmp/test.kubeconfig").Once()
+	delete := cluster.On("Delete", mock.MatchedBy(func(ctx context.Context) bool {
+		_, ok := ctx.Deadline()
+		return ok
+	})).Return(nil).Once()
+	executor := &mockExecutor{}
+	prepare := executor.On("Run", mock.Anything, commandSpec("kubectl", "apply", "-f", "manifest.yaml")).Return(command.Result{}, nil).Once()
+	verifyClean := executor.On("Run", mock.Anything, commandSpec("verify-clean")).Return(command.Result{}, nil).Once()
+	injectFault := executor.On("Run", mock.Anything, commandSpec("inject-fault")).Return(command.Result{}, nil).Once()
+	verifyFault := executor.On("Run", mock.Anything, commandSpec("verify-fault")).Return(command.Result{}, nil).Once()
+	grade := executor.On("Run", mock.Anything, commandSpec("verify-restored")).Return(command.Result{}, nil).Once()
+	reset := executor.On("Run", mock.Anything, commandSpec("reset")).Return(command.Result{}, nil).Once()
+	mock.InOrder(create, kubeconfigPath, prepare, verifyClean, injectFault, verifyFault, grade, reset, delete)
 	var clusterName string
 	runner := Runner{
 		ClusterFactory: func(name string) (Cluster, error) {
 			clusterName = name
-			events = append(events, "factory")
 			return cluster, nil
 		},
 		Executor:       executor,
@@ -119,32 +114,24 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	if !strings.HasPrefix(clusterName, "benchmark-test-scenario-") {
 		t.Fatalf("cluster name = %q, want scenario prefix", clusterName)
 	}
-
-	wantEvents := []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset", "delete"}
-	if !slices.Equal(events, wantEvents) {
-		t.Fatalf("events = %v, want %v", events, wantEvents)
-	}
-	if got := executor.specs[0].Args; !slices.Equal(got, []string{"apply", "-f", "manifest.yaml"}) {
-		t.Fatalf("kubectl args = %v, want unchanged args", got)
-	}
-	if got := executor.specs[0].Env["KUBECONFIG"]; got != "/tmp/test.kubeconfig" {
-		t.Fatalf("KUBECONFIG = %q, want %q", got, "/tmp/test.kubeconfig")
-	}
-	if _, ok := cluster.deleteCtx.Deadline(); !ok {
-		t.Fatal("cleanup context has no deadline")
-	}
+	assert.True(t, cluster.AssertExpectations(t))
+	assert.True(t, executor.AssertExpectations(t))
 }
 
 func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
-	events := []string{}
-	executor := &recordingExecutor{
-		events: &events,
-		results: []command.Result{
-			{Stdout: "healthy", ExitCode: 0, Duration: 10 * time.Millisecond},
-			{Stdout: "partial", Stderr: "not ready", ExitCode: 7, Duration: 20 * time.Millisecond},
-		},
-		errors: []error{nil, errors.New("check failed")},
-	}
+	executor := &mockExecutor{}
+	first := executor.On("Run", mock.Anything, commandSpec("first-check")).Return(command.Result{
+		Stdout:   "healthy",
+		ExitCode: 0,
+		Duration: 10 * time.Millisecond,
+	}, nil).Once()
+	second := executor.On("Run", mock.Anything, commandSpec("second-check")).Return(command.Result{
+		Stdout:   "partial",
+		Stderr:   "not ready",
+		ExitCode: 7,
+		Duration: 20 * time.Millisecond,
+	}, errors.New("check failed")).Once()
+	mock.InOrder(first, second)
 	runner := Runner{Executor: executor}
 	criteria := []scenario.Criterion{
 		{ID: "healthy", Weight: 1, Check: scenario.Command{Program: "first-check"}},
@@ -158,15 +145,13 @@ func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 	if result.Score != 0.25 || result.FullSuccess {
 		t.Fatalf("grading result = %#v, want score 0.25 and partial success", result)
 	}
-	if !slices.Equal(events, []string{"first-check", "second-check"}) {
-		t.Fatalf("grading events = %v, want both checks in order", events)
-	}
 	if len(result.Criteria) != 2 {
 		t.Fatalf("criteria = %#v, want two results", result.Criteria)
 	}
 	if got := result.Criteria[1]; got.Passed || got.Error != "check failed" || got.Stdout != "partial" || got.Stderr != "not ready" || got.ExitCode != 7 || got.DurationSeconds != 0.02 {
 		t.Fatalf("failed criterion evidence = %#v, want captured result", got)
 	}
+	assert.True(t, executor.AssertExpectations(t))
 }
 
 func TestWithKubeconfigPreservesEnvironment(t *testing.T) {
@@ -192,42 +177,45 @@ func TestClusterNameUsesScenarioID(t *testing.T) {
 }
 
 func TestRunnerCleansUpAfterCreateFailure(t *testing.T) {
-	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		createErr:      errors.New("create failed"),
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	createErr := errors.New("create failed")
+	cluster := &mockCluster{}
+	create := cluster.On("Create", mock.Anything).Return(createErr).Once()
+	delete := cluster.On("Delete", mock.Anything).Return(nil).Once()
+	mock.InOrder(create, delete)
 	runner := Runner{
 		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
-		Executor:       &recordingExecutor{events: &events},
+		Executor:       &mockExecutor{},
 	}
 
 	if _, err := runner.Run(context.Background(), testDefinition()); err == nil {
 		t.Fatal("expected create error")
 	}
-	if len(events) != 2 || events[0] != "create" || events[1] != "delete" {
-		t.Fatalf("events = %v, want create and delete", events)
-	}
+	assert.True(t, cluster.AssertExpectations(t))
 }
 
 func TestRunnerReturnsCleanupError(t *testing.T) {
-	events := []string{}
 	cleanupErr := errors.New("delete failed")
-	cluster := &fakeCluster{
-		events:         &events,
-		deleteErr:      cleanupErr,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	cluster := &mockCluster{}
+	create := cluster.On("Create", mock.Anything).Return(nil).Once()
+	kubeconfigPath := cluster.On("KubeconfigPath").Return("/tmp/test.kubeconfig").Once()
+	delete := cluster.On("Delete", mock.Anything).Return(cleanupErr).Once()
+	executor := &mockExecutor{}
+	prepare := executor.On("Run", mock.Anything, commandSpec("kubectl", "apply", "-f", "manifest.yaml")).Return(command.Result{}, nil).Once()
+	verifyClean := executor.On("Run", mock.Anything, commandSpec("verify-clean")).Return(command.Result{}, nil).Once()
+	injectFault := executor.On("Run", mock.Anything, commandSpec("inject-fault")).Return(command.Result{}, nil).Once()
+	verifyFault := executor.On("Run", mock.Anything, commandSpec("verify-fault")).Return(command.Result{}, nil).Once()
+	grade := executor.On("Run", mock.Anything, commandSpec("verify-restored")).Return(command.Result{}, nil).Once()
+	reset := executor.On("Run", mock.Anything, commandSpec("reset")).Return(command.Result{}, nil).Once()
+	mock.InOrder(create, kubeconfigPath, prepare, verifyClean, injectFault, verifyFault, grade, reset, delete)
 	runner := Runner{
 		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
-		Executor:       &recordingExecutor{events: &events},
+		Executor:       executor,
 	}
 
 	_, err := runner.Run(context.Background(), testDefinition())
 	if !errors.Is(err, cleanupErr) {
 		t.Fatalf("Run() error = %v, want cleanup error", err)
 	}
+	assert.True(t, cluster.AssertExpectations(t))
+	assert.True(t, executor.AssertExpectations(t))
 }
