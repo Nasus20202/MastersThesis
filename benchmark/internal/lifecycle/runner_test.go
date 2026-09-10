@@ -66,6 +66,11 @@ func testDefinition() scenario.Definition {
 		InjectFault: scenario.Step{{Program: "inject-fault"}},
 		VerifyFault: scenario.Step{{Program: "verify-fault"}},
 		Reset:       scenario.Step{{Program: "reset"}},
+		Grading: []scenario.Criterion{{
+			ID:     "workload-restored",
+			Weight: 1,
+			Check:  scenario.Command{Program: "verify-restored"},
+		}},
 	}
 }
 

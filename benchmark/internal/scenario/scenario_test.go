@@ -13,6 +13,8 @@ task: Restore the test workload.
 prepare:
   - program: prepare
     args: [manifest.yaml]
+    env:
+      CHECK_MODE: strict
 
 verify_clean:
   - program: verify-clean
@@ -25,6 +27,12 @@ verify_fault:
 
 reset:
   - program: reset
+
+grading:
+  - id: workload-restored
+    weight: 1
+    check:
+      program: verify-restored
 `
 
 func TestParseValidScenario(t *testing.T) {
@@ -41,6 +49,9 @@ func TestParseValidScenario(t *testing.T) {
 	}
 	if got := definition.Prepare[0].Spec().Args; len(got) != 1 || got[0] != "manifest.yaml" {
 		t.Fatalf("prepare command args = %#v, want manifest.yaml", got)
+	}
+	if got := definition.Prepare[0].Spec().Env["CHECK_MODE"]; got != "strict" {
+		t.Fatalf("prepare command environment = %q, want strict", got)
 	}
 }
 
@@ -101,6 +112,56 @@ func TestValidateRejectsInvalidID(t *testing.T) {
 
 	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "scenarioid") {
 		t.Fatalf("validation error = %v, want scenarioid validation error", err)
+	}
+}
+
+func TestValidateRejectsInvalidCriterion(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*Definition)
+		want   string
+	}{
+		{
+			name: "blank id",
+			change: func(definition *Definition) {
+				definition.Grading[0].ID = " "
+			},
+			want: "ID",
+		},
+		{
+			name: "zero weight",
+			change: func(definition *Definition) {
+				definition.Grading[0].Weight = 0
+			},
+			want: "Weight",
+		},
+		{
+			name: "blank check program",
+			change: func(definition *Definition) {
+				definition.Grading[0].Check.Program = " "
+			},
+			want: "Program",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			definition := validDefinition(t)
+			test.change(&definition)
+
+			if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validation error = %v, want %s validation error", err, test.want)
+			}
+		})
+	}
+}
+
+func TestValidateRejectsMissingGrading(t *testing.T) {
+	definition := validDefinition(t)
+	definition.Grading = nil
+
+	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "Grading") {
+		t.Fatalf("validation error = %v, want Grading validation error", err)
 	}
 }
 

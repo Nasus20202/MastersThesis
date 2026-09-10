@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strconv"
 	"time"
 
@@ -128,9 +129,9 @@ func withKubeconfig(spec command.Spec, kubeconfigPath string) command.Spec {
 		return spec
 	}
 
-	env := make(map[string]string, len(spec.Env)+1)
-	for key, value := range spec.Env {
-		env[key] = value
+	env := maps.Clone(spec.Env)
+	if env == nil {
+		env = make(map[string]string)
 	}
 	env[kubeconfigEnv] = kubeconfigPath
 	spec.Env = env
