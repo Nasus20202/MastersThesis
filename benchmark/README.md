@@ -8,8 +8,8 @@ restored after a fault is injected.
 ## Scenarios
 
 Scenarios define the workload setup, clean-state verification, fault injection,
-fault verification, weighted repair criteria and reset steps. A complete generic
-scenario looks like this:
+fault verification and reset steps. A complete generic scenario looks like
+this:
 
 ```yaml
 id: example-incident
@@ -23,6 +23,8 @@ cluster:
 prepare:
   - program: kubectl
     args: [apply, -f, manifests/app.yaml]
+    env:
+      EXAMPLE_MODE: strict
 
 verify_clean:
   - program: kubectl
@@ -47,46 +49,19 @@ reset:
     args: [rollout, status, deployment/app, --timeout=60s]
 ```
 
-Each command may also define an optional `env` mapping. Command paths, manifest
-paths and the optional Kind config path are resolved relative to the scenario
-file. Without a Kind config, Kind uses its default single control-plane node
-configuration.
-
-The runner executes the lifecycle in this order:
+The runner performs these steps in order:
 
 1. prepare;
 2. verify the clean state;
-3. inject and verify the fault;
-4. leave a boundary for future agent repair execution;
-5. run every grading check independently;
-6. reset the scenario.
+3. inject the fault;
+4. verify the fault;
+5. leave a boundary for future agent repair;
+6. grade the repaired state;
+7. reset the scenario.
 
-Each grading check passes when its command exits with status `0`. The result
-contains the criterion ID, weight, pass/fail value, stdout, stderr, exit code
-and duration in seconds. The aggregate score is the passed weight divided by
-total weight; `full_success` is true only when every criterion passes.
-
-The command writes a pretty-printed JSON result to stdout and logs to stderr:
-
-```json
-{
-  "grading": {
-    "criteria": [
-      {
-        "id": "workload-ready",
-        "weight": 1,
-        "passed": true,
-        "stdout": "healthy\n",
-        "stderr": "",
-        "exit_code": 0,
-        "duration": 0.012345
-      }
-    ],
-    "score": 1,
-    "full_success": true
-  }
-}
-```
+Command paths, manifest paths and the optional Kind config path are resolved
+relative to the scenario file. Without a Kind config, Kind uses its default
+single control-plane node configuration.
 
 ## Development
 
