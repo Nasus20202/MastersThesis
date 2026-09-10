@@ -14,12 +14,24 @@ import (
 )
 
 const (
-	dockerProgram       = "docker"
-	kindNetwork         = "kind"
-	benchmarkUser       = "benchmark"
-	defaultWorkdir      = "/workspace"
-	kubeconfigMountPath = "/home/benchmark/.kube/config"
+	dockerProgram = "docker"
+	kindNetwork   = "kind"
+	tmpfsMode     = ":rw,mode=1777"
 )
+
+type ImageLayout struct {
+	User                string
+	Workdir             string
+	KubeconfigMountPath string
+}
+
+func DefaultImageLayout() ImageLayout {
+	return ImageLayout{
+		User:                "benchmark",
+		Workdir:             "/workspace",
+		KubeconfigMountPath: "/home/benchmark/.kube/config",
+	}
+}
 
 type Config struct {
 	Name           string
@@ -27,6 +39,7 @@ type Config struct {
 	DockerfilePath string
 	BuildContext   string
 	KubeconfigPath string
+	Layout         ImageLayout
 }
 
 type Sandbox struct {
@@ -55,6 +68,21 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	}
 	if !filepath.IsAbs(config.KubeconfigPath) {
 		return nil, errors.New("sandbox kubeconfig path must be absolute")
+	}
+	if strings.TrimSpace(config.Layout.User) == "" {
+		return nil, errors.New("sandbox image user is required")
+	}
+	if strings.TrimSpace(config.Layout.Workdir) == "" {
+		return nil, errors.New("sandbox image workdir is required")
+	}
+	if !filepath.IsAbs(config.Layout.Workdir) {
+		return nil, errors.New("sandbox image workdir must be absolute")
+	}
+	if strings.TrimSpace(config.Layout.KubeconfigMountPath) == "" {
+		return nil, errors.New("sandbox kubeconfig mount path is required")
+	}
+	if !filepath.IsAbs(config.Layout.KubeconfigMountPath) {
+		return nil, errors.New("sandbox kubeconfig mount path must be absolute")
 	}
 	return &Sandbox{executor: executor, config: config}, nil
 }
@@ -94,13 +122,14 @@ func (s *Sandbox) Start(ctx context.Context) error {
 			"--rm",
 			"--name", s.config.Name,
 			"--network", kindNetwork,
-			"--user", benchmarkUser,
+			"--user", s.config.Layout.User,
+			"--workdir", s.config.Layout.Workdir,
 			"--cap-drop", "ALL",
 			"--security-opt", "no-new-privileges",
 			"--read-only",
-			"--tmpfs", "/tmp:rw,mode=1777",
-			"--tmpfs", "/workspace:rw,mode=1777",
-			"--mount", fmt.Sprintf("type=bind,src=%s,dst=%s,readonly", filepath.Clean(s.config.KubeconfigPath), kubeconfigMountPath),
+			"--tmpfs", "/tmp" + tmpfsMode,
+			"--tmpfs", s.config.Layout.Workdir + tmpfsMode,
+			"--mount", fmt.Sprintf("type=bind,src=%s,dst=%s,readonly", filepath.Clean(s.config.KubeconfigPath), s.config.Layout.KubeconfigMountPath),
 			s.config.Image,
 			"sleep", "infinity",
 		},
@@ -120,8 +149,8 @@ func (s *Sandbox) Exec(ctx context.Context, spec command.Spec) (command.Result, 
 
 	args := []string{
 		"exec",
-		"--user", benchmarkUser,
-		"--workdir", workdir(spec.Dir),
+		"--user", s.config.Layout.User,
+		"--workdir", workdir(spec.Dir, s.config.Layout.Workdir),
 	}
 	for _, key := range slices.Sorted(maps.Keys(spec.Env)) {
 		args = append(args, "--env", key+"="+spec.Env[key])
@@ -151,9 +180,9 @@ func (s *Sandbox) Stop(ctx context.Context) error {
 	return nil
 }
 
-func workdir(dir string) string {
+func workdir(dir, defaultDir string) string {
 	if dir == "" {
-		return defaultWorkdir
+		return defaultDir
 	}
 	return dir
 }

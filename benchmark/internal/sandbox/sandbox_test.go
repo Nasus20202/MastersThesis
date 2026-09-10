@@ -28,6 +28,7 @@ func newSandbox(t *testing.T, executor command.Executor) *Sandbox {
 		DockerfilePath: "/tmp/Dockerfile",
 		BuildContext:   "/tmp/context",
 		KubeconfigPath: "/tmp/benchmark.kubeconfig",
+		Layout:         DefaultImageLayout(),
 	})
 	require.NoError(t, err)
 	return sandbox
@@ -79,6 +80,7 @@ func TestStartUsesRestrictedHostDockerCommand(t *testing.T) {
 			"run", "--detach", "--rm", "--name", "benchmark-sandbox",
 			"--network", "kind",
 			"--user", "benchmark",
+			"--workdir", "/workspace",
 			"--cap-drop", "ALL",
 			"--security-opt", "no-new-privileges",
 			"--read-only",
