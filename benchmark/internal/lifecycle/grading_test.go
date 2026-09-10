@@ -59,12 +59,12 @@ func TestCalculateGradingResult(t *testing.T) {
 
 func TestCalculateGradingResultPreservesEvidence(t *testing.T) {
 	criteria := []CriterionResult{{
-		ID:       "workload-restored",
-		Weight:   2,
-		Stdout:   "observed stdout",
-		Stderr:   "observed stderr",
-		ExitCode: 7,
-		Duration: 0.15,
+		ID:              "workload-restored",
+		Weight:          2,
+		Stdout:          "observed stdout",
+		Stderr:          "observed stderr",
+		ExitCode:        7,
+		DurationSeconds: 0.15,
 	}}
 
 	result, err := calculateGradingResult(criteria)
@@ -81,7 +81,7 @@ func TestCalculateGradingResultPreservesEvidence(t *testing.T) {
 	if got.Stdout != criteria[0].Stdout || got.Stderr != criteria[0].Stderr {
 		t.Fatalf("criterion output = %#v, want %#v", got, criteria[0])
 	}
-	if got.ExitCode != criteria[0].ExitCode || got.Duration != criteria[0].Duration {
+	if got.ExitCode != criteria[0].ExitCode || got.DurationSeconds != criteria[0].DurationSeconds {
 		t.Fatalf("criterion execution data = %#v, want %#v", got, criteria[0])
 	}
 }

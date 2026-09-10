@@ -23,6 +23,9 @@ func TestLoadReadsScenarioFile(t *testing.T) {
 	if got, want := definition.Prepare[0].Spec().Dir, filepath.Dir(path); got != want {
 		t.Fatalf("command directory = %q, want %q", got, want)
 	}
+	if got, want := definition.Grading[0].Check.Spec().Dir, filepath.Dir(path); got != want {
+		t.Fatalf("grading command directory = %q, want %q", got, want)
+	}
 }
 
 func TestLoadResolvesKindConfigPath(t *testing.T) {

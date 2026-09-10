@@ -70,6 +70,9 @@ func (d *Definition) setDir(dir string) {
 	d.InjectFault.setDir(dir)
 	d.VerifyFault.setDir(dir)
 	d.Reset.setDir(dir)
+	for index := range d.Grading {
+		d.Grading[index].Check.dir = dir
+	}
 }
 
 var scenarioIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -78,6 +81,14 @@ var definitionValidator = mustNewValidator()
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
 		return formatValidationError(err)
+	}
+
+	seenIDs := make(map[string]struct{}, len(d.Grading))
+	for _, criterion := range d.Grading {
+		if _, exists := seenIDs[criterion.ID]; exists {
+			return fmt.Errorf("invalid scenario: duplicate grading criterion id %q", criterion.ID)
+		}
+		seenIDs[criterion.ID] = struct{}{}
 	}
 	return nil
 }

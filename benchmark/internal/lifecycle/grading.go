@@ -7,13 +7,14 @@ import (
 )
 
 type CriterionResult struct {
-	ID       string  `json:"id"`
-	Weight   float64 `json:"weight"`
-	Passed   bool    `json:"passed"`
-	Stdout   string  `json:"stdout"`
-	Stderr   string  `json:"stderr"`
-	ExitCode int     `json:"exit_code"`
-	Duration float64 `json:"duration"`
+	ID              string  `json:"id"`
+	Weight          float64 `json:"weight"`
+	Passed          bool    `json:"passed"`
+	Stdout          string  `json:"stdout"`
+	Stderr          string  `json:"stderr"`
+	Error           string  `json:"error,omitempty"`
+	ExitCode        int     `json:"exit_code"`
+	DurationSeconds float64 `json:"duration_seconds"`
 }
 
 type GradingResult struct {
@@ -23,7 +24,8 @@ type GradingResult struct {
 }
 
 type RunResult struct {
-	Grading GradingResult `json:"grading"`
+	ScenarioID string        `json:"scenario_id"`
+	Grading    GradingResult `json:"grading"`
 }
 
 func calculateGradingResult(criteria []CriterionResult) (GradingResult, error) {

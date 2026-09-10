@@ -46,6 +46,7 @@ type recordingExecutor struct {
 	failWith error
 	failAt   int
 	results  []command.Result
+	errors   []error
 }
 
 func (e *recordingExecutor) Run(_ context.Context, spec command.Spec) (command.Result, error) {
@@ -56,9 +57,16 @@ func (e *recordingExecutor) Run(_ context.Context, spec command.Spec) (command.R
 	}
 	resultIndex := len(e.specs) - 1
 	if resultIndex >= len(e.results) {
-		return command.Result{}, nil
+		return command.Result{}, e.errorAt(resultIndex)
 	}
-	return e.results[resultIndex], nil
+	return e.results[resultIndex], e.errorAt(resultIndex)
+}
+
+func (e *recordingExecutor) errorAt(index int) error {
+	if index >= len(e.errors) {
+		return nil
+	}
+	return e.errors[index]
 }
 
 func testDefinition() scenario.Definition {
@@ -105,6 +113,9 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	if result.Grading.Score != 1 || !result.Grading.FullSuccess {
 		t.Fatalf("grading result = %#v, want full success with score 1", result)
 	}
+	if result.ScenarioID != "test-scenario" {
+		t.Fatalf("scenario ID = %q, want test-scenario", result.ScenarioID)
+	}
 	if !strings.HasPrefix(clusterName, "benchmark-test-scenario-") {
 		t.Fatalf("cluster name = %q, want scenario prefix", clusterName)
 	}
@@ -132,6 +143,7 @@ func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 			{Stdout: "healthy", ExitCode: 0, Duration: 10 * time.Millisecond},
 			{Stdout: "partial", Stderr: "not ready", ExitCode: 7, Duration: 20 * time.Millisecond},
 		},
+		errors: []error{nil, errors.New("check failed")},
 	}
 	runner := Runner{Executor: executor}
 	criteria := []scenario.Criterion{
@@ -152,7 +164,7 @@ func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 	if len(result.Criteria) != 2 {
 		t.Fatalf("criteria = %#v, want two results", result.Criteria)
 	}
-	if got := result.Criteria[1]; got.Stdout != "partial" || got.Stderr != "not ready" || got.ExitCode != 7 || got.Duration != 0.02 {
+	if got := result.Criteria[1]; got.Passed || got.Error != "check failed" || got.Stdout != "partial" || got.Stderr != "not ready" || got.ExitCode != 7 || got.DurationSeconds != 0.02 {
 		t.Fatalf("failed criterion evidence = %#v, want captured result", got)
 	}
 }

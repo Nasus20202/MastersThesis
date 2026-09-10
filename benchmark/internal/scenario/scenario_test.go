@@ -165,6 +165,15 @@ func TestValidateRejectsMissingGrading(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsDuplicateCriterionIDs(t *testing.T) {
+	definition := validDefinition(t)
+	definition.Grading = append(definition.Grading, definition.Grading[0])
+
+	if err := definition.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate grading criterion id") {
+		t.Fatalf("validation error = %v, want duplicate criterion ID error", err)
+	}
+}
+
 func TestValidateRejectsLongID(t *testing.T) {
 	definition := validDefinition(t)
 	definition.ID = strings.Repeat("a", 33)

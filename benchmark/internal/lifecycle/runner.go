@@ -62,7 +62,7 @@ func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result
 		return RunResult{}, err
 	}
 	grading, err := r.runPhases(ctx, definition, cluster.KubeconfigPath(), logger)
-	return RunResult{Grading: grading}, err
+	return RunResult{ScenarioID: definition.ID, Grading: grading}, err
 }
 
 func (r Runner) newCluster(name string, logger *slog.Logger) (Cluster, error) {
@@ -156,16 +156,20 @@ func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, k
 func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, kubeconfigPath string) (GradingResult, error) {
 	results := make([]CriterionResult, 0, len(criteria))
 	for _, criterion := range criteria {
-		result, _ := r.Executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
-		results = append(results, CriterionResult{
-			ID:       criterion.ID,
-			Weight:   criterion.Weight,
-			Passed:   result.ExitCode == 0,
-			Stdout:   result.Stdout,
-			Stderr:   result.Stderr,
-			ExitCode: result.ExitCode,
-			Duration: result.Duration.Seconds(),
-		})
+		result, err := r.Executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
+		criterionResult := CriterionResult{
+			ID:              criterion.ID,
+			Weight:          criterion.Weight,
+			Passed:          err == nil && result.ExitCode == 0,
+			Stdout:          result.Stdout,
+			Stderr:          result.Stderr,
+			ExitCode:        result.ExitCode,
+			DurationSeconds: result.Duration.Seconds(),
+		}
+		if err != nil {
+			criterionResult.Error = err.Error()
+		}
+		results = append(results, criterionResult)
 	}
 	return calculateGradingResult(results)
 }
