@@ -1,8 +1,10 @@
 package lifecycle
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateGradingResult(t *testing.T) {
@@ -44,15 +46,9 @@ func TestCalculateGradingResult(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := calculateGradingResult(test.criteria)
-			if err != nil {
-				t.Fatalf("calculate grading result: %v", err)
-			}
-			if result.Score != test.wantScore {
-				t.Fatalf("score = %v, want %v", result.Score, test.wantScore)
-			}
-			if result.FullSuccess != test.wantSuccess {
-				t.Fatalf("full success = %t, want %t", result.FullSuccess, test.wantSuccess)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, test.wantScore, result.Score)
+			assert.Equal(t, test.wantSuccess, result.FullSuccess)
 		})
 	}
 }
@@ -68,30 +64,15 @@ func TestCalculateGradingResultPreservesEvidence(t *testing.T) {
 	}}
 
 	result, err := calculateGradingResult(criteria)
-	if err != nil {
-		t.Fatalf("calculate grading result: %v", err)
-	}
-	if len(result.Criteria) != 1 {
-		t.Fatalf("criteria = %#v, want one result", result.Criteria)
-	}
-	got := result.Criteria[0]
-	if got.ID != criteria[0].ID || got.Weight != criteria[0].Weight || got.Passed != criteria[0].Passed {
-		t.Fatalf("criterion metadata = %#v, want %#v", got, criteria[0])
-	}
-	if got.Stdout != criteria[0].Stdout || got.Stderr != criteria[0].Stderr {
-		t.Fatalf("criterion output = %#v, want %#v", got, criteria[0])
-	}
-	if got.ExitCode != criteria[0].ExitCode || got.DurationSeconds != criteria[0].DurationSeconds {
-		t.Fatalf("criterion execution data = %#v, want %#v", got, criteria[0])
-	}
+	require.NoError(t, err)
+	require.Len(t, result.Criteria, 1)
+	assert.Equal(t, criteria[0], result.Criteria[0])
 }
 
 func TestCalculateGradingResultRejectsInvalidInput(t *testing.T) {
-	if _, err := calculateGradingResult(nil); err == nil || !strings.Contains(err.Error(), "at least one") {
-		t.Fatalf("empty criteria error = %v, want missing criteria error", err)
-	}
+	_, err := calculateGradingResult(nil)
+	assert.ErrorContains(t, err, "at least one")
 
-	if _, err := calculateGradingResult([]CriterionResult{{ID: "invalid", Weight: 0}}); err == nil || !strings.Contains(err.Error(), "non-positive") {
-		t.Fatalf("zero weight error = %v, want non-positive weight error", err)
-	}
+	_, err = calculateGradingResult([]CriterionResult{{ID: "invalid", Weight: 0}})
+	assert.ErrorContains(t, err, "non-positive")
 }
