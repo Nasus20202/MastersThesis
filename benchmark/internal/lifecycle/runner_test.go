@@ -14,12 +14,13 @@ import (
 )
 
 type fakeCluster struct {
-	events         *[]string
-	createErr      error
-	deleteErr      error
-	deleteCtx      context.Context
-	kubeconfigPath string
-	kubeconfigCtx  string
+	events                 *[]string
+	createErr              error
+	deleteErr              error
+	deleteCtx              context.Context
+	kubeconfigPath         string
+	internalKubeconfigPath string
+	kubeconfigCtx          string
 }
 
 func (c *fakeCluster) Create(context.Context) error {
@@ -35,6 +36,10 @@ func (c *fakeCluster) Delete(ctx context.Context) error {
 
 func (c *fakeCluster) KubeconfigPath() string {
 	return c.kubeconfigPath
+}
+
+func (c *fakeCluster) InternalKubeconfigPath() string {
+	return c.internalKubeconfigPath
 }
 
 func (c *fakeCluster) KubeconfigContext() string {

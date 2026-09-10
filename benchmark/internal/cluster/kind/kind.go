@@ -24,10 +24,11 @@ type Config struct {
 }
 
 type Cluster struct {
-	executor       command.Executor
-	name           string
-	configPath     string
-	kubeconfigPath string
+	executor               command.Executor
+	name                   string
+	configPath             string
+	kubeconfigPath         string
+	internalKubeconfigPath string
 }
 
 // Ensure Cluster implements lifecycle.Cluster at compile time.
@@ -44,18 +45,23 @@ func New(executor command.Executor, config Config) (*Cluster, error) {
 		return nil, errors.New("kind cluster config path is invalid")
 	}
 	return &Cluster{
-		executor:       executor,
-		name:           config.Name,
-		configPath:     config.ConfigPath,
-		kubeconfigPath: filepath.Join(os.TempDir(), config.Name+".kubeconfig"),
+		executor:               executor,
+		name:                   config.Name,
+		configPath:             config.ConfigPath,
+		kubeconfigPath:         filepath.Join(os.TempDir(), config.Name+".kubeconfig"),
+		internalKubeconfigPath: filepath.Join(os.TempDir(), config.Name+".internal.kubeconfig"),
 	}, nil
 }
 
 func (c *Cluster) Create(ctx context.Context) error {
 	logger := slog.With("cluster", c.name)
 	logger.InfoContext(ctx, "creating kind cluster")
-	if err := c.run(ctx, "create", "cluster", "--name", c.name); err != nil {
+	if _, err := c.run(ctx, "create", "cluster", "--name", c.name); err != nil {
 		logger.ErrorContext(ctx, "kind cluster creation failed", "error", err)
+		return err
+	}
+	if err := c.generateInternalKubeconfig(ctx); err != nil {
+		logger.ErrorContext(ctx, "kind internal kubeconfig generation failed", "error", err)
 		return err
 	}
 	logger.InfoContext(ctx, "kind cluster created")
@@ -65,12 +71,14 @@ func (c *Cluster) Create(ctx context.Context) error {
 func (c *Cluster) Delete(ctx context.Context) error {
 	logger := slog.With("cluster", c.name)
 	defer func() {
-		if err := os.Remove(c.kubeconfigPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			logger.WarnContext(ctx, "kind kubeconfig cleanup failed", "error", err)
+		for _, path := range []string{c.kubeconfigPath, c.internalKubeconfigPath} {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				logger.WarnContext(ctx, "kind kubeconfig cleanup failed", "path", path, "error", err)
+			}
 		}
 	}()
 	logger.InfoContext(ctx, "deleting kind cluster")
-	if err := c.run(ctx, "delete", "cluster", "--name", c.name); err != nil {
+	if _, err := c.run(ctx, "delete", "cluster", "--name", c.name); err != nil {
 		logger.ErrorContext(ctx, "kind cluster deletion failed", "error", err)
 		return err
 	}
@@ -82,11 +90,29 @@ func (c *Cluster) KubeconfigPath() string {
 	return c.kubeconfigPath
 }
 
+func (c *Cluster) InternalKubeconfigPath() string {
+	return c.internalKubeconfigPath
+}
+
+func (c *Cluster) generateInternalKubeconfig(ctx context.Context) error {
+	result, err := c.run(ctx, "get", "kubeconfig", "--name", c.name, "--internal")
+	if err != nil {
+		return fmt.Errorf("get internal kubeconfig for cluster %q: %w", c.name, err)
+	}
+	if strings.TrimSpace(result.Stdout) == "" {
+		return fmt.Errorf("get internal kubeconfig for cluster %q: command returned empty output", c.name)
+	}
+	if err := os.WriteFile(c.internalKubeconfigPath, []byte(result.Stdout), 0o600); err != nil {
+		return fmt.Errorf("write internal kubeconfig for cluster %q: %w", c.name, err)
+	}
+	return nil
+}
+
 func (c *Cluster) KubeconfigContext() string {
 	return kindContextPrefix + c.name
 }
 
-func (c *Cluster) run(ctx context.Context, args ...string) error {
+func (c *Cluster) run(ctx context.Context, args ...string) (command.Result, error) {
 	spec := command.Spec{Program: program, Args: args}
 	if c.configPath != "" && args[0] == "create" {
 		args = append(args, "--kubeconfig", c.kubeconfigPath)
@@ -97,9 +123,9 @@ func (c *Cluster) run(ctx context.Context, args ...string) error {
 		args = append(args, "--kubeconfig", c.kubeconfigPath)
 		spec.Args = args
 	}
-	_, err := c.executor.Run(ctx, spec)
+	result, err := c.executor.Run(ctx, spec)
 	if err != nil {
-		return fmt.Errorf("kind cluster %q %s: %w", c.name, args[0], err)
+		return result, fmt.Errorf("kind cluster %q %s: %w", c.name, args[0], err)
 	}
-	return nil
+	return result, nil
 }
