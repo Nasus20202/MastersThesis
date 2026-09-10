@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const validScenarioYAML = `
@@ -39,18 +40,12 @@ grading:
 
 func TestParseValidScenario(t *testing.T) {
 	definition, err := Parse([]byte(validScenarioYAML))
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 
 	assert.Equal(t, "test-scenario", definition.ID)
-	if !assert.Len(t, definition.Prepare, 1) {
-		return
-	}
+	require.Len(t, definition.Prepare, 1)
 	assert.Equal(t, "prepare", definition.Prepare[0].Program)
-	if !assert.Equal(t, []string{"manifest.yaml"}, definition.Prepare[0].Spec().Args) {
-		return
-	}
+	assert.Equal(t, []string{"manifest.yaml"}, definition.Prepare[0].Spec().Args)
 	assert.Equal(t, "strict", definition.Prepare[0].Spec().Env["CHECK_MODE"])
 }
 
@@ -68,9 +63,7 @@ func validDefinition(t *testing.T) Definition {
 	t.Helper()
 
 	definition, err := Parse([]byte(validScenarioYAML))
-	if !assert.NoError(t, err) {
-		return Definition{}
-	}
+	require.NoError(t, err)
 	return definition
 }
 
