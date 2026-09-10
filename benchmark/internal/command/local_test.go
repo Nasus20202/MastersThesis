@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSpecValidateRejectsBlankProgram(t *testing.T) {
@@ -19,9 +20,7 @@ func TestLocalExecutorCapturesOutput(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "printf stdout; printf stderr >&2"},
 	})
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 0, result.ExitCode)
 	assert.Equal(t, "stdout", result.Stdout)
 	assert.Equal(t, "stderr", result.Stderr)
@@ -45,9 +44,7 @@ func TestLocalExecutorUsesDirectoryAndEnvironment(t *testing.T) {
 		Dir:     directory,
 		Env:     map[string]string{"TEST_VALUE": "configured"},
 	})
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, directory+":configured", strings.TrimSpace(result.Stdout))
 }
 
@@ -75,8 +72,6 @@ func TestLocalExecutorPreservesInheritedEnvironment(t *testing.T) {
 		Program: "sh",
 		Args:    []string{"-c", "printf '%s' \"$COMMAND_TEST_INHERITED\""},
 	})
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, os.Getenv("COMMAND_TEST_INHERITED"), result.Stdout)
 }
