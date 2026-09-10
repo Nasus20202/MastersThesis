@@ -164,7 +164,7 @@ func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, k
 			Stdout:   result.Stdout,
 			Stderr:   result.Stderr,
 			ExitCode: result.ExitCode,
-			Duration: result.Duration,
+			Duration: result.Duration.Seconds(),
 		})
 	}
 	return calculateGradingResult(results)

@@ -63,8 +63,8 @@ The runner executes the lifecycle in this order:
 
 Each grading check passes when its command exits with status `0`. The result
 contains the criterion ID, weight, pass/fail value, stdout, stderr, exit code
-and duration. The aggregate score is the passed weight divided by total weight;
-`full_success` is true only when every criterion passes.
+and duration in seconds. The aggregate score is the passed weight divided by
+total weight; `full_success` is true only when every criterion passes.
 
 The command writes a pretty-printed JSON result to stdout and logs to stderr:
 
@@ -79,7 +79,7 @@ The command writes a pretty-printed JSON result to stdout and logs to stderr:
         "stdout": "healthy\n",
         "stderr": "",
         "exit_code": 0,
-        "duration": 1234567
+        "duration": 0.012345
       }
     ],
     "score": 1,
@@ -87,9 +87,6 @@ The command writes a pretty-printed JSON result to stdout and logs to stderr:
   }
 }
 ```
-
-`duration` is encoded as an integer number of nanoseconds because it is a Go
-`time.Duration`.
 
 ## Development
 

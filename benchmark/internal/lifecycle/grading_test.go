@@ -3,7 +3,6 @@ package lifecycle
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestCalculateGradingResult(t *testing.T) {
@@ -65,7 +64,7 @@ func TestCalculateGradingResultPreservesEvidence(t *testing.T) {
 		Stdout:   "observed stdout",
 		Stderr:   "observed stderr",
 		ExitCode: 7,
-		Duration: 150 * time.Millisecond,
+		Duration: 0.15,
 	}}
 
 	result, err := calculateGradingResult(criteria)

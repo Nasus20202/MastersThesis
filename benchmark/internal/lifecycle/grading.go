@@ -4,17 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 )
 
 type CriterionResult struct {
-	ID       string        `json:"id"`
-	Weight   float64       `json:"weight"`
-	Passed   bool          `json:"passed"`
-	Stdout   string        `json:"stdout"`
-	Stderr   string        `json:"stderr"`
-	ExitCode int           `json:"exit_code"`
-	Duration time.Duration `json:"duration"`
+	ID       string  `json:"id"`
+	Weight   float64 `json:"weight"`
+	Passed   bool    `json:"passed"`
+	Stdout   string  `json:"stdout"`
+	Stderr   string  `json:"stderr"`
+	ExitCode int     `json:"exit_code"`
+	Duration float64 `json:"duration"`
 }
 
 type GradingResult struct {

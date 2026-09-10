@@ -152,7 +152,7 @@ func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 	if len(result.Criteria) != 2 {
 		t.Fatalf("criteria = %#v, want two results", result.Criteria)
 	}
-	if got := result.Criteria[1]; got.Stdout != "partial" || got.Stderr != "not ready" || got.ExitCode != 7 || got.Duration != 20*time.Millisecond {
+	if got := result.Criteria[1]; got.Stdout != "partial" || got.Stderr != "not ready" || got.ExitCode != 7 || got.Duration != 0.02 {
 		t.Fatalf("failed criterion evidence = %#v, want captured result", got)
 	}
 }
