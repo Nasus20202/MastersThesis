@@ -23,6 +23,28 @@ type fakeCluster struct {
 	kubeconfigCtx          string
 }
 
+type fakeSandbox struct {
+	events   *[]string
+	buildErr error
+	startErr error
+	stopErr  error
+}
+
+func (s *fakeSandbox) Build(context.Context) error {
+	*s.events = append(*s.events, "sandbox-build")
+	return s.buildErr
+}
+
+func (s *fakeSandbox) Start(context.Context) error {
+	*s.events = append(*s.events, "sandbox-start")
+	return s.startErr
+}
+
+func (s *fakeSandbox) Stop(context.Context) error {
+	*s.events = append(*s.events, "sandbox-stop")
+	return s.stopErr
+}
+
 func (c *fakeCluster) Create(context.Context) error {
 	*c.events = append(*c.events, "create")
 	return c.createErr
@@ -125,6 +147,40 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	assert.Equal(t, "/tmp/test.kubeconfig", executor.specs[0].Env["KUBECONFIG"])
 	_, hasDeadline := cluster.deleteCtx.Deadline()
 	assert.True(t, hasDeadline)
+}
+
+func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	executor := &recordingExecutor{events: &events}
+	runner := Runner{
+		ClusterFactory: func(name string) (Cluster, error) {
+			events = append(events, "factory")
+			return cluster, nil
+		},
+		SandboxFactory: func(name, kubeconfigPath string) (Sandbox, error) {
+			assert.True(t, strings.HasPrefix(name, "benchmark-test-scenario-"))
+			assert.Equal(t, "/tmp/test.internal.kubeconfig", kubeconfigPath)
+			events = append(events, "sandbox-factory")
+			return sandbox, nil
+		},
+		Executor:       executor,
+		CleanupTimeout: time.Second,
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"factory", "create", "sandbox-factory", "sandbox-build", "sandbox-start",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"sandbox-stop", "delete",
+	}, events)
 }
 
 func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {

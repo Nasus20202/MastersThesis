@@ -11,3 +11,11 @@ type Cluster interface {
 }
 
 type ClusterFactory func(string) (Cluster, error)
+
+type Sandbox interface {
+	Build(context.Context) error
+	Start(context.Context) error
+	Stop(context.Context) error
+}
+
+type SandboxFactory func(string, string) (Sandbox, error)
