@@ -102,14 +102,14 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if result.Score != 1 || !result.FullSuccess {
+	if result.Grading.Score != 1 || !result.Grading.FullSuccess {
 		t.Fatalf("grading result = %#v, want full success with score 1", result)
 	}
 	if !strings.HasPrefix(clusterName, "benchmark-test-scenario-") {
 		t.Fatalf("cluster name = %q, want scenario prefix", clusterName)
 	}
 
-	wantEvents := []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "reset", "verify-restored", "delete"}
+	wantEvents := []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset", "delete"}
 	if !slices.Equal(events, wantEvents) {
 		t.Fatalf("events = %v, want %v", events, wantEvents)
 	}

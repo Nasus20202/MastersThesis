@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,22 +18,22 @@ import (
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stderr, os.Stdout); err != nil {
 		slog.Error("benchmark failed", "error", err)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, output io.Writer) error {
-	logger, err := newLogger(output)
+func run(args []string, logOutput, resultOutput io.Writer) error {
+	logger, err := newLogger(logOutput)
 	if err != nil {
 		return err
 	}
 	slog.SetDefault(logger)
 
 	flags := flag.NewFlagSet("benchmark", flag.ContinueOnError)
-	flags.SetOutput(output)
+	flags.SetOutput(logOutput)
 	scenarioPath := flags.String("scenario", "", "path to the scenario YAML file")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -60,8 +61,20 @@ func run(args []string, output io.Writer) error {
 			})
 		},
 	}
-	_, err = runner.Run(context.Background(), definition)
-	return err
+	result, err := runner.Run(context.Background(), definition)
+	if err != nil {
+		return err
+	}
+	return writeResult(resultOutput, result)
+}
+
+func writeResult(output io.Writer, result lifecycle.RunResult) error {
+	encoder := json.NewEncoder(output)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(result); err != nil {
+		return fmt.Errorf("write benchmark result: %w", err)
+	}
+	return nil
 }
 
 func newLogger(output io.Writer) (*slog.Logger, error) {

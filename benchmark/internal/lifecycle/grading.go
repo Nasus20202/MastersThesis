@@ -23,6 +23,10 @@ type GradingResult struct {
 	FullSuccess bool              `json:"full_success"`
 }
 
+type RunResult struct {
+	Grading GradingResult `json:"grading"`
+}
+
 func calculateGradingResult(criteria []CriterionResult) (GradingResult, error) {
 	if len(criteria) == 0 {
 		return GradingResult{}, errors.New("grading requires at least one criterion result")
