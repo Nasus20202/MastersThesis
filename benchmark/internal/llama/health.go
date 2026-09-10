@@ -3,7 +3,9 @@ package llama
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 )
 
 // Ready checks whether the llama-server router accepts requests. A router that
@@ -18,11 +20,23 @@ func (c *Client) Ready(ctx context.Context) (bool, error) {
 		request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
+	started := time.Now()
+	logger := slog.With("method", http.MethodGet, "path", healthPath)
+	logger.DebugContext(ctx, "llama health check started")
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return false, fmt.Errorf("call llama health endpoint: %w", err)
+		requestErr := fmt.Errorf("call llama health endpoint: %w", err)
+		logger.ErrorContext(ctx, "llama health check failed",
+			"duration", time.Since(started),
+			"error", requestErr,
+		)
+		return false, requestErr
 	}
 	defer response.Body.Close()
+	logger.DebugContext(ctx, "llama health response received",
+		"status", response.StatusCode,
+		"duration", time.Since(started),
+	)
 
 	switch response.StatusCode {
 	case http.StatusOK:
@@ -30,6 +44,11 @@ func (c *Client) Ready(ctx context.Context) (bool, error) {
 	case http.StatusServiceUnavailable:
 		return false, nil
 	default:
-		return false, newHTTPError(response)
+		httpErr := newHTTPError(response)
+		logger.ErrorContext(ctx, "llama health check returned an error",
+			"status", response.StatusCode,
+			"error", httpErr,
+		)
+		return false, httpErr
 	}
 }

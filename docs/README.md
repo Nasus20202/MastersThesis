@@ -10,6 +10,7 @@ This directory contains the research design, benchmark definition, technology ch
 - [Decision log](decision-log.md) — canonical record of approved, provisional, open and superseded decisions.
 - [Sources](sources.md) — technical documentation, papers and related work.
 - [Glossary](glossary.md) — project terminology and links to further information.
+- [Benchmark module](../benchmark/README.md) — local runner commands, logging and scenario configuration.
 
 ## Research evaluations
 

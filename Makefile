@@ -2,6 +2,7 @@ GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
 BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
+SCENARIO ?= scenarios/image-pull-failure/scenario.yaml
 COMPOSE := docker compose --env-file $(BENCHMARK_CONFIG) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 include $(BENCHMARK_CONFIG)
@@ -13,7 +14,7 @@ export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs inference
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs benchmark
 
 help:
 	@printf '%s\n' \
@@ -26,7 +27,8 @@ help:
 		'  make llama-start     Start the llama.cpp model router.' \
 		'  make llama-stop      Stop the llama.cpp model router.' \
 		'  make llama-logs      Follow llama.cpp model router logs.' \
-		'  make inference       Run one inference through the Go client.'
+		'  make benchmark       Run the default benchmark scenario.' \
+		'  make benchmark SCENARIO=PATH  Run a selected scenario.'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -55,11 +57,11 @@ llama-stop:
 llama-logs:
 	$(COMPOSE) logs --follow llama-server
 
-inference:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/inference
+benchmark:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO)
 
 benchmark-go-test:
-	cd $(BENCHMARK_DIR) && $(GO) test ./...
+	cd $(BENCHMARK_DIR) && $(GO) test ./... -cover
 
 benchmark-go-vet:
 	cd $(BENCHMARK_DIR) && $(GO) vet ./...

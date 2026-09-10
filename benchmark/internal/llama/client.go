@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -106,17 +108,38 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload, resul
 		request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
+	started := time.Now()
+	logger := slog.With("method", method, "path", path)
+	logger.DebugContext(ctx, "llama request started")
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("call llama endpoint: %w", err)
+		requestErr := fmt.Errorf("call llama endpoint: %w", err)
+		logger.ErrorContext(ctx, "llama request failed",
+			"duration", time.Since(started),
+			"error", requestErr,
+		)
+		return requestErr
 	}
 	defer response.Body.Close()
+	logger.DebugContext(ctx, "llama response received",
+		"status", response.StatusCode,
+		"duration", time.Since(started),
+	)
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return newHTTPError(response)
+		httpErr := newHTTPError(response)
+		logger.ErrorContext(ctx, "llama request returned an error",
+			"status", response.StatusCode,
+			"error", httpErr,
+		)
+		return httpErr
 	}
 	if err := json.NewDecoder(response.Body).Decode(result); err != nil {
-		return fmt.Errorf("decode llama response: %w", err)
+		decodeErr := fmt.Errorf("decode llama response: %w", err)
+		logger.ErrorContext(ctx, "llama response decode failed",
+			"error", decodeErr,
+		)
+		return decodeErr
 	}
 	return nil
 }
