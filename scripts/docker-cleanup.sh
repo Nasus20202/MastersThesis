@@ -2,23 +2,23 @@
 
 set -euo pipefail
 
-clusters=$(kind get clusters)
-while IFS= read -r cluster; do
-  case "$cluster" in
-    benchmark*) kind delete cluster --name "$cluster" ;;
+CLUSTERS=$(kind get clusters)
+while IFS= read -r CLUSTER; do
+  case "$CLUSTER" in
+    benchmark*) kind delete cluster --name "$CLUSTER" ;;
   esac
-done <<< "$clusters"
+done <<< "$CLUSTERS"
 
-containers=$(docker ps -aq --filter name=sandbox)
-while IFS= read -r container; do
-  if [[ -n "$container" ]]; then
-    docker rm --force "$container"
+CONTAINERS=$(docker ps -aq --filter name=sandbox)
+while IFS= read -r CONTAINER; do
+  if [[ -n "$CONTAINER" ]]; then
+    docker rm --force "$CONTAINER"
   fi
-done <<< "$containers"
+done <<< "$CONTAINERS"
 
-networks=$(docker network ls -q --filter name=sandbox-network)
-while IFS= read -r network; do
-  if [[ -n "$network" ]]; then
-    docker network rm "$network"
+NETWORKS=$(docker network ls -q --filter name=sandbox-network)
+while IFS= read -r NETWORK; do
+  if [[ -n "$NETWORK" ]]; then
+    docker network rm "$NETWORK"
   fi
-done <<< "$networks"
+done <<< "$NETWORKS"
