@@ -51,8 +51,10 @@ func TestRunUsesMinimalToolPromptAndPreservesTaskEvidence(t *testing.T) {
 	require.Len(t, client.requests, 1)
 	prompt := client.requests[0].Messages[0].Content
 	assert.Contains(t, prompt, "Restore the application.")
+	assert.Contains(t, prompt, "Kubernetes troubleshooting environment")
 	assert.Contains(t, prompt, "bash tool")
 	assert.NotContains(t, prompt, "kubectl")
+	assert.NotContains(t, prompt, "ImagePullBackOff")
 }
 
 type baselineTestShell struct{}
