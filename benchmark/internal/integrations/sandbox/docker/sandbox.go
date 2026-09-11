@@ -80,7 +80,7 @@ func NewImageBuilder(executor command.Executor, config ImageConfig) (*ImageBuild
 
 func (b *ImageBuilder) Build(ctx context.Context) error {
 	b.once.Do(func() {
-		b.err = buildImage(ctx, b.executor, b.config)
+		b.err = ensureImage(ctx, b.executor, b.config)
 	})
 	return b.err
 }
@@ -160,6 +160,20 @@ func buildImage(ctx context.Context, executor command.Executor, config ImageConf
 	}
 	logger.InfoContext(ctx, "sandbox image built")
 	return nil
+}
+
+func ensureImage(ctx context.Context, executor command.Executor, config ImageConfig) error {
+	logger := slog.With("sandbox_image", config.Image)
+	if _, err := executor.Run(ctx, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"image", "inspect", config.Image},
+	}); err == nil {
+		logger.InfoContext(ctx, "sandbox image already available")
+		return nil
+	} else if ctx.Err() != nil {
+		return fmt.Errorf("check sandbox image %q: %w", config.Image, ctx.Err())
+	}
+	return buildImage(ctx, executor, config)
 }
 
 func (s *Sandbox) Start(ctx context.Context) error {

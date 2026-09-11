@@ -84,7 +84,33 @@ func TestBuildUsesHostDockerCommand(t *testing.T) {
 }
 
 func TestImageBuilderBuildsImageOnce(t *testing.T) {
-	executor := &fakeExecutor{}
+	executor := &sequenceExecutor{errors: []error{errors.New("image not found")}}
+	builder, err := NewImageBuilder(executor, ImageConfig{
+		Image:          "masters-thesis-sandbox:increment-1",
+		DockerfilePath: "/tmp/Dockerfile",
+		BuildContext:   "/tmp/context",
+	})
+	require.NoError(t, err)
+
+	assert.NoError(t, builder.Build(context.Background()))
+	assert.NoError(t, builder.Build(context.Background()))
+
+	require.Len(t, executor.specs, 2)
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args:    []string{"image", "inspect", "masters-thesis-sandbox:increment-1"},
+	}, executor.specs[0])
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args: []string{
+			"build", "--file", "/tmp/Dockerfile",
+			"--tag", "masters-thesis-sandbox:increment-1", "/tmp/context",
+		},
+	}, executor.specs[1])
+}
+
+func TestImageBuilderReusesExistingImage(t *testing.T) {
+	executor := &sequenceExecutor{}
 	builder, err := NewImageBuilder(executor, ImageConfig{
 		Image:          "masters-thesis-sandbox:increment-1",
 		DockerfilePath: "/tmp/Dockerfile",
@@ -98,10 +124,7 @@ func TestImageBuilderBuildsImageOnce(t *testing.T) {
 	require.Len(t, executor.specs, 1)
 	assert.Equal(t, command.Spec{
 		Program: dockerProgram,
-		Args: []string{
-			"build", "--file", "/tmp/Dockerfile",
-			"--tag", "masters-thesis-sandbox:increment-1", "/tmp/context",
-		},
+		Args:    []string{"image", "inspect", "masters-thesis-sandbox:increment-1"},
 	}, executor.specs[0])
 }
 
