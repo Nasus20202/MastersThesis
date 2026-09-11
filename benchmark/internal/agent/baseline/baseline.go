@@ -15,6 +15,8 @@ type Agent struct {
 	delegate rootagent.Agent
 }
 
+const promptInstruction = "Use the bash tool to inspect and repair the environment. When finished, provide a brief final response."
+
 // New constructs a baseline agent with the shared loop and sandbox-backed Bash
 // tool.
 func New(client inference.Client, shell common.Shell, config common.Config) (*Agent, error) {
@@ -33,7 +35,13 @@ func (a *Agent) Run(ctx context.Context, task string) (common.Result, error) {
 	if a == nil || a.delegate == nil {
 		return common.Result{}, errors.New("baseline agent is not initialized")
 	}
-	return a.delegate.Run(ctx, task)
+	result, err := a.delegate.Run(ctx, baselinePrompt(task))
+	result.Task = task
+	return result, err
+}
+
+func baselinePrompt(task string) string {
+	return "Task:\n" + task + "\n\n" + promptInstruction
 }
 
 var _ rootagent.Agent = (*Agent)(nil)
