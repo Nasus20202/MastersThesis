@@ -16,7 +16,7 @@ type Agent struct {
 	delegate rootagent.Agent
 }
 
-const promptInstruction = "Use the bash tool to inspect and repair the environment. When finished, provide a brief final response."
+const promptInstruction = "You are working in a Kubernetes troubleshooting environment. Use the bash tool to inspect and modify the environment as needed. Complete the task using only the available environment. When finished, provide a short final response."
 
 // New constructs a baseline agent with the shared loop and sandbox-backed Bash
 // tool.
