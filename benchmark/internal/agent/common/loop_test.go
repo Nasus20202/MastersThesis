@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,13 @@ func (c *loopClient) Chat(_ context.Context, messages []inference.Message, tools
 
 func (c *loopClient) Metadata() inference.Metadata { return c.metadata }
 
+type blockingLoopClient struct{}
+
+func (blockingLoopClient) Chat(ctx context.Context, _ []inference.Message, _ []inference.Tool, _ inference.Options) (inference.Result, error) {
+	<-ctx.Done()
+	return inference.Result{}, ctx.Err()
+}
+
 type loopTool struct {
 	definition inference.Tool
 	result     ToolResult
@@ -61,7 +69,7 @@ func (t *loopTool) Execute(_ context.Context, call inference.ToolCall) ToolResul
 }
 
 func TestDefaultConfig(t *testing.T) {
-	assert.Equal(t, Config{MaxTurns: 12, MaxToolCalls: 24}, DefaultConfig())
+	assert.Equal(t, Config{MaxTurns: 12, MaxToolCalls: 24, TimeoutSeconds: 300}, DefaultConfig())
 }
 
 func TestNewLoopValidatesDependenciesAndConfiguration(t *testing.T) {
@@ -109,6 +117,12 @@ func TestNewLoopValidatesDependenciesAndConfiguration(t *testing.T) {
 			tools:  []Tool{tool},
 			config: Config{MaxTurns: 1, MaxToolCalls: 1, MaxTokens: func() *int { value := 0; return &value }()},
 			want:   "agent maximum tokens must be at least 1",
+		},
+		"negative timeout": {
+			client: client,
+			tools:  []Tool{tool},
+			config: Config{MaxTurns: 1, MaxToolCalls: 1, TimeoutSeconds: -1},
+			want:   "agent timeout must not be negative",
 		},
 		"nil tool": {
 			client: client,
@@ -298,6 +312,41 @@ func TestLoopStopsAtTurnAndToolLimits(t *testing.T) {
 		assert.Empty(t, tool.calls)
 		assert.Equal(t, "maximum tool call limit reached", result.ToolCalls[0].Error)
 	})
+}
+
+func TestLoopClassifiesFinishReasonsAndTimeout(t *testing.T) {
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}}
+
+	for reason, want := range map[string]string{
+		"length":         TerminationTokenLimit,
+		"content_filter": TerminationFinishReason,
+	} {
+		t.Run(reason, func(t *testing.T) {
+			client := &loopClient{results: []inference.Result{{
+				Message:      inference.Message{Role: "assistant", Content: "partial"},
+				FinishReason: reason,
+			}}}
+			loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 1, MaxToolCalls: 1})
+			require.NoError(t, err)
+
+			result, err := loop.Run(context.Background(), "Inspect the workload.")
+			require.NoError(t, err)
+			assert.Equal(t, want, result.Termination)
+		})
+	}
+
+	loop, err := NewLoop(blockingLoopClient{}, []Tool{tool}, Config{
+		MaxTurns:       1,
+		MaxToolCalls:   1,
+		TimeoutSeconds: 0.01,
+	})
+	require.NoError(t, err)
+
+	started := time.Now()
+	result, err := loop.Run(context.Background(), "Inspect the workload.")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, TerminationTimeout, result.Termination)
+	assert.Less(t, time.Since(started), time.Second)
 }
 
 func TestLoopReturnsInferenceErrorsAndCancellation(t *testing.T) {
