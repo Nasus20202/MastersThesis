@@ -3,6 +3,7 @@ package results
 import (
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
@@ -17,8 +18,10 @@ type RunMetadata struct {
 
 type AttemptResult struct {
 	RunID      string                         `json:"run_id"`
+	Condition  string                         `json:"condition"`
 	ScenarioID string                         `json:"scenario_id"`
 	Attempt    int                            `json:"attempt"`
+	Agent      *common.Result                 `json:"agent,omitempty"`
 	Grading    orchestration.GradingResult    `json:"grading"`
 	Failure    *orchestration.FailureEvidence `json:"failure,omitempty"`
 	Error      string                         `json:"error,omitempty"`
@@ -26,6 +29,7 @@ type AttemptResult struct {
 
 type ValidationAttemptResult struct {
 	RunID               string                         `json:"run_id"`
+	Condition           string                         `json:"condition"`
 	ScenarioID          string                         `json:"scenario_id"`
 	CaseID              string                         `json:"case_id"`
 	Attempt             int                            `json:"attempt"`

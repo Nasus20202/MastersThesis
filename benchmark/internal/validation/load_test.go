@@ -25,6 +25,27 @@ scenarios:
         expected_full_success: true
 `
 
+const validScenarioYAML = `
+id: test-scenario
+title: Test scenario
+task: Restore the workload.
+prepare:
+  - program: prepare
+verify_clean:
+  - program: verify-clean
+inject_fault:
+  - program: inject-fault
+verify_fault:
+  - program: verify-fault
+reset:
+  - program: reset
+grading:
+  - id: ready
+    weight: 1
+    check:
+      program: check
+`
+
 func TestLoadReadsValidationManifest(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "validation.yaml")
@@ -73,4 +94,51 @@ func TestParseRequiresExpectedValues(t *testing.T) {
 
 	_, err := Parse([]byte(data))
 	assert.ErrorContains(t, err, "ExpectedScore")
+}
+
+func TestLoadCasesLoadsScenariosAndPropagatesRepairDirectory(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "scenario.yaml"), []byte(validScenarioYAML), 0o600))
+	validationPath := filepath.Join(root, "validation.yaml")
+	validationYAML := `
+scenarios:
+  - scenario_file: scenario.yaml
+    cases:
+      - id: repaired
+        repair:
+          - program: repair
+        expected_score: 1
+        expected_full_success: true
+`
+	require.NoError(t, os.WriteFile(validationPath, []byte(validationYAML), 0o600))
+
+	cases, err := LoadCases([]string{validationPath})
+	require.NoError(t, err)
+	require.Len(t, cases, 1)
+	assert.Equal(t, "test-scenario", cases[0].Scenario.ID)
+	assert.Equal(t, "repaired", cases[0].ID)
+	assert.Equal(t, float64(1), cases[0].ExpectedScore)
+	assert.True(t, cases[0].ExpectedFullSuccess)
+	require.Len(t, cases[0].Repair, 1)
+	assert.Equal(t, filepath.Dir(validationPath), cases[0].Repair[0].Spec().Dir)
+}
+
+func TestLoadCasesRejectsDuplicateCasesAcrossInputs(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "scenario.yaml"), []byte(validScenarioYAML), 0o600))
+	validationYAML := `
+scenarios:
+  - scenario_file: scenario.yaml
+    cases:
+      - id: repaired
+        expected_score: 1
+        expected_full_success: true
+`
+	first := filepath.Join(root, "first.yaml")
+	second := filepath.Join(root, "second.yaml")
+	require.NoError(t, os.WriteFile(first, []byte(validationYAML), 0o600))
+	require.NoError(t, os.WriteFile(second, []byte(validationYAML), 0o600))
+
+	_, err := LoadCases([]string{first, second})
+	assert.ErrorContains(t, err, `duplicate validation case "test-scenario/repaired"`)
 }

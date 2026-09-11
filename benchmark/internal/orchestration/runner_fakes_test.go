@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 )
 
@@ -69,6 +70,42 @@ func (s *fakeSandbox) Start(context.Context) error {
 func (s *fakeSandbox) Stop(context.Context) error {
 	*s.events = append(*s.events, "sandbox-stop")
 	return s.stopErr
+}
+
+func (s *fakeSandbox) Exec(context.Context, command.Spec) (command.Result, error) {
+	*s.events = append(*s.events, "sandbox-exec")
+	return command.Result{}, nil
+}
+
+type lifecycleOnlySandbox struct {
+	events *[]string
+}
+
+func (s *lifecycleOnlySandbox) Build(context.Context) error {
+	*s.events = append(*s.events, "sandbox-build")
+	return nil
+}
+
+func (s *lifecycleOnlySandbox) Start(context.Context) error {
+	*s.events = append(*s.events, "sandbox-start")
+	return nil
+}
+
+func (s *lifecycleOnlySandbox) Stop(context.Context) error {
+	*s.events = append(*s.events, "sandbox-stop")
+	return nil
+}
+
+type fakeAgent struct {
+	events *[]string
+	task   string
+	err    error
+}
+
+func (a *fakeAgent) Run(_ context.Context, task string) (common.Result, error) {
+	*a.events = append(*a.events, "agent")
+	a.task = task
+	return common.Result{Task: task, Termination: "completed"}, a.err
 }
 
 type recordingExecutor struct {

@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChatSendsRequestAndDecodesResponse(t *testing.T) {
@@ -113,4 +117,27 @@ func TestNewClientAndChatValidateConfiguration(t *testing.T) {
 	if err == nil {
 		t.Fatal("chat with no messages succeeded, want validation error")
 	}
+}
+
+func TestClientExposesInferenceMetadata(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://localhost:8080",
+		Model:   "gemma-test",
+		Metadata: inference.Metadata{
+			Artifact: "repo@revision/model.gguf",
+			RuntimeSettings: map[string]string{
+				"LLAMA_CONTEXT_SIZE": "32768",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	metadata := client.Metadata()
+	assert.Equal(t, "llama.cpp", metadata.Provider)
+	assert.Equal(t, "gemma-test", metadata.Model)
+	assert.Equal(t, "repo@revision/model.gguf", metadata.Artifact)
+	assert.Equal(t, map[string]string{"LLAMA_CONTEXT_SIZE": "32768"}, metadata.RuntimeSettings)
+
+	metadata.RuntimeSettings["LLAMA_CONTEXT_SIZE"] = "1"
+	assert.Equal(t, "32768", client.Metadata().RuntimeSettings["LLAMA_CONTEXT_SIZE"])
 }

@@ -11,7 +11,7 @@ type Message struct {
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 }
 
-// ToolCall describes a function call returned by the model.
+// ToolCall describes a function call returned by llama-server.
 type ToolCall struct {
 	ID       string           `json:"id"`
 	Type     string           `json:"type"`
@@ -39,7 +39,7 @@ type FunctionDefinition struct {
 }
 
 // ChatRequest contains the model-visible conversation and optional generation
-// controls supported by the server endpoint.
+// controls supported by llama-server.
 type ChatRequest struct {
 	Messages    []Message `json:"messages"`
 	Temperature *float64  `json:"temperature,omitempty"`
@@ -62,7 +62,7 @@ type Choice struct {
 	FinishReason string  `json:"finish_reason"`
 }
 
-// Usage contains token counts returned by the server.
+// Usage contains token counts returned by llama-server.
 type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`

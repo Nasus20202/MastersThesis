@@ -249,3 +249,44 @@ func TestSandboxReturnsDockerErrors(t *testing.T) {
 	err = sandbox.Stop(context.Background())
 	assert.ErrorIs(t, err, wantErr)
 }
+
+func TestStartCleansNetworkWhenConnectFails(t *testing.T) {
+	wantErr := errors.New("network connect failed")
+	executor := &sequenceExecutor{errors: []error{nil, wantErr}}
+	sandbox := newSandbox(t, executor)
+
+	err := sandbox.Start(context.Background())
+	assert.ErrorIs(t, err, wantErr)
+	assert.Len(t, executor.specs, 3)
+	assert.Equal(t, []string{"create", "connect", "rm"}, []string{
+		executor.specs[0].Args[1], executor.specs[1].Args[1], executor.specs[2].Args[1],
+	})
+}
+
+func TestStartCleansNetworkWhenContainerRunFails(t *testing.T) {
+	wantErr := errors.New("container run failed")
+	executor := &sequenceExecutor{errors: []error{nil, nil, wantErr}}
+	sandbox := newSandbox(t, executor)
+
+	err := sandbox.Start(context.Background())
+	assert.ErrorIs(t, err, wantErr)
+	assert.Len(t, executor.specs, 5)
+	assert.Equal(t, []string{"create", "connect", "run", "disconnect", "rm"}, []string{
+		executor.specs[0].Args[1], executor.specs[1].Args[1], executor.specs[2].Args[0],
+		executor.specs[3].Args[1], executor.specs[4].Args[1],
+	})
+}
+
+func TestStartCleansUpAfterKubernetesAccessCheckFails(t *testing.T) {
+	wantErr := errors.New("Kubernetes is unavailable")
+	executor := &sequenceExecutor{errors: []error{nil, nil, nil, wantErr}}
+	sandbox := newSandbox(t, executor)
+
+	err := sandbox.Start(context.Background())
+	assert.ErrorIs(t, err, wantErr)
+	assert.Len(t, executor.specs, 7)
+	assert.Equal(t, []string{"create", "connect", "run", "exec", "stop", "disconnect", "rm"}, []string{
+		executor.specs[0].Args[1], executor.specs[1].Args[1], executor.specs[2].Args[0],
+		executor.specs[3].Args[0], executor.specs[4].Args[0], executor.specs[5].Args[1], executor.specs[6].Args[1],
+	})
+}
