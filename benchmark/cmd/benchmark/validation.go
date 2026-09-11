@@ -43,8 +43,12 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	)
 
 	commandExecutor := command.LocalExecutor{}
+	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
+	if err != nil {
+		return err
+	}
 	runCase := func(ctx context.Context, definition scenario.Definition, repair scenario.Step) (orchestration.RunResult, error) {
-		return newOrchestrationRunner(commandExecutor, definition).RunWithRepair(ctx, definition, repair)
+		return newOrchestrationRunner(commandExecutor, definition, imageBuilder).RunWithRepair(ctx, definition, repair)
 	}
 	tasks := make([]executor.Task, 0, len(cases)*repeat)
 	for attempt := 1; attempt <= repeat; attempt++ {

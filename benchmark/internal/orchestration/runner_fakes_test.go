@@ -46,6 +46,16 @@ type fakeSandbox struct {
 	stopErr  error
 }
 
+type fakeImageBuilder struct {
+	events   *[]string
+	buildErr error
+}
+
+func (b *fakeImageBuilder) Build(context.Context) error {
+	*b.events = append(*b.events, "sandbox-image-build")
+	return b.buildErr
+}
+
 func (s *fakeSandbox) Build(context.Context) error {
 	*s.events = append(*s.events, "sandbox-build")
 	return s.buildErr

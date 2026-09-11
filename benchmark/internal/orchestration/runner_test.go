@@ -99,6 +99,38 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	}, events)
 }
 
+func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	runner := Runner{
+		ClusterFactory: func(string) (Cluster, error) {
+			events = append(events, "factory")
+			return cluster, nil
+		},
+		SandboxFactory: func(string, string) (Sandbox, error) {
+			events = append(events, "sandbox-factory")
+			return sandbox, nil
+		},
+		SandboxImageBuilder: &fakeImageBuilder{events: &events},
+		Executor:            &recordingExecutor{events: &events},
+		CleanupTimeout:      time.Second,
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"sandbox-image-build", "factory", "create", "sandbox-factory", "sandbox-start",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"sandbox-stop", "delete",
+	}, events)
+}
+
 func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{

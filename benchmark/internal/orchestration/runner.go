@@ -17,10 +17,11 @@ import (
 )
 
 type Runner struct {
-	ClusterFactory ClusterFactory
-	SandboxFactory SandboxFactory
-	Executor       command.Executor
-	CleanupTimeout time.Duration
+	ClusterFactory      ClusterFactory
+	SandboxFactory      SandboxFactory
+	SandboxImageBuilder SandboxImageBuilder
+	Executor            command.Executor
+	CleanupTimeout      time.Duration
 }
 
 const (
@@ -64,6 +65,13 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 
 	clusterName := clusterNameFor(definition.ID)
 	logger := slog.With("scenario", definition.ID, "cluster", clusterName)
+	if r.SandboxFactory != nil && r.SandboxImageBuilder != nil {
+		if err := r.SandboxImageBuilder.Build(ctx); err != nil {
+			logger.Error("sandbox image build failed", "error", err)
+			result.Failure = newFailureEvidence("build sandbox image", err)
+			return result, fmt.Errorf("build sandbox image: %w", err)
+		}
+	}
 	cluster, err := r.newCluster(clusterName, logger)
 	if err != nil {
 		return RunResult{}, err
@@ -142,9 +150,11 @@ func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (Sa
 }
 
 func (r Runner) startSandbox(ctx context.Context, sandbox Sandbox, logger *slog.Logger) error {
-	if err := sandbox.Build(ctx); err != nil {
-		logger.Error("sandbox image build failed", "error", err)
-		return fmt.Errorf("build sandbox image: %w", err)
+	if r.SandboxImageBuilder == nil {
+		if err := sandbox.Build(ctx); err != nil {
+			logger.Error("sandbox image build failed", "error", err)
+			return fmt.Errorf("build sandbox image: %w", err)
+		}
 	}
 	if err := sandbox.Start(ctx); err != nil {
 		logger.Error("sandbox start failed", "error", err)

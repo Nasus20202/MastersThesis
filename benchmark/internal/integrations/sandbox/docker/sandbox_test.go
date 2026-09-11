@@ -83,6 +83,28 @@ func TestBuildUsesHostDockerCommand(t *testing.T) {
 	}, executor.specs[0])
 }
 
+func TestImageBuilderBuildsImageOnce(t *testing.T) {
+	executor := &fakeExecutor{}
+	builder, err := NewImageBuilder(executor, ImageConfig{
+		Image:          "masters-thesis-sandbox:increment-1",
+		DockerfilePath: "/tmp/Dockerfile",
+		BuildContext:   "/tmp/context",
+	})
+	require.NoError(t, err)
+
+	assert.NoError(t, builder.Build(context.Background()))
+	assert.NoError(t, builder.Build(context.Background()))
+
+	require.Len(t, executor.specs, 1)
+	assert.Equal(t, command.Spec{
+		Program: dockerProgram,
+		Args: []string{
+			"build", "--file", "/tmp/Dockerfile",
+			"--tag", "masters-thesis-sandbox:increment-1", "/tmp/context",
+		},
+	}, executor.specs[0])
+}
+
 func TestStartUsesRestrictedHostDockerCommand(t *testing.T) {
 	executor := &fakeExecutor{}
 	sandbox := newSandbox(t, executor)

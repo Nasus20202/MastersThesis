@@ -50,6 +50,10 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	)
 
 	commandExecutor := command.LocalExecutor{}
+	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
+	if err != nil {
+		return err
+	}
 	tasks := make([]executor.Task, 0, len(definitions)*repeat)
 	for attempt := 1; attempt <= repeat; attempt++ {
 		for _, definition := range definitions {
@@ -58,7 +62,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 				ScenarioID: definition.ID,
 				Attempt:    attempt,
 				Run: func(ctx context.Context) (orchestration.RunResult, error) {
-					return newOrchestrationRunner(commandExecutor, definition).Run(ctx, definition)
+					return newOrchestrationRunner(commandExecutor, definition, imageBuilder).Run(ctx, definition)
 				},
 			})
 		}
@@ -93,9 +97,10 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder orchestration.SandboxImageBuilder) orchestration.Runner {
 	return orchestration.Runner{
-		Executor: commandExecutor,
+		Executor:            commandExecutor,
+		SandboxImageBuilder: imageBuilder,
 		ClusterFactory: func(name string) (orchestration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{
 				Name:       name,
@@ -115,6 +120,14 @@ func newOrchestrationRunner(commandExecutor command.Executor, definition scenari
 			})
 		},
 	}
+}
+
+func newSandboxImageBuilder(commandExecutor command.Executor) (*docker.ImageBuilder, error) {
+	return docker.NewImageBuilder(commandExecutor, docker.ImageConfig{
+		Image:          sandboxImage,
+		DockerfilePath: sandboxDockerfilePath,
+		BuildContext:   sandboxBuildContext,
+	})
 }
 
 func scenarioIDs(definitions []scenario.Definition) []string {

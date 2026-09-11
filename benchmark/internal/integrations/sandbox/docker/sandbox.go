@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 )
@@ -43,9 +44,45 @@ type Config struct {
 	Layout         ImageLayout
 }
 
+type ImageConfig struct {
+	Image          string
+	DockerfilePath string
+	BuildContext   string
+}
+
+type ImageBuilder struct {
+	executor command.Executor
+	config   ImageConfig
+	once     sync.Once
+	err      error
+}
+
 type Sandbox struct {
 	executor command.Executor
 	config   Config
+}
+
+func NewImageBuilder(executor command.Executor, config ImageConfig) (*ImageBuilder, error) {
+	if executor == nil {
+		return nil, errors.New("sandbox image executor is required")
+	}
+	if strings.TrimSpace(config.Image) == "" {
+		return nil, errors.New("sandbox image is required")
+	}
+	if strings.TrimSpace(config.DockerfilePath) == "" {
+		return nil, errors.New("sandbox Dockerfile path is required")
+	}
+	if strings.TrimSpace(config.BuildContext) == "" {
+		return nil, errors.New("sandbox build context is required")
+	}
+	return &ImageBuilder{executor: executor, config: config}, nil
+}
+
+func (b *ImageBuilder) Build(ctx context.Context) error {
+	b.once.Do(func() {
+		b.err = buildImage(ctx, b.executor, b.config)
+	})
+	return b.err
 }
 
 func New(executor command.Executor, config Config) (*Sandbox, error) {
@@ -95,23 +132,31 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 }
 
 func (s *Sandbox) Build(ctx context.Context) error {
-	logger := slog.With("sandbox_image", s.config.Image)
+	return buildImage(ctx, s.executor, ImageConfig{
+		Image:          s.config.Image,
+		DockerfilePath: s.config.DockerfilePath,
+		BuildContext:   s.config.BuildContext,
+	})
+}
+
+func buildImage(ctx context.Context, executor command.Executor, config ImageConfig) error {
+	logger := slog.With("sandbox_image", config.Image)
 	logger.InfoContext(ctx, "building sandbox image",
-		"dockerfile", s.config.DockerfilePath,
-		"context", s.config.BuildContext,
+		"dockerfile", config.DockerfilePath,
+		"context", config.BuildContext,
 	)
-	_, err := s.executor.Run(ctx, command.Spec{
+	_, err := executor.Run(ctx, command.Spec{
 		Program: dockerProgram,
 		Args: []string{
 			"build",
-			"--file", s.config.DockerfilePath,
-			"--tag", s.config.Image,
-			s.config.BuildContext,
+			"--file", config.DockerfilePath,
+			"--tag", config.Image,
+			config.BuildContext,
 		},
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "sandbox image build failed", "error", err)
-		return fmt.Errorf("build sandbox image %q: %w", s.config.Image, err)
+		return fmt.Errorf("build sandbox image %q: %w", config.Image, err)
 	}
 	logger.InfoContext(ctx, "sandbox image built")
 	return nil

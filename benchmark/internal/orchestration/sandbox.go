@@ -8,4 +8,8 @@ type Sandbox interface {
 	Stop(context.Context) error
 }
 
+type SandboxImageBuilder interface {
+	Build(context.Context) error
+}
+
 type SandboxFactory func(string, string) (Sandbox, error)
