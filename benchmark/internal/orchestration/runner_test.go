@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
+	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
+	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +43,7 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	executor := &recordingExecutor{events: &events}
 	var clusterName string
 	runner := Runner{
-		ClusterFactory: func(name string) (Cluster, error) {
+		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			clusterName = name
 			events = append(events, "factory")
 			return cluster, nil
@@ -76,11 +78,11 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	sandbox := &fakeSandbox{events: &events}
 	executor := &recordingExecutor{events: &events}
 	runner := Runner{
-		ClusterFactory: func(name string) (Cluster, error) {
+		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			events = append(events, "factory")
 			return cluster, nil
 		},
-		SandboxFactory: func(name, kubeconfigPath string) (Sandbox, error) {
+		SandboxFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
 			assert.True(t, strings.HasPrefix(name, "benchmark-test-scenario-"))
 			assert.Equal(t, "/tmp/test.internal.kubeconfig", kubeconfigPath)
 			events = append(events, "sandbox-factory")
@@ -109,11 +111,11 @@ func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
 	}
 	sandbox := &fakeSandbox{events: &events}
 	runner := Runner{
-		ClusterFactory: func(string) (Cluster, error) {
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) {
 			events = append(events, "factory")
 			return cluster, nil
 		},
-		SandboxFactory: func(string, string) (Sandbox, error) {
+		SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) {
 			events = append(events, "sandbox-factory")
 			return sandbox, nil
 		},
@@ -139,7 +141,7 @@ func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 		kubeconfigCtx:  "kind-test",
 	}
 	runner := Runner{
-		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
 	}
 
@@ -165,7 +167,7 @@ func TestRunnerPreservesFailedStepEvidence(t *testing.T) {
 		results:  []command.Result{{}, {Stdout: "diagnostic", Stderr: "unhealthy", ExitCode: 7, Duration: 2 * time.Millisecond}},
 	}
 	runner := Runner{
-		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       executor,
 	}
 
@@ -247,7 +249,7 @@ func TestRunnerCleansUpAfterCreateFailure(t *testing.T) {
 		kubeconfigCtx:  "kind-test",
 	}
 	runner := Runner{
-		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
 	}
 
@@ -266,7 +268,7 @@ func TestRunnerReturnsCleanupError(t *testing.T) {
 		kubeconfigCtx:  "kind-test",
 	}
 	runner := Runner{
-		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
 	}
 

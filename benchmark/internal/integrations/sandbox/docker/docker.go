@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
+	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 )
 
 const (
@@ -61,6 +62,11 @@ type Sandbox struct {
 	executor command.Executor
 	config   Config
 }
+
+// Ensure the Docker implementation satisfies the provider-neutral lifecycle
+// and command-execution interfaces.
+var _ sandboxintegration.Sandbox = (*Sandbox)(nil)
+var _ sandboxintegration.Executor = (*Sandbox)(nil)
 
 func NewImageBuilder(executor command.Executor, config ImageConfig) (*ImageBuilder, error) {
 	if executor == nil {

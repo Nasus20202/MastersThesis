@@ -10,7 +10,9 @@ import (
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
+	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster/kind"
+	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox/docker"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
@@ -97,17 +99,17 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder orchestration.SandboxImageBuilder) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder) orchestration.Runner {
 	return orchestration.Runner{
 		Executor:            commandExecutor,
 		SandboxImageBuilder: imageBuilder,
-		ClusterFactory: func(name string) (orchestration.Cluster, error) {
+		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{
 				Name:       name,
 				ConfigPath: definition.Cluster.Kind.ConfigPath(),
 			})
 		},
-		SandboxFactory: func(name, kubeconfigPath string) (orchestration.Sandbox, error) {
+		SandboxFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
 			return docker.New(commandExecutor, docker.Config{
 				Name:           name + "-sandbox",
 				Image:          sandboxImage,

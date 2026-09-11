@@ -13,13 +13,15 @@ import (
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
+	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
+	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 type Runner struct {
-	ClusterFactory      ClusterFactory
-	SandboxFactory      SandboxFactory
-	SandboxImageBuilder SandboxImageBuilder
+	ClusterFactory      clusterintegration.Factory
+	SandboxFactory      sandboxintegration.Factory
+	SandboxImageBuilder sandboxintegration.ImageBuilder
 	Executor            command.Executor
 	CleanupTimeout      time.Duration
 }
@@ -116,7 +118,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	return result, err
 }
 
-func (r Runner) newCluster(name string, logger *slog.Logger) (Cluster, error) {
+func (r Runner) newCluster(name string, logger *slog.Logger) (clusterintegration.Cluster, error) {
 	cluster, err := r.ClusterFactory(name)
 	if err != nil {
 		logger.Error("cluster factory failed", "error", err)
@@ -128,7 +130,7 @@ func (r Runner) newCluster(name string, logger *slog.Logger) (Cluster, error) {
 	return cluster, nil
 }
 
-func (r Runner) createCluster(ctx context.Context, cluster Cluster, name string, logger *slog.Logger) error {
+func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cluster, name string, logger *slog.Logger) error {
 	if err := cluster.Create(ctx); err != nil {
 		logger.Error("scenario cluster creation failed", "error", err)
 		return fmt.Errorf("create cluster %q: %w", name, err)
@@ -137,7 +139,7 @@ func (r Runner) createCluster(ctx context.Context, cluster Cluster, name string,
 	return nil
 }
 
-func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (Sandbox, error) {
+func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
 	sandbox, err := r.SandboxFactory(name, kubeconfigPath)
 	if err != nil {
 		logger.Error("sandbox factory failed", "error", err)
@@ -149,7 +151,7 @@ func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (Sa
 	return sandbox, nil
 }
 
-func (r Runner) startSandbox(ctx context.Context, sandbox Sandbox, logger *slog.Logger) error {
+func (r Runner) startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
 	if r.SandboxImageBuilder == nil {
 		if err := sandbox.Build(ctx); err != nil {
 			logger.Error("sandbox image build failed", "error", err)
@@ -164,7 +166,7 @@ func (r Runner) startSandbox(ctx context.Context, sandbox Sandbox, logger *slog.
 	return nil
 }
 
-func (r Runner) cleanupSandbox(sandbox Sandbox, logger *slog.Logger) error {
+func (r Runner) cleanupSandbox(sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), r.cleanupTimeout())
 	defer cancel()
 	logger.Info("stopping sandbox")
@@ -176,7 +178,7 @@ func (r Runner) cleanupSandbox(sandbox Sandbox, logger *slog.Logger) error {
 	return nil
 }
 
-func (r Runner) cleanupCluster(cluster Cluster, logger *slog.Logger) error {
+func (r Runner) cleanupCluster(cluster clusterintegration.Cluster, logger *slog.Logger) error {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), r.cleanupTimeout())
 	defer cancel()
 	logger.Info("deleting scenario cluster")

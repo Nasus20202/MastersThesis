@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
+	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 )
 
 const (
@@ -31,8 +31,8 @@ type Cluster struct {
 	internalKubeconfigPath string
 }
 
-// Ensure Cluster implements orchestration.Cluster at compile time.
-var _ orchestration.Cluster = (*Cluster)(nil)
+// Ensure Cluster implements the provider-neutral cluster contract.
+var _ clusterintegration.Cluster = (*Cluster)(nil)
 
 func New(executor command.Executor, config Config) (*Cluster, error) {
 	if executor == nil {
