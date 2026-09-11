@@ -55,13 +55,46 @@ The runner performs these steps in order:
 2. verify the clean state;
 3. inject the fault;
 4. verify the fault;
-5. leave a boundary for future agent repair;
+5. leave a boundary for future model repair, or apply a declared repair in validation mode;
 6. grade the repaired state;
 7. reset the scenario.
 
 Command paths, manifest paths and the optional Kind config path are resolved
 relative to the scenario file. Without a Kind config, Kind uses its default
 single control-plane node configuration.
+
+## Validation and results
+
+Validation manifests are YAML files that reference scenario files and declare
+deterministic repair cases with expected scores and full-success values. A
+directory input is scanned recursively for `.yaml` and `.yml` files; unrelated
+YAML files are skipped. For example:
+
+```yaml
+scenarios:
+  - scenario_file: scenario.yaml
+    cases:
+      - id: broken
+        expected_score: 0
+        expected_full_success: false
+      - id: repaired
+        repair:
+          - program: kubectl
+            args: [set, image, deployment/app, app=nginx:1.31.5]
+        expected_score: 1
+        expected_full_success: true
+```
+
+The `--scenario` and `--validate` options accept files or directories. Directory
+inputs are scanned recursively for YAML files. Use `--parallel N` to bound
+concurrent attempts and `--repeat N` to run each scenario or validation case
+more than once.
+
+Each run writes machine-readable evidence under `results/<run-id>/`, including
+run metadata and one JSON file per attempt. Grading criteria preserve command
+stdout, stderr, exit status and duration. Failed lifecycle commands also record
+their phase, command details and captured output in the attempt's `failure`
+object.
 
 ## Development
 

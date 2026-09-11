@@ -1,4 +1,4 @@
-package lifecycle
+package orchestration
 
 import (
 	"context"
@@ -99,6 +99,88 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	}, events)
 }
 
+func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	runner := Runner{
+		ClusterFactory: func(string) (Cluster, error) {
+			events = append(events, "factory")
+			return cluster, nil
+		},
+		SandboxFactory: func(string, string) (Sandbox, error) {
+			events = append(events, "sandbox-factory")
+			return sandbox, nil
+		},
+		SandboxImageBuilder: &fakeImageBuilder{events: &events},
+		Executor:            &recordingExecutor{events: &events},
+		CleanupTimeout:      time.Second,
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"sandbox-image-build", "factory", "create", "sandbox-factory", "sandbox-start",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"sandbox-stop", "delete",
+	}, events)
+}
+
+func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:         &events,
+		kubeconfigPath: "/tmp/test.kubeconfig",
+		kubeconfigCtx:  "kind-test",
+	}
+	runner := Runner{
+		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		Executor:       &recordingExecutor{events: &events},
+	}
+
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), scenario.Step{{Program: "repair"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "repair", "verify-restored", "reset", "delete",
+	}, events)
+}
+
+func TestRunnerPreservesFailedStepEvidence(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:         &events,
+		kubeconfigPath: "/tmp/test.kubeconfig",
+		kubeconfigCtx:  "kind-test",
+	}
+	wantErr := errors.New("verification failed")
+	executor := &recordingExecutor{
+		events:   &events,
+		failAt:   2,
+		failWith: wantErr,
+		results:  []command.Result{{}, {Stdout: "diagnostic", Stderr: "unhealthy", ExitCode: 7, Duration: 2 * time.Millisecond}},
+	}
+	runner := Runner{
+		ClusterFactory: func(string) (Cluster, error) { return cluster, nil },
+		Executor:       executor,
+	}
+
+	result, err := runner.Run(context.Background(), testDefinition())
+
+	assert.ErrorIs(t, err, wantErr)
+	require.NotNil(t, result.Failure)
+	assert.Equal(t, "verify clean", result.Failure.Phase)
+	assert.Equal(t, 1, result.Failure.CommandIndex)
+	assert.Equal(t, "verify-clean", result.Failure.Program)
+	assert.Equal(t, "diagnostic", result.Failure.Stdout)
+	assert.Equal(t, "unhealthy", result.Failure.Stderr)
+	assert.Equal(t, 7, result.Failure.ExitCode)
+}
+
 func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 	events := []string{}
 	executor := &recordingExecutor{
@@ -143,6 +225,17 @@ func TestWithKubeconfigPreservesEnvironment(t *testing.T) {
 func TestClusterNameUsesScenarioID(t *testing.T) {
 	name := clusterNameFor("image-pull-failure")
 	assert.True(t, strings.HasPrefix(name, "benchmark-image-pull-failure-"))
+}
+
+func TestClusterNameFitsKindNodeNameLimit(t *testing.T) {
+	name := clusterNameFor(strings.Repeat("a", 32))
+	assert.LessOrEqual(t, len(name)+len("-control-plane"), 63)
+}
+
+func TestClusterNamesHaveDifferentRandomSuffixes(t *testing.T) {
+	first := clusterNameFor("scenario")
+	second := clusterNameFor("scenario")
+	assert.NotEqual(t, first, second)
 }
 
 func TestRunnerCleansUpAfterCreateFailure(t *testing.T) {

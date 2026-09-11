@@ -21,6 +21,22 @@ type Result struct {
 	Duration time.Duration
 }
 
+// ExecutionError retains the command result while preserving the execution
+// error for callers that need to inspect the failed process.
+type ExecutionError struct {
+	Spec   Spec
+	Result Result
+	Err    error
+}
+
+func (e *ExecutionError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *ExecutionError) Unwrap() error {
+	return e.Err
+}
+
 type Executor interface {
 	Run(context.Context, Spec) (Result, error)
 }

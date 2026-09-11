@@ -2,7 +2,9 @@ GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
 BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
-SCENARIO ?= scenarios/image-pull-failure/scenario.yaml
+SCENARIO ?= scenarios/
+REPEAT ?= 1
+VALIDATION_PARALLEL ?= 4
 COMPOSE := docker compose --env-file $(BENCHMARK_CONFIG) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 include $(BENCHMARK_CONFIG)
@@ -14,7 +16,7 @@ export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs docker-cleanup benchmark
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs docker-cleanup build benchmark benchmark-validate
 
 help:
 	@printf '%s\n' 'Available commands:'
@@ -28,8 +30,14 @@ help:
 		'make llama-stop' 'Stop the llama.cpp model router.' \
 		'make llama-logs' 'Follow llama.cpp model router logs.' \
 		'make docker-cleanup' 'Remove benchmark Kind clusters and sandbox containers.' \
+		'make build' 'Build the benchmark executable.' \
 		'make benchmark' 'Run the default benchmark scenario.' \
-		'make benchmark SCENARIO=PATH' 'Run a selected scenario.'
+		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.'
+	@printf '%s\n' 'Benchmark parameters:'
+	@printf '  %-28s %s\n' \
+		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
+		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
+		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -61,8 +69,14 @@ llama-logs:
 docker-cleanup:
 	./scripts/docker-cleanup.sh
 
+build:
+	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
+
 benchmark:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO) --repeat $(REPEAT)
+
+benchmark-validate:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
 
 benchmark-go-test:
 	cd $(BENCHMARK_DIR) && $(GO) test ./... -cover

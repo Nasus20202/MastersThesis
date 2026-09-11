@@ -1,4 +1,4 @@
-package lifecycle
+package orchestration
 
 import (
 	"context"
@@ -46,6 +46,16 @@ type fakeSandbox struct {
 	stopErr  error
 }
 
+type fakeImageBuilder struct {
+	events   *[]string
+	buildErr error
+}
+
+func (b *fakeImageBuilder) Build(context.Context) error {
+	*b.events = append(*b.events, "sandbox-image-build")
+	return b.buildErr
+}
+
 func (s *fakeSandbox) Build(context.Context) error {
 	*s.events = append(*s.events, "sandbox-build")
 	return s.buildErr
@@ -74,6 +84,10 @@ func (e *recordingExecutor) Run(_ context.Context, spec command.Spec) (command.R
 	e.specs = append(e.specs, spec)
 	*e.events = append(*e.events, spec.Program)
 	if e.failAt == len(e.specs) {
+		resultIndex := len(e.specs) - 1
+		if resultIndex < len(e.results) {
+			return e.results[resultIndex], e.failWith
+		}
 		return command.Result{}, e.failWith
 	}
 	resultIndex := len(e.specs) - 1

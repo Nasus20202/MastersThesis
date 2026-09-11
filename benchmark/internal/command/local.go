@@ -58,7 +58,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 			"duration", result.Duration,
 			"error", runErr,
 		)
-		return result, runErr
+		return result, &ExecutionError{Spec: spec, Result: result, Err: runErr}
 	}
 	runErr := fmt.Errorf("run %q: %w", spec.Program, err)
 	logger.WarnContext(ctx, "command exited with non-zero status",
@@ -66,7 +66,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 		"duration", result.Duration,
 		"error", runErr,
 	)
-	return result, runErr
+	return result, &ExecutionError{Spec: spec, Result: result, Err: runErr}
 }
 
 func exitCode(err error) int {
