@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 )
 
 type CriterionResult struct {
@@ -25,6 +27,7 @@ type GradingResult struct {
 
 type RunResult struct {
 	ScenarioID string           `json:"scenario_id"`
+	Agent      *common.Result   `json:"agent,omitempty"`
 	Grading    GradingResult    `json:"grading"`
 	Failure    *FailureEvidence `json:"failure,omitempty"`
 }

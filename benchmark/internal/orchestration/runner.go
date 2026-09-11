@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -22,6 +24,7 @@ type Runner struct {
 	ClusterFactory      clusterintegration.Factory
 	SandboxFactory      sandboxintegration.Factory
 	SandboxImageBuilder sandboxintegration.ImageBuilder
+	AgentFactory        rootagent.Factory
 	Executor            command.Executor
 	CleanupTimeout      time.Duration
 }
@@ -43,22 +46,28 @@ type phase struct {
 }
 
 func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result RunResult, runErr error) {
-	return r.run(ctx, definition, nil)
+	return r.run(ctx, definition, nil, true)
 }
 
 // RunWithRepair runs a scenario with a validation-only repair step between
 // fault verification and grading. The repair is supplied by validation data,
 // not by the scenario definition used for benchmark execution.
 func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definition, repair scenario.Step) (RunResult, error) {
-	return r.run(ctx, definition, repair)
+	return r.run(ctx, definition, repair, false)
 }
 
-func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step) (result RunResult, runErr error) {
+func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step, useAgent bool) (result RunResult, runErr error) {
 	if r.ClusterFactory == nil {
 		return RunResult{}, errors.New("orchestration cluster factory is required")
 	}
 	if r.Executor == nil {
 		return RunResult{}, errors.New("orchestration command executor is required")
+	}
+	if !useAgent && r.AgentFactory != nil {
+		return RunResult{}, errors.New("validation run cannot use a model agent")
+	}
+	if useAgent && r.AgentFactory != nil && r.SandboxFactory == nil {
+		return RunResult{}, errors.New("model agent requires an orchestration sandbox")
 	}
 	if err := definition.Validate(); err != nil {
 		return RunResult{}, err
@@ -92,6 +101,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 		result.Failure = newFailureEvidence("create cluster", err)
 		return result, err
 	}
+	var modelAgent rootagent.Agent
 	if r.SandboxFactory != nil {
 		sandbox, err := r.newSandbox(clusterName, cluster.InternalKubeconfigPath(), logger)
 		if err != nil {
@@ -109,13 +119,36 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 				}
 			}
 		}()
+		if useAgent && r.AgentFactory != nil {
+			executor, ok := sandbox.(sandboxintegration.Executor)
+			if !ok {
+				return result, errors.New("orchestration sandbox does not provide command execution")
+			}
+			modelAgent, err = r.newAgent(executor, logger)
+			if err != nil {
+				return result, err
+			}
+		}
 	}
-	grading, err := r.runPhases(ctx, definition, repair, cluster.KubeconfigPath(), logger)
+	grading, agentResult, err := r.runPhases(ctx, definition, repair, modelAgent, cluster.KubeconfigPath(), logger)
+	result.Agent = agentResult
 	result.Grading = grading
 	if err != nil && result.Failure == nil {
 		result.Failure = newFailureEvidence("scenario", err)
 	}
 	return result, err
+}
+
+func (r Runner) newAgent(executor sandboxintegration.Executor, logger *slog.Logger) (rootagent.Agent, error) {
+	agent, err := r.AgentFactory(executor)
+	if err != nil {
+		logger.Error("agent factory failed", "error", err)
+		return nil, fmt.Errorf("create model agent: %w", err)
+	}
+	if agent == nil {
+		return nil, errors.New("create model agent: factory returned a nil agent")
+	}
+	return agent, nil
 }
 
 func (r Runner) newCluster(name string, logger *slog.Logger) (clusterintegration.Cluster, error) {
@@ -190,7 +223,7 @@ func (r Runner) cleanupCluster(cluster clusterintegration.Cluster, logger *slog.
 	return nil
 }
 
-func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, kubeconfigPath string, logger *slog.Logger) (GradingResult, error) {
+func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, modelAgent rootagent.Agent, kubeconfigPath string, logger *slog.Logger) (GradingResult, *common.Result, error) {
 	beforeAgent := []phase{
 		{name: phasePrepare, step: definition.Prepare},
 		{name: phaseVerifyClean, step: definition.VerifyClean},
@@ -198,11 +231,25 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 		{name: phaseVerifyFault, step: definition.VerifyFault},
 	}
 	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, logger); err != nil {
-		return GradingResult{}, err
+		return GradingResult{}, nil, err
 	}
 	if len(repair) > 0 {
 		if err := r.runPhaseSteps(ctx, []phase{{name: phaseRepair, step: repair}}, kubeconfigPath, logger); err != nil {
-			return GradingResult{}, err
+			return GradingResult{}, nil, err
+		}
+	}
+
+	var agentResult *common.Result
+	var agentErr error
+	if modelAgent != nil {
+		logger.Info("running model agent")
+		result, err := modelAgent.Run(ctx, definition.Task)
+		agentResult = &result
+		if err != nil {
+			agentErr = fmt.Errorf("run model agent: %w", err)
+			logger.Error("model agent failed", "error", err)
+		} else {
+			logger.Info("model agent completed", "termination", result.Termination)
 		}
 	}
 
@@ -216,15 +263,12 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 
 	afterGrading := []phase{{name: phaseReset, step: definition.Reset}}
 	if err := r.runPhaseSteps(ctx, afterGrading, kubeconfigPath, logger); err != nil {
-		if gradingErr != nil {
-			return GradingResult{}, errors.Join(gradingErr, err)
-		}
-		return result, err
+		return result, agentResult, errors.Join(agentErr, gradingErr, err)
 	}
-	if gradingErr != nil {
-		return GradingResult{}, gradingErr
+	if runErr := errors.Join(agentErr, gradingErr); runErr != nil {
+		return result, agentResult, runErr
 	}
-	return result, nil
+	return result, agentResult, nil
 }
 
 func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPath string, logger *slog.Logger) error {

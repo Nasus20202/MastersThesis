@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -131,6 +132,54 @@ func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
 		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
 		"sandbox-stop", "delete",
 	}, events)
+}
+
+func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	agent := &fakeAgent{events: &events}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) { return sandbox, nil },
+		AgentFactory: rootagent.Factory(func(executor sandboxintegration.Executor) (rootagent.Agent, error) {
+			assert.Same(t, sandbox, executor)
+			events = append(events, "agent-factory")
+			return agent, nil
+		}),
+		Executor: &recordingExecutor{events: &events},
+	}
+
+	result, err := runner.Run(context.Background(), testDefinition())
+	require.NoError(t, err)
+	assert.Equal(t, testDefinition().Task, agent.task)
+	require.NotNil(t, result.Agent)
+	assert.Equal(t, testDefinition().Task, result.Agent.Task)
+	assert.Equal(t, []string{
+		"create", "sandbox-build", "sandbox-start", "agent-factory", "kubectl", "verify-clean",
+		"inject-fault", "verify-fault", "agent", "verify-restored", "reset", "sandbox-stop", "delete",
+	}, events)
+}
+
+func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{events: &events, kubeconfigPath: "/tmp/test.kubeconfig"}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		AgentFactory: rootagent.Factory(func(sandboxintegration.Executor) (rootagent.Agent, error) {
+			return &fakeAgent{}, nil
+		}),
+		Executor: &recordingExecutor{events: &events},
+	}
+
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), scenario.Step{{Program: "repair"}})
+	assert.ErrorContains(t, err, "validation run cannot use a model agent")
+	assert.Empty(t, events)
 }
 
 func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
