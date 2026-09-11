@@ -1,4 +1,4 @@
-package lifecycle
+package orchestration
 
 import (
 	"errors"
@@ -24,8 +24,9 @@ type GradingResult struct {
 }
 
 type RunResult struct {
-	ScenarioID string        `json:"scenario_id"`
-	Grading    GradingResult `json:"grading"`
+	ScenarioID string           `json:"scenario_id"`
+	Grading    GradingResult    `json:"grading"`
+	Failure    *FailureEvidence `json:"failure,omitempty"`
 }
 
 func calculateGradingResult(criteria []CriterionResult) (GradingResult, error) {

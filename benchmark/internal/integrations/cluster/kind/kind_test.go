@@ -110,3 +110,13 @@ func TestClusterReturnsExecutorError(t *testing.T) {
 	err = cluster.Create(context.Background())
 	assert.ErrorIs(t, err, wantErr)
 }
+
+func TestClusterIncludesCommandStderrInExecutorError(t *testing.T) {
+	wantErr := errors.New("kind failed")
+	executor := &fakeExecutor{err: wantErr, results: []command.Result{{Stderr: "node name is too long\n"}}}
+	cluster, err := New(executor, Config{Name: "benchmark"})
+	require.NoError(t, err)
+
+	err = cluster.Create(context.Background())
+	assert.ErrorContains(t, err, "node name is too long")
+}

@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-CLUSTER_PATTERN='^benchmark-.+-[0-9]+$'
-SANDBOX_PATTERN='^benchmark-.+-[0-9]+-sandbox$'
-NETWORK_PATTERN='^benchmark-.+-[0-9]+-sandbox-network$'
+CLUSTER_PATTERN='^benchmark-.+-[a-f0-9]+$'
+SANDBOX_PATTERN='^benchmark-.+-[a-f0-9]+-sandbox$'
+NETWORK_PATTERN='^benchmark-.+-[a-f0-9]+-sandbox-network$'
 
 while IFS= read -r CLUSTER; do
   if [[ "$CLUSTER" =~ $CLUSTER_PATTERN ]]; then

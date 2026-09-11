@@ -36,6 +36,10 @@ func (s Step) setDir(dir string) {
 	}
 }
 
+func (s Step) SetDir(dir string) {
+	s.setDir(dir)
+}
+
 func (s Step) Specs() []command.Spec {
 	specs := make([]command.Spec, len(s))
 	for index, item := range s {

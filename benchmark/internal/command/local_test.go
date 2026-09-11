@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -29,11 +30,15 @@ func TestLocalExecutorCapturesOutput(t *testing.T) {
 func TestLocalExecutorReturnsExitCodeAndOutput(t *testing.T) {
 	result, err := (LocalExecutor{}).Run(context.Background(), Spec{
 		Program: "sh",
-		Args:    []string{"-c", "printf failed >&2; exit 7"},
+		Args:    []string{"-c", "printf stdout; printf stderr >&2; exit 7"},
 	})
 	assert.Error(t, err)
 	assert.Equal(t, 7, result.ExitCode)
-	assert.Equal(t, "failed", result.Stderr)
+	assert.Equal(t, "stdout", result.Stdout)
+	assert.Equal(t, "stderr", result.Stderr)
+	var executionErr *ExecutionError
+	assert.True(t, errors.As(err, &executionErr))
+	assert.Equal(t, result, executionErr.Result)
 }
 
 func TestLocalExecutorUsesDirectoryAndEnvironment(t *testing.T) {

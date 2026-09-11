@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/lifecycle"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
 const (
@@ -31,8 +31,8 @@ type Cluster struct {
 	internalKubeconfigPath string
 }
 
-// Ensure Cluster implements lifecycle.Cluster at compile time.
-var _ lifecycle.Cluster = (*Cluster)(nil)
+// Ensure Cluster implements orchestration.Cluster at compile time.
+var _ orchestration.Cluster = (*Cluster)(nil)
 
 func New(executor command.Executor, config Config) (*Cluster, error) {
 	if executor == nil {
@@ -126,6 +126,10 @@ func (c *Cluster) run(ctx context.Context, args ...string) (command.Result, erro
 	}
 	result, err := c.executor.Run(ctx, spec)
 	if err != nil {
+		stderr := strings.TrimSpace(result.Stderr)
+		if stderr != "" {
+			return result, fmt.Errorf("kind cluster %q %s: %w: %s", c.name, args[0], err, stderr)
+		}
 		return result, fmt.Errorf("kind cluster %q %s: %w", c.name, args[0], err)
 	}
 	return result, nil

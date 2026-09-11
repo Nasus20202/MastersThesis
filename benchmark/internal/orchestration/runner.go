@@ -1,12 +1,15 @@
-package lifecycle
+package orchestration
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
-	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -27,6 +30,7 @@ const (
 	phaseVerifyClean      = "verify clean"
 	phaseInjectFault      = "inject fault"
 	phaseVerifyFault      = "verify fault"
+	phaseRepair           = "repair"
 	phaseReset            = "reset"
 )
 
@@ -36,15 +40,27 @@ type phase struct {
 }
 
 func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result RunResult, runErr error) {
+	return r.run(ctx, definition, nil)
+}
+
+// RunWithRepair runs a scenario with a validation-only repair step between
+// fault verification and grading. The repair is supplied by validation data,
+// not by the scenario definition used for benchmark execution.
+func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definition, repair scenario.Step) (RunResult, error) {
+	return r.run(ctx, definition, repair)
+}
+
+func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step) (result RunResult, runErr error) {
 	if r.ClusterFactory == nil {
-		return RunResult{}, errors.New("lifecycle cluster factory is required")
+		return RunResult{}, errors.New("orchestration cluster factory is required")
 	}
 	if r.Executor == nil {
-		return RunResult{}, errors.New("lifecycle command executor is required")
+		return RunResult{}, errors.New("orchestration command executor is required")
 	}
 	if err := definition.Validate(); err != nil {
 		return RunResult{}, err
 	}
+	result.ScenarioID = definition.ID
 
 	clusterName := clusterNameFor(definition.ID)
 	logger := slog.With("scenario", definition.ID, "cluster", clusterName)
@@ -56,28 +72,40 @@ func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result
 	defer func() {
 		if err := r.cleanupCluster(cluster, logger); err != nil {
 			runErr = errors.Join(runErr, err)
+			if result.Failure == nil {
+				result.Failure = newFailureEvidence("cleanup cluster", err)
+			}
 		}
 	}()
 
 	if err := r.createCluster(ctx, cluster, clusterName, logger); err != nil {
-		return RunResult{}, err
+		result.Failure = newFailureEvidence("create cluster", err)
+		return result, err
 	}
 	if r.SandboxFactory != nil {
 		sandbox, err := r.newSandbox(clusterName, cluster.InternalKubeconfigPath(), logger)
 		if err != nil {
-			return RunResult{}, err
+			return result, err
 		}
 		if err := r.startSandbox(ctx, sandbox, logger); err != nil {
-			return RunResult{}, err
+			result.Failure = newFailureEvidence("start sandbox", err)
+			return result, err
 		}
 		defer func() {
 			if err := r.cleanupSandbox(sandbox, logger); err != nil {
 				runErr = errors.Join(runErr, err)
+				if result.Failure == nil {
+					result.Failure = newFailureEvidence("cleanup sandbox", err)
+				}
 			}
 		}()
 	}
-	grading, err := r.runPhases(ctx, definition, cluster.KubeconfigPath(), logger)
-	return RunResult{ScenarioID: definition.ID, Grading: grading}, err
+	grading, err := r.runPhases(ctx, definition, repair, cluster.KubeconfigPath(), logger)
+	result.Grading = grading
+	if err != nil && result.Failure == nil {
+		result.Failure = newFailureEvidence("scenario", err)
+	}
+	return result, err
 }
 
 func (r Runner) newCluster(name string, logger *slog.Logger) (Cluster, error) {
@@ -150,7 +178,7 @@ func (r Runner) cleanupCluster(cluster Cluster, logger *slog.Logger) error {
 	return nil
 }
 
-func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, kubeconfigPath string, logger *slog.Logger) (GradingResult, error) {
+func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, kubeconfigPath string, logger *slog.Logger) (GradingResult, error) {
 	beforeAgent := []phase{
 		{name: phasePrepare, step: definition.Prepare},
 		{name: phaseVerifyClean, step: definition.VerifyClean},
@@ -160,8 +188,12 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, k
 	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, logger); err != nil {
 		return GradingResult{}, err
 	}
+	if len(repair) > 0 {
+		if err := r.runPhaseSteps(ctx, []phase{{name: phaseRepair, step: repair}}, kubeconfigPath, logger); err != nil {
+			return GradingResult{}, err
+		}
+	}
 
-	// Future agent repair execution belongs between fault verification and grading.
 	logger.Info("running scenario grading")
 	result, gradingErr := r.runGrading(ctx, definition.Grading, kubeconfigPath)
 	if gradingErr != nil {
@@ -198,8 +230,15 @@ func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPat
 func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, kubeconfigPath string) error {
 	for index, spec := range step.Specs() {
 		spec = withKubeconfig(spec, kubeconfigPath)
-		if _, err := r.Executor.Run(ctx, spec); err != nil {
-			return fmt.Errorf("run %s command %d: %w", phase, index+1, err)
+		result, err := r.Executor.Run(ctx, spec)
+		if err != nil {
+			return &stepError{
+				phase:        phase,
+				commandIndex: index + 1,
+				spec:         spec,
+				result:       result,
+				err:          fmt.Errorf("run %s command %d: %w", phase, index+1, err),
+			}
 		}
 	}
 	return nil
@@ -248,5 +287,26 @@ func (r Runner) cleanupTimeout() time.Duration {
 }
 
 func clusterNameFor(scenarioID string) string {
-	return fmt.Sprintf("benchmark-%s-%s", scenarioID, strconv.FormatInt(time.Now().UnixNano(), 10))
+	const prefix = "benchmark-"
+	const maxNodeNameLength = 63
+	const controlPlaneSuffix = "-control-plane"
+
+	suffix := randomClusterSuffix()
+	base := prefix + scenarioID
+	maxClusterNameLength := maxNodeNameLength - len(controlPlaneSuffix)
+	maxBaseLength := maxClusterNameLength - len(suffix) - 1
+	if len(base) > maxBaseLength {
+		base = strings.TrimRight(base[:maxBaseLength], "-")
+	}
+	return base + "-" + suffix
+}
+
+var clusterNameFallback atomic.Uint64
+
+func randomClusterSuffix() string {
+	var value [4]byte
+	if _, err := crand.Read(value[:]); err == nil {
+		return hex.EncodeToString(value[:])
+	}
+	return fmt.Sprintf("%08x", clusterNameFallback.Add(1))
 }

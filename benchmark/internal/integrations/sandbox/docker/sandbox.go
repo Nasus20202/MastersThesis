@@ -1,4 +1,4 @@
-package sandbox
+package docker
 
 import (
 	"context"
@@ -142,6 +142,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 			"--detach",
 			"--rm",
 			"--name", s.config.Name,
+			"--hostname", s.config.Name,
 			"--network", s.config.Network,
 			"--user", s.config.Layout.User,
 			"--workdir", s.config.Layout.Workdir,
@@ -197,20 +198,28 @@ func (s *Sandbox) Exec(ctx context.Context, spec command.Spec) (command.Result, 
 func (s *Sandbox) Stop(ctx context.Context) error {
 	logger := slog.With("sandbox", s.config.Name)
 	logger.InfoContext(ctx, "stopping sandbox")
+	var stopErr error
 	_, err := s.executor.Run(ctx, command.Spec{
 		Program: dockerProgram,
 		Args:    []string{"stop", s.config.Name},
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "sandbox stop failed", "error", err)
-		return fmt.Errorf("stop sandbox %q: %w", s.config.Name, err)
+		stopErr = fmt.Errorf("stop sandbox %q: %w", s.config.Name, err)
+	}
+	var cleanupErrs []error
+	if stopErr != nil {
+		cleanupErrs = append(cleanupErrs, stopErr)
 	}
 	if err := s.disconnectNetwork(ctx); err != nil {
 		logger.ErrorContext(ctx, "sandbox network disconnection failed", "error", err)
-		return err
+		cleanupErrs = append(cleanupErrs, err)
 	}
 	if err := s.removeNetwork(ctx); err != nil {
 		logger.ErrorContext(ctx, "sandbox network removal failed", "error", err)
+		cleanupErrs = append(cleanupErrs, err)
+	}
+	if err := errors.Join(cleanupErrs...); err != nil {
 		return err
 	}
 	logger.InfoContext(ctx, "sandbox stopped")

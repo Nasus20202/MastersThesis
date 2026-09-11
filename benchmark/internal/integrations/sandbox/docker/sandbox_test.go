@@ -1,4 +1,4 @@
-package sandbox
+package docker
 
 import (
 	"context"
@@ -18,6 +18,20 @@ type fakeExecutor struct {
 func (f *fakeExecutor) Run(_ context.Context, spec command.Spec) (command.Result, error) {
 	f.specs = append(f.specs, spec)
 	return command.Result{}, f.err
+}
+
+type sequenceExecutor struct {
+	specs  []command.Spec
+	errors []error
+}
+
+func (e *sequenceExecutor) Run(_ context.Context, spec command.Spec) (command.Result, error) {
+	e.specs = append(e.specs, spec)
+	index := len(e.specs) - 1
+	if index < len(e.errors) {
+		return command.Result{}, e.errors[index]
+	}
+	return command.Result{}, nil
 }
 
 func newSandbox(t *testing.T, executor command.Executor) *Sandbox {
@@ -88,6 +102,7 @@ func TestStartUsesRestrictedHostDockerCommand(t *testing.T) {
 		Program: dockerProgram,
 		Args: []string{
 			"run", "--detach", "--rm", "--name", "benchmark-sandbox",
+			"--hostname", "benchmark-sandbox",
 			"--network", "benchmark-sandbox-network",
 			"--user", "benchmark",
 			"--workdir", "/workspace",
@@ -158,6 +173,19 @@ func TestStopUsesHostDockerCommand(t *testing.T) {
 	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"stop", "benchmark-sandbox"}}, executor.specs[0])
 	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"network", "disconnect", "--force", "benchmark-sandbox-network", "benchmark-control-plane"}}, executor.specs[1])
 	assert.Equal(t, command.Spec{Program: dockerProgram, Args: []string{"network", "rm", "benchmark-sandbox-network"}}, executor.specs[2])
+}
+
+func TestStopAttemptsNetworkCleanupWhenContainerStopFails(t *testing.T) {
+	stopErr := errors.New("container already stopped")
+	executor := &sequenceExecutor{errors: []error{stopErr}}
+	sandbox := newSandbox(t, executor)
+
+	err := sandbox.Stop(context.Background())
+
+	assert.ErrorIs(t, err, stopErr)
+	assert.Len(t, executor.specs, 3)
+	assert.Equal(t, "network", executor.specs[1].Args[0])
+	assert.Equal(t, "network", executor.specs[2].Args[0])
 }
 
 func TestSandboxReturnsDockerErrors(t *testing.T) {
