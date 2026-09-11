@@ -54,7 +54,7 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 		CleanupTimeout: time.Second,
 	}
 
-	result, err := runner.Run(context.Background(), testDefinition())
+	result, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, float64(1), result.Grading.Score)
 	assert.True(t, result.Grading.FullSuccess)
@@ -94,7 +94,7 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 		CleanupTimeout: time.Second,
 	}
 
-	_, err := runner.Run(context.Background(), testDefinition())
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"factory", "create", "sandbox-factory", "sandbox-build", "sandbox-start",
@@ -126,7 +126,7 @@ func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
 		CleanupTimeout:      time.Second,
 	}
 
-	_, err := runner.Run(context.Background(), testDefinition())
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"sandbox-image-build", "factory", "create", "sandbox-factory", "sandbox-start",
@@ -248,6 +248,21 @@ func TestRunnerRejectsInvalidAgentFactoryResults(t *testing.T) {
 	}
 }
 
+func TestRunnerRequiresAgentFactoryForBaselineRun(t *testing.T) {
+	events := []string{}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) {
+			events = append(events, "factory")
+			return &fakeCluster{}, nil
+		},
+		Executor: &recordingExecutor{events: &events},
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	assert.EqualError(t, err, "baseline run requires a model agent factory")
+	assert.Empty(t, events)
+}
+
 func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{events: &events, kubeconfigPath: "/tmp/test.kubeconfig"}
@@ -302,7 +317,7 @@ func TestRunnerPreservesFailedStepEvidence(t *testing.T) {
 		Executor:       executor,
 	}
 
-	result, err := runner.Run(context.Background(), testDefinition())
+	result, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 
 	assert.ErrorIs(t, err, wantErr)
 	require.NotNil(t, result.Failure)
@@ -384,7 +399,7 @@ func TestRunnerCleansUpAfterCreateFailure(t *testing.T) {
 		Executor:       &recordingExecutor{events: &events},
 	}
 
-	_, err := runner.Run(context.Background(), testDefinition())
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	assert.Error(t, err)
 	assert.Equal(t, []string{"create", "delete"}, events)
 }
@@ -403,6 +418,6 @@ func TestRunnerReturnsCleanupError(t *testing.T) {
 		Executor:       &recordingExecutor{events: &events},
 	}
 
-	_, err := runner.Run(context.Background(), testDefinition())
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	assert.ErrorIs(t, err, cleanupErr)
 }
