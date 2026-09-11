@@ -27,6 +27,7 @@ type GradingResult struct {
 
 type RunResult struct {
 	ScenarioID string           `json:"scenario_id"`
+	Condition  string           `json:"condition"`
 	Agent      *common.Result   `json:"agent,omitempty"`
 	Grading    GradingResult    `json:"grading"`
 	Failure    *FailureEvidence `json:"failure,omitempty"`

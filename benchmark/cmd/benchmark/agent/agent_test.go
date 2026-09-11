@@ -29,6 +29,20 @@ func TestNewBaselineFactoryConstructsAgent(t *testing.T) {
 	assert.NotNil(t, agent)
 }
 
+func TestModelArtifactAndRuntimeSettings(t *testing.T) {
+	t.Setenv("LLAMA_MODEL_REPOSITORY", "google/gemma")
+	t.Setenv("LLAMA_MODEL_REVISION", "revision")
+	t.Setenv("LLAMA_MODEL_FILE", "gemma.gguf")
+	t.Setenv("LLAMA_CONTEXT_SIZE", "32768")
+	t.Setenv("LLAMA_REASONING", "on")
+
+	assert.Equal(t, "google/gemma@revision/gemma.gguf", modelArtifact())
+	settings := runtimeSettings()
+	assert.Equal(t, "32768", settings["LLAMA_CONTEXT_SIZE"])
+	assert.Equal(t, "on", settings["LLAMA_REASONING"])
+	assert.Equal(t, "auto", settings["LLAMA_FLASH_ATTN"])
+}
+
 type baselineTestExecutor struct{}
 
 func (baselineTestExecutor) Exec(context.Context, command.Spec) (command.Result, error) {

@@ -28,6 +28,14 @@ func TestRunRejectsUninitializedAgent(t *testing.T) {
 	assert.EqualError(t, err, "baseline agent is not initialized")
 }
 
+func TestRunRejectsBlankTask(t *testing.T) {
+	agent, err := New(&fakeChatClient{}, baselineTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
+	require.NoError(t, err)
+
+	_, err = agent.Run(context.Background(), "  ")
+	assert.EqualError(t, err, "agent task is required")
+}
+
 func TestRunUsesMinimalToolPromptAndPreservesTaskEvidence(t *testing.T) {
 	client := &fakeChatClient{responses: []llama.ChatResponse{{Choices: []llama.Choice{{Message: llama.Message{
 		Role:    "assistant",
@@ -39,6 +47,7 @@ func TestRunUsesMinimalToolPromptAndPreservesTaskEvidence(t *testing.T) {
 	result, err := agent.Run(context.Background(), "Restore the application.")
 	require.NoError(t, err)
 	assert.Equal(t, "Restore the application.", result.Task)
+	assert.Equal(t, "baseline", result.Condition)
 	require.Len(t, client.requests, 1)
 	prompt := client.requests[0].Messages[0].Content
 	assert.Contains(t, prompt, "Restore the application.")

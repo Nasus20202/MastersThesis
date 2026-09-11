@@ -24,10 +24,10 @@ const (
 // Config controls the safety limits and generation settings for one model
 // loop. The limits apply to one call to Run.
 type Config struct {
-	MaxTurns     int
-	MaxToolCalls int
-	Temperature  *float64
-	MaxTokens    *int
+	MaxTurns     int      `json:"max_turns"`
+	MaxToolCalls int      `json:"max_tool_calls"`
+	Temperature  *float64 `json:"temperature,omitempty"`
+	MaxTokens    *int     `json:"max_tokens,omitempty"`
 }
 
 // DefaultConfig returns conservative limits suitable for a benchmark smoke
@@ -41,6 +41,7 @@ type Loop struct {
 	tools       map[string]Tool
 	definitions []inference.Tool
 	config      Config
+	metadata    inference.Metadata
 }
 
 func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error) {
@@ -81,7 +82,12 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 		definitions = append(definitions, definition)
 	}
 
-	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config}, nil
+	metadata := inference.Metadata{}
+	if provider, ok := client.(inference.MetadataProvider); ok {
+		metadata = provider.Metadata()
+		metadata.RuntimeSettings = cloneRuntimeSettings(metadata.RuntimeSettings)
+	}
+	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config, metadata: metadata}, nil
 }
 
 // ResponseEvidence preserves the raw response and the client round-trip
@@ -93,7 +99,11 @@ type ResponseEvidence struct {
 
 // Result is the complete model-loop evidence produced by Run.
 type Result struct {
+	Condition       string              `json:"condition,omitempty"`
 	Task            string              `json:"task"`
+	Inference       inference.Metadata  `json:"inference"`
+	LoopConfig      Config              `json:"loop_config"`
+	Tools           []inference.Tool    `json:"tools"`
 	Messages        []inference.Message `json:"messages"`
 	Responses       []ResponseEvidence  `json:"responses"`
 	ToolCalls       []ToolCallEvidence  `json:"tool_calls"`
@@ -113,6 +123,9 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	defer func() { result.DurationSeconds = time.Since(started).Seconds() }()
 
 	result.Task = task
+	result.Inference = l.metadata
+	result.LoopConfig = l.config
+	result.Tools = slices.Clone(l.definitions)
 	result.Messages = []inference.Message{{Role: "user", Content: task}}
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -213,6 +226,17 @@ func cloneMessages(messages []inference.Message) []inference.Message {
 	copy(cloned, messages)
 	for index := range cloned {
 		cloned[index].ToolCalls = slices.Clone(cloned[index].ToolCalls)
+	}
+	return cloned
+}
+
+func cloneRuntimeSettings(settings map[string]string) map[string]string {
+	if settings == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(settings))
+	for key, value := range settings {
+		cloned[key] = value
 	}
 	return cloned
 }

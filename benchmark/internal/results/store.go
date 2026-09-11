@@ -69,6 +69,7 @@ func (s *Store) writeAttempt(attempt int, scenarioID string, result orchestratio
 	path := filepath.Join(scenarioDir, fmt.Sprintf("%03d.json", attempt))
 	artifact := AttemptResult{
 		RunID:      s.metadata.RunID,
+		Condition:  result.Condition,
 		ScenarioID: scenarioID,
 		Attempt:    attempt,
 		Agent:      result.Agent,
@@ -101,6 +102,7 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	}
 	artifact := ValidationAttemptResult{
 		RunID:               s.metadata.RunID,
+		Condition:           result.Condition,
 		ScenarioID:          scenarioID,
 		CaseID:              caseID,
 		Attempt:             attempt,

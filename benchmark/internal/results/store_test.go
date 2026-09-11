@@ -29,6 +29,7 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 
 	result := orchestration.RunResult{
 		ScenarioID: "image-pull-failure",
+		Condition:  "baseline",
 		Agent: &common.Result{
 			Task:        "Restore the application.",
 			Messages:    []inference.Message{{Role: "user", Content: "Restore the application."}},
@@ -62,6 +63,7 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 	require.NoError(t, json.Unmarshal(attemptData, &attempt))
 	assert.Equal(t, "run-1", attempt.RunID)
 	assert.Equal(t, "image-pull-failure", attempt.ScenarioID)
+	assert.Equal(t, "baseline", attempt.Condition)
 	assert.Equal(t, 2, attempt.Attempt)
 	assert.Equal(t, result.Agent, attempt.Agent)
 	assert.Equal(t, result.Grading, attempt.Grading)
@@ -106,6 +108,7 @@ func TestStoreWritesValidationAttemptEvidence(t *testing.T) {
 	require.NoError(t, err)
 	result := orchestration.RunResult{
 		ScenarioID: "scenario",
+		Condition:  "validation",
 		Grading:    orchestration.GradingResult{Score: 0.5, FullSuccess: false},
 	}
 	require.NoError(t, store.WriteValidationAttempt(1, "scenario", "partial", 0.5, false, result, nil))
@@ -116,6 +119,7 @@ func TestStoreWritesValidationAttemptEvidence(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &artifact))
 	assert.Equal(t, "run-1", artifact.RunID)
 	assert.Equal(t, "partial", artifact.CaseID)
+	assert.Equal(t, "validation", artifact.Condition)
 	assert.Equal(t, 0.5, artifact.ExpectedScore)
 	assert.True(t, artifact.Passed)
 }

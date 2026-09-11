@@ -12,6 +12,12 @@ type Client interface {
 	Chat(context.Context, []Message, []Tool, Options) (Result, error)
 }
 
+// MetadataProvider optionally exposes provider and model metadata without
+// making it part of the chat-call contract.
+type MetadataProvider interface {
+	Metadata() Metadata
+}
+
 type Options struct {
 	Temperature *float64
 	MaxTokens   *int

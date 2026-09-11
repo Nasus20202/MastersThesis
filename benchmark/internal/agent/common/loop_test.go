@@ -14,6 +14,7 @@ type loopClient struct {
 	results  []inference.Result
 	errors   []error
 	requests []loopRequest
+	metadata inference.Metadata
 }
 
 type loopRequest struct {
@@ -39,6 +40,8 @@ func (c *loopClient) Chat(_ context.Context, messages []inference.Message, tools
 	}
 	return result, err
 }
+
+func (c *loopClient) Metadata() inference.Metadata { return c.metadata }
 
 type loopTool struct {
 	definition inference.Tool
@@ -157,7 +160,14 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 		FinishReason: "stop",
 		Usage:        &inference.Usage{TotalTokens: 7},
 		Timings:      &inference.Timings{PredictedMS: 12.5},
-	}}}
+	}}, metadata: inference.Metadata{
+		Provider: "llama.cpp",
+		Model:    "gemma-test",
+		Artifact: "repo@revision/model.gguf",
+		RuntimeSettings: map[string]string{
+			"LLAMA_CONTEXT_SIZE": "32768",
+		},
+	}}
 	tool := &loopTool{definition: inference.Tool{Name: "inspect"}}
 	loop, err := NewLoop(client, []Tool{tool}, Config{
 		MaxTurns:     2,
@@ -176,6 +186,9 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 	assert.Len(t, result.Messages, 2)
 	assert.Equal(t, "done", result.Messages[1].Content)
 	assert.Equal(t, client.results[0], result.Responses[0].Response)
+	assert.Equal(t, client.metadata, result.Inference)
+	assert.Equal(t, loop.config, result.LoopConfig)
+	assert.Equal(t, []inference.Tool{tool.definition}, result.Tools)
 	assert.GreaterOrEqual(t, result.DurationSeconds, float64(0))
 
 	require.Len(t, client.requests, 1)

@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
 const (
@@ -26,6 +28,7 @@ type Config struct {
 	Model      string
 	APIKey     string
 	HTTPClient *http.Client
+	Metadata   inference.Metadata
 }
 
 // Client is an HTTP client for the llama-server API.
@@ -34,6 +37,7 @@ type Client struct {
 	model      string
 	apiKey     string
 	httpClient *http.Client
+	metadata   inference.Metadata
 }
 
 // NewClient validates cfg and returns a client for the configured server.
@@ -69,7 +73,38 @@ func NewClient(cfg Config) (*Client, error) {
 		model:      cfg.Model,
 		apiKey:     cfg.APIKey,
 		httpClient: httpClient,
+		metadata:   clientMetadata(cfg),
 	}, nil
+}
+
+func clientMetadata(cfg Config) inference.Metadata {
+	metadata := cfg.Metadata
+	if metadata.Provider == "" {
+		metadata.Provider = "llama.cpp"
+	}
+	if metadata.Model == "" {
+		metadata.Model = cfg.Model
+	}
+	metadata.RuntimeSettings = cloneSettings(metadata.RuntimeSettings)
+	return metadata
+}
+
+func cloneSettings(settings map[string]string) map[string]string {
+	if settings == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(settings))
+	for key, value := range settings {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+// Metadata describes the llama-server and model used by the client.
+func (c *Client) Metadata() inference.Metadata {
+	metadata := c.metadata
+	metadata.RuntimeSettings = cloneSettings(metadata.RuntimeSettings)
+	return metadata
 }
 
 // Chat sends a non-streaming chat completion request to llama-server.

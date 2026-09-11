@@ -57,6 +57,11 @@ func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definitio
 }
 
 func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step, useAgent bool) (result RunResult, runErr error) {
+	if useAgent {
+		result.Condition = "baseline"
+	} else {
+		result.Condition = "validation"
+	}
 	if r.ClusterFactory == nil {
 		return RunResult{}, errors.New("orchestration cluster factory is required")
 	}

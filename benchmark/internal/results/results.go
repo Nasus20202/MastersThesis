@@ -18,6 +18,7 @@ type RunMetadata struct {
 
 type AttemptResult struct {
 	RunID      string                         `json:"run_id"`
+	Condition  string                         `json:"condition"`
 	ScenarioID string                         `json:"scenario_id"`
 	Attempt    int                            `json:"attempt"`
 	Agent      *common.Result                 `json:"agent,omitempty"`
@@ -28,6 +29,7 @@ type AttemptResult struct {
 
 type ValidationAttemptResult struct {
 	RunID               string                         `json:"run_id"`
+	Condition           string                         `json:"condition"`
 	ScenarioID          string                         `json:"scenario_id"`
 	CaseID              string                         `json:"case_id"`
 	Attempt             int                            `json:"attempt"`

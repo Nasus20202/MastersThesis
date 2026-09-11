@@ -21,6 +21,10 @@ func NewAdapter(client *Client) (inference.Client, error) {
 	return Adapter{client: client}, nil
 }
 
+func (a Adapter) Metadata() inference.Metadata {
+	return a.client.Metadata()
+}
+
 func (a Adapter) Chat(ctx context.Context, messages []inference.Message, tools []inference.Tool, options inference.Options) (inference.Result, error) {
 	response, err := a.client.Chat(ctx, ChatRequest{
 		Messages:    toLlamaMessages(messages),

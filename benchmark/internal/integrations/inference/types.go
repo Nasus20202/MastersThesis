@@ -2,6 +2,15 @@ package inference
 
 import "encoding/json"
 
+// Metadata identifies the inference implementation and the model execution
+// configuration used for an attempt.
+type Metadata struct {
+	Provider        string            `json:"provider,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	Artifact        string            `json:"artifact,omitempty"`
+	RuntimeSettings map[string]string `json:"runtime_settings,omitempty"`
+}
+
 type Message struct {
 	Role       string     `json:"role"`
 	Content    string     `json:"content"`
