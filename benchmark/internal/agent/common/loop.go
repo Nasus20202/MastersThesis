@@ -17,23 +17,27 @@ const (
 	TerminationCompleted    = "completed"
 	TerminationTurnLimit    = "turn_limit"
 	TerminationToolLimit    = "tool_limit"
+	TerminationTokenLimit   = "token_limit"
+	TerminationFinishReason = "finish_reason"
 	TerminationInference    = "inference_error"
 	TerminationCancellation = "cancellation"
+	TerminationTimeout      = "timeout"
 )
 
 // Config controls the safety limits and generation settings for one model
 // loop. The limits apply to one call to Run.
 type Config struct {
-	MaxTurns     int      `json:"max_turns"`
-	MaxToolCalls int      `json:"max_tool_calls"`
-	Temperature  *float64 `json:"temperature,omitempty"`
-	MaxTokens    *int     `json:"max_tokens,omitempty"`
+	MaxTurns       int      `json:"max_turns"`
+	MaxToolCalls   int      `json:"max_tool_calls"`
+	TimeoutSeconds float64  `json:"timeout_seconds"`
+	Temperature    *float64 `json:"temperature,omitempty"`
+	MaxTokens      *int     `json:"max_tokens,omitempty"`
 }
 
 // DefaultConfig returns conservative limits suitable for a benchmark smoke
 // test. Callers should persist the selected values with the run result.
 func DefaultConfig() Config {
-	return Config{MaxTurns: 12, MaxToolCalls: 24}
+	return Config{MaxTurns: 12, MaxToolCalls: 24, TimeoutSeconds: 300}
 }
 
 type Loop struct {
@@ -56,6 +60,12 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	}
 	if config.MaxToolCalls < 1 {
 		return nil, errors.New("agent maximum tool calls must be at least 1")
+	}
+	if config.TimeoutSeconds == 0 {
+		config.TimeoutSeconds = DefaultConfig().TimeoutSeconds
+	}
+	if config.TimeoutSeconds < 0 {
+		return nil, errors.New("agent timeout must not be negative")
 	}
 	if config.Temperature != nil && *config.Temperature < 0 {
 		return nil, errors.New("agent temperature must not be negative")
@@ -122,20 +132,23 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	started := time.Now()
 	defer func() { result.DurationSeconds = time.Since(started).Seconds() }()
 
+	runCtx, cancel := context.WithTimeout(ctx, time.Duration(l.config.TimeoutSeconds*float64(time.Second)))
+	defer cancel()
+
 	result.Task = task
 	result.Inference = l.metadata
 	result.LoopConfig = l.config
 	result.Tools = slices.Clone(l.definitions)
 	result.Messages = []inference.Message{{Role: "user", Content: task}}
 	for result.Turns < l.config.MaxTurns {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return l.finish(&result, TerminationCancellation, ctxErr)
+		if ctxErr := runCtx.Err(); ctxErr != nil {
+			return l.finishContext(&result, ctxErr)
 		}
 
 		requestMessages := cloneMessages(result.Messages)
 		requestTools := slices.Clone(l.definitions)
 		responseStarted := time.Now()
-		response, chatErr := l.client.Chat(ctx, requestMessages, requestTools, inference.Options{
+		response, chatErr := l.client.Chat(runCtx, requestMessages, requestTools, inference.Options{
 			Temperature: l.config.Temperature,
 			MaxTokens:   l.config.MaxTokens,
 		})
@@ -145,16 +158,15 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 			DurationSeconds: time.Since(responseStarted).Seconds(),
 		})
 		if chatErr != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return l.finish(&result, TerminationCancellation, ctxErr)
+			if ctxErr := runCtx.Err(); ctxErr != nil {
+				return l.finishContext(&result, ctxErr)
 			}
 			return l.finish(&result, TerminationInference, chatErr)
 		}
 		message := response.Message
 		result.Messages = append(result.Messages, message)
 		if len(message.ToolCalls) == 0 {
-			result.Termination = TerminationCompleted
-			return result, nil
+			return l.finish(&result, terminationForFinishReason(response.FinishReason), nil)
 		}
 
 		if result.ToolCallCount+len(message.ToolCalls) > l.config.MaxToolCalls {
@@ -169,11 +181,11 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 
 		for _, call := range message.ToolCalls {
 			result.ToolCallCount++
-			toolMessage, evidence := l.executeToolCall(ctx, call)
+			toolMessage, evidence := l.executeToolCall(runCtx, call)
 			result.ToolCalls = append(result.ToolCalls, evidence)
 			result.Messages = append(result.Messages, toolMessage)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return l.finish(&result, TerminationCancellation, ctxErr)
+			if ctxErr := runCtx.Err(); ctxErr != nil {
+				return l.finishContext(&result, ctxErr)
 			}
 		}
 	}
@@ -215,6 +227,25 @@ func (l *Loop) finish(result *Result, termination string, loopErr error) (Result
 		result.Error = loopErr.Error()
 	}
 	return *result, loopErr
+}
+
+func (l *Loop) finishContext(result *Result, ctxErr error) (Result, error) {
+	termination := TerminationCancellation
+	if errors.Is(ctxErr, context.DeadlineExceeded) {
+		termination = TerminationTimeout
+	}
+	return l.finish(result, termination, ctxErr)
+}
+
+func terminationForFinishReason(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case "", "stop":
+		return TerminationCompleted
+	case "length":
+		return TerminationTokenLimit
+	default:
+		return TerminationFinishReason
+	}
 }
 
 func toolMessage(callID, content string) inference.Message {
