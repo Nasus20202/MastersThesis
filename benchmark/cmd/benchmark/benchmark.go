@@ -19,7 +19,7 @@ import (
 
 const (
 	sandboxImage          = "benchmark-sandbox:ubuntu-26.04"
-	sandboxDockerfilePath = "sandbox/Dockerfile"
+	sandboxDockerfilePath = "sandbox/Dockerfile.ubuntu-26.04"
 	sandboxBuildContext   = "sandbox"
 )
 
