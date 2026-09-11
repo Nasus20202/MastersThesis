@@ -71,7 +71,10 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	if !useAgent && r.AgentFactory != nil {
 		return RunResult{}, errors.New("validation run cannot use a model agent")
 	}
-	if useAgent && r.AgentFactory != nil && r.SandboxFactory == nil {
+	if useAgent && r.AgentFactory == nil {
+		return RunResult{}, errors.New("baseline run requires a model agent factory")
+	}
+	if useAgent && r.SandboxFactory == nil {
 		return RunResult{}, errors.New("model agent requires an orchestration sandbox")
 	}
 	if err := definition.Validate(); err != nil {
