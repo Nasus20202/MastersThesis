@@ -31,7 +31,6 @@ type Cluster struct {
 	internalKubeconfigPath string
 }
 
-// Ensure Cluster implements the provider-neutral cluster contract.
 var _ clusterintegration.Cluster = (*Cluster)(nil)
 
 func New(executor command.Executor, config Config) (*Cluster, error) {

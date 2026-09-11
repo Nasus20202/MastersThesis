@@ -36,7 +36,6 @@ func DefaultConfig() Config {
 	return Config{MaxTurns: 12, MaxToolCalls: 24}
 }
 
-// Loop drives one explicit chat/tool exchange sequence.
 type Loop struct {
 	client      inference.Client
 	tools       map[string]Tool
@@ -44,7 +43,6 @@ type Loop struct {
 	config      Config
 }
 
-// NewLoop validates dependencies and returns a model loop.
 func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error) {
 	if client == nil {
 		return nil, errors.New("agent llama client is required")
@@ -106,8 +104,6 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
-// Run sends task to the model and services tool calls until the model returns
-// a response without tool calls or a configured limit is reached.
 func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) {
 	if strings.TrimSpace(task) == "" {
 		return Result{}, errors.New("agent task is required")

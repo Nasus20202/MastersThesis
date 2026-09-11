@@ -63,8 +63,6 @@ type Sandbox struct {
 	config   Config
 }
 
-// Ensure the Docker implementation satisfies the provider-neutral lifecycle
-// and command-execution interfaces.
 var _ sandboxintegration.Sandbox = (*Sandbox)(nil)
 var _ sandboxintegration.Executor = (*Sandbox)(nil)
 

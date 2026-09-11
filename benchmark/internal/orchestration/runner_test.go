@@ -8,6 +8,7 @@ import (
 	"time"
 
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -164,6 +165,87 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 		"create", "sandbox-build", "sandbox-start", "agent-factory", "kubectl", "verify-clean",
 		"inject-fault", "verify-fault", "agent", "verify-restored", "reset", "sandbox-stop", "delete",
 	}, events)
+}
+
+func TestRunnerPreservesAgentFailureAndStillResets(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+	}
+	sandbox := &fakeSandbox{events: &events}
+	wantErr := errors.New("model stopped unexpectedly")
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) { return sandbox, nil },
+		AgentFactory: rootagent.Factory(func(sandboxintegration.Executor) (rootagent.Agent, error) {
+			return &fakeAgent{events: &events, err: wantErr}, nil
+		}),
+		Executor: &recordingExecutor{events: &events},
+	}
+
+	result, err := runner.Run(context.Background(), testDefinition())
+	assert.ErrorIs(t, err, wantErr)
+	require.NotNil(t, result.Agent)
+	assert.Equal(t, common.TerminationCompleted, result.Agent.Termination)
+	assert.Equal(t, []string{
+		"create", "sandbox-build", "sandbox-start", "kubectl", "verify-clean", "inject-fault", "verify-fault",
+		"agent", "verify-restored", "reset", "sandbox-stop", "delete",
+	}, events)
+}
+
+func TestRunnerRequiresSandboxExecutorForAgent(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+	}
+	sandbox := &lifecycleOnlySandbox{events: &events}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) { return sandbox, nil },
+		AgentFactory: rootagent.Factory(func(sandboxintegration.Executor) (rootagent.Agent, error) {
+			return &fakeAgent{}, nil
+		}),
+		Executor: &recordingExecutor{events: &events},
+	}
+
+	_, err := runner.Run(context.Background(), testDefinition())
+	assert.ErrorContains(t, err, "does not provide command execution")
+	assert.Equal(t, []string{"create", "sandbox-build", "sandbox-start", "sandbox-stop", "delete"}, events)
+}
+
+func TestRunnerRejectsInvalidAgentFactoryResults(t *testing.T) {
+	for name, factory := range map[string]rootagent.Factory{
+		"error": func(sandboxintegration.Executor) (rootagent.Agent, error) {
+			return nil, errors.New("factory failed")
+		},
+		"nil agent": func(sandboxintegration.Executor) (rootagent.Agent, error) {
+			return nil, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			events := []string{}
+			cluster := &fakeCluster{
+				events:                 &events,
+				kubeconfigPath:         "/tmp/test.kubeconfig",
+				internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+			}
+			sandbox := &fakeSandbox{events: &events}
+			runner := Runner{
+				ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+				SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) { return sandbox, nil },
+				AgentFactory:   factory,
+				Executor:       &recordingExecutor{events: &events},
+			}
+
+			_, err := runner.Run(context.Background(), testDefinition())
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "create model agent")
+		})
+	}
 }
 
 func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {

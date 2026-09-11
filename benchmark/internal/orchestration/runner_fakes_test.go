@@ -77,6 +77,25 @@ func (s *fakeSandbox) Exec(context.Context, command.Spec) (command.Result, error
 	return command.Result{}, nil
 }
 
+type lifecycleOnlySandbox struct {
+	events *[]string
+}
+
+func (s *lifecycleOnlySandbox) Build(context.Context) error {
+	*s.events = append(*s.events, "sandbox-build")
+	return nil
+}
+
+func (s *lifecycleOnlySandbox) Start(context.Context) error {
+	*s.events = append(*s.events, "sandbox-start")
+	return nil
+}
+
+func (s *lifecycleOnlySandbox) Stop(context.Context) error {
+	*s.events = append(*s.events, "sandbox-stop")
+	return nil
+}
+
 type fakeAgent struct {
 	events *[]string
 	task   string

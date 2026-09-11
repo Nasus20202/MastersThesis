@@ -29,7 +29,6 @@ func New(client inference.Client, shell common.Shell, config common.Config) (*Ag
 	return &Agent{delegate: loop}, nil
 }
 
-// Run executes one baseline model/tool interaction.
 func (a *Agent) Run(ctx context.Context, task string) (common.Result, error) {
 	if a == nil || a.delegate == nil {
 		return common.Result{}, errors.New("baseline agent is not initialized")

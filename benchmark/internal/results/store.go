@@ -71,6 +71,7 @@ func (s *Store) writeAttempt(attempt int, scenarioID string, result orchestratio
 		RunID:      s.metadata.RunID,
 		ScenarioID: scenarioID,
 		Attempt:    attempt,
+		Agent:      result.Agent,
 		Grading:    result.Grading,
 		Failure:    result.Failure,
 	}

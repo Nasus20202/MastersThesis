@@ -48,4 +48,12 @@ func TestCheckMatchesExpectedScoreAndSuccess(t *testing.T) {
 		ScenarioID: "scenario",
 		Grading:    orchestration.GradingResult{Score: 1, FullSuccess: true},
 	}), "score")
+	assert.ErrorContains(t, Check(item, orchestration.RunResult{
+		ScenarioID: "other",
+		Grading:    orchestration.GradingResult{Score: 0.5, FullSuccess: false},
+	}), "scenario ID")
+	assert.ErrorContains(t, Check(item, orchestration.RunResult{
+		ScenarioID: "scenario",
+		Grading:    orchestration.GradingResult{Score: 0.5, FullSuccess: true},
+	}), "full_success")
 }

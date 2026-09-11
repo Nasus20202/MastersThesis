@@ -12,7 +12,6 @@ type Client interface {
 	Chat(context.Context, []Message, []Tool, Options) (Result, error)
 }
 
-// Options contains provider-neutral generation controls.
 type Options struct {
 	Temperature *float64
 	MaxTokens   *int

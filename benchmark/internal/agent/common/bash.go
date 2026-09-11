@@ -15,7 +15,6 @@ const bashToolName = "bash"
 
 type bashTool struct{ shell Shell }
 
-// NewBashTool creates a reusable sandbox-backed Bash capability.
 func NewBashTool(shell Shell) (Tool, error) {
 	if shell == nil {
 		return nil, errors.New("bash shell is required")
@@ -23,7 +22,6 @@ func NewBashTool(shell Shell) (Tool, error) {
 	return bashTool{shell: shell}, nil
 }
 
-// BashTool returns the raw shell capability definition exposed to the model.
 func BashTool() inference.Tool {
 	return inference.Tool{
 		Name:        bashToolName,

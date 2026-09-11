@@ -59,3 +59,41 @@ func TestNewAdapterRejectsNilClient(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, adapter)
 }
+
+func TestAdapterRejectsResponseWithoutChoices(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return testResponse(http.StatusOK, `{"id":"empty","choices":[]}`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	_, err = adapter.Chat(context.Background(), []inference.Message{{Role: "user", Content: "Inspect"}}, nil, inference.Options{})
+	assert.EqualError(t, err, "llama response contained no choices")
+}
+
+func TestAdapterPreservesMissingOptionalResponseFields(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return testResponse(http.StatusOK, `{
+                "id": "chatcmpl-minimal",
+                "choices": [{"message": {"role": "assistant", "content": "done"}}]
+            }`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	response, err := adapter.Chat(context.Background(), []inference.Message{{Role: "user", Content: "Inspect"}}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "chatcmpl-minimal", response.ID)
+	assert.Nil(t, response.Usage)
+	assert.Nil(t, response.Timings)
+}

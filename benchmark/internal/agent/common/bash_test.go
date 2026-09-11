@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -48,6 +49,23 @@ func TestBashToolExecutesInTheShellBoundary(t *testing.T) {
 	assert.Equal(t, "output", details.Stdout)
 	assert.Equal(t, "diagnostic", details.Stderr)
 	assert.Equal(t, 7, details.ExitCode)
+}
+
+func TestBashToolDefinitionAndConstructor(t *testing.T) {
+	assert.Equal(t, inference.Tool{
+		Name:        "bash",
+		Description: "Execute a shell command inside the isolated benchmark sandbox.",
+		Parameters:  json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"Shell command to execute"}},"required":["command"],"additionalProperties":false}`),
+	}, BashTool())
+
+	shell := &bashTestShell{}
+	tool, err := NewBashTool(shell)
+	require.NoError(t, err)
+	assert.Equal(t, BashTool(), tool.Definition())
+
+	tool, err = NewBashTool(nil)
+	assert.Nil(t, tool)
+	assert.EqualError(t, err, "bash shell is required")
 }
 
 func TestBashToolReturnsArgumentAndExecutionErrors(t *testing.T) {
