@@ -8,6 +8,8 @@ type Metadata struct {
 	Provider        string            `json:"provider,omitempty"`
 	Model           string            `json:"model,omitempty"`
 	Artifact        string            `json:"artifact,omitempty"`
+	Quantization    string            `json:"quantization,omitempty"`
+	SHA256          string            `json:"sha256,omitempty"`
 	RuntimeSettings map[string]string `json:"runtime_settings,omitempty"`
 }
 
