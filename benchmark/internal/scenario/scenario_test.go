@@ -67,6 +67,21 @@ func validDefinition(t *testing.T) Definition {
 	return definition
 }
 
+func TestValidateAllowsScenarioWithoutFault(t *testing.T) {
+	definition := validDefinition(t)
+	definition.InjectFault = nil
+	definition.VerifyFault = nil
+
+	assert.NoError(t, definition.Validate())
+}
+
+func TestValidateRejectsIncompleteFaultSetup(t *testing.T) {
+	definition := validDefinition(t)
+	definition.VerifyFault = nil
+
+	assert.ErrorContains(t, definition.Validate(), "inject_fault and verify_fault must be provided together")
+}
+
 func TestValidateRejectsMissingPhase(t *testing.T) {
 	definition := validDefinition(t)
 	definition.Prepare = nil
