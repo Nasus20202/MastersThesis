@@ -23,7 +23,6 @@ func main() {
 			return
 		}
 		slog.Error("benchmark failed", "error", err)
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
