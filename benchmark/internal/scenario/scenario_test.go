@@ -28,9 +28,6 @@ inject_fault:
 verify_fault:
   - program: verify-fault
 
-reset:
-  - program: reset
-
 grading:
   - id: workload-restored
     weight: 1
