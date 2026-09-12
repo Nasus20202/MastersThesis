@@ -1,9 +1,7 @@
 # Baseline model comparison pilot
 
-Pilot comparison of Gemma 4 E2B, Gemma 4 E4B, Qwen3.5 4B and Qwen3.5 9B on
-the baseline `image-pull-failure` benchmark scenario. The purpose was local
-model selection before expanding the baseline, prompt, skill, RAG and
-fine-tuning experiments.
+Comparison of four local model artifacts on 10 attempts each of the baseline
+`image-pull-failure` scenario (40 attempts total), to inform model selection.
 
 ## Method
 
@@ -23,134 +21,102 @@ An application in the Kubernetes cluster is unhealthy. Restore it to a healthy s
 You are working in a Kubernetes troubleshooting environment. Use the bash tool to inspect and modify the environment as needed. Complete the task using only the available environment. When finished, provide a short final response.
 ```
 
-| Parameter          | Value                                                      |
-| ------------------ | ---------------------------------------------------------- |
-| Scenario           | `image-pull-failure`                                       |
-| Attempts per model | 10                                                         |
-| Execution          | Sequential, `parallelism=1`; `LLAMA_PARALLEL=1`            |
-| Cluster            | Kind, three nodes; `kindest/node:v1.37.0` pinned by digest |
-| Kubernetes         | v1.37.0                                                    |
-| Context            | 32768 tokens                                               |
-| GPU offload        | `LLAMA_GPU_LAYERS=999`; Vulkan `/dev/dri/renderD128`       |
-| KV caches          | `f16` / `f16`                                              |
-| Reasoning          | Enabled; budget 4096 tokens                                |
-| Loop limits        | 12 turns, 24 tool calls, 300-second timeout                |
-| Target hardware    | Local AMD Navi 10 Radeon GPU, 8 GB class VRAM              |
-| Server             | llama.cpp Vulkan `server-vulkan-b10524`                    |
+| Parameter         | Value                                       |
+| ----------------- | ------------------------------------------- |
+| Cluster           | Three-node Kind cluster, Kubernetes v1.37.0 |
+| Context           | 32,768 tokens                               |
+| Reasoning         | Enabled, 4,096-token budget                 |
+| Loop limits       | 12 turns, 24 tool calls, 300 seconds        |
+| Hardware          | AMD Navi 10 Radeon GPU, 8 GB class VRAM     |
+| Inference runtime | llama.cpp Vulkan, build b10524              |
 
-The quantization was not independently controlled: Gemma uses the existing QAT
-Q4_0 artifact, while both Qwen artifacts use Q4_K_M. This is a practical local
-model-selection pilot, not a claim that quantization effects were isolated.
+Gemma artifacts use QAT Q4_0; Qwen artifacts use Q4_K_M. Model family, size and
+quantization therefore vary together, so their individual effects cannot be
+identified from this comparison.
 
-## Artifacts
-
-| Model       | GGUF repository                                                                                     | GGUF file                  | Quantization |
-| ----------- | --------------------------------------------------------------------------------------------------- | -------------------------- | ------------ |
-| Gemma 4 E2B | [`google/gemma-4-E2B-it-qat-q4_0-gguf`](https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf) | `gemma-4-E2B_q4_0-it.gguf` | Q4_0         |
-| Gemma 4 E4B | [`google/gemma-4-E4B-it-qat-q4_0-gguf`](https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf) | `gemma-4-E4B_q4_0-it.gguf` | Q4_0         |
-| Qwen3.5 4B  | [`unsloth/Qwen3.5-4B-GGUF`](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF)                         | `Qwen3.5-4B-Q4_K_M.gguf`   | Q4_K_M       |
-| Qwen3.5 9B  | [`unsloth/Qwen3.5-9B-GGUF`](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF)                         | `Qwen3.5-9B-Q4_K_M.gguf`   | Q4_K_M       |
-
-The model profiles in [`benchmark/model-profiles`](../../../benchmark/model-profiles/)
-contain the exact download metadata and runtime model selection. No model
-files are committed. The Qwen source model repositories are `Qwen/Qwen3.5-4B`
-and `Qwen/Qwen3.5-9B`.
+Exact model sources, filenames, revisions and hashes are retained in the
+[model profiles](../../../benchmark/model-profiles/) and [raw evidence](#raw-evidence).
 
 ## Results
 
-The deterministic score is the mean of the two equally weighted repair
-criteria. `Full success` is the verifier result. `Failed / partial / complete`
-describes execution: a failed attempt has a recorded model-agent error, a
-partial attempt completed execution without full success, and a complete
-attempt completed execution with full success. This keeps model-loop failures
-visible even when post-attempt grading found that the repair had already been
-applied.
+The [grader](../../../benchmark/scenarios/image-pull-failure/scenario.yaml)
+checks rollout completion and whether both desired and updated replica counts
+equal three. The score is the mean of these two binary checks; full repair
+requires both to pass. Grading runs after the agent stops and can wait up to
+60 seconds for rollout completion. It does not establish the time of repair.
 
-| Model       | Runs | Mean score | Median score | Score distribution | Full success | Failed / partial / complete | Mean loop time | Median loop time | Avg tokens | Avg output tok/s | Avg turns | Avg tool calls |
-| ----------- | ---: | ---------: | -----------: | ------------------ | -----------: | --------------------------- | -------------: | ---------------: | ---------: | ---------------: | --------: | -------------: |
-| Gemma 4 E2B |   10 |      0.600 |        1.000 | 0: 4, 1: 6         |   6/10 (60%) | 1 / 3 / 6                   |         73.4 s |           44.2 s |   12,460.6 |             77.1 |       6.5 |            5.6 |
-| Gemma 4 E4B |   10 |      0.900 |        1.000 | 0: 1, 1: 9         |   9/10 (90%) | 0 / 1 / 9                   |         53.7 s |           53.1 s |   13,957.9 |             57.1 |       7.7 |            6.7 |
-| Qwen3.5 4B  |   10 |      1.000 |        1.000 | 1: 10              | 10/10 (100%) | 4 / 0 / 6                   |        156.1 s |           72.9 s |   22,524.9 |             35.5 |       9.9 |            9.7 |
-| Qwen3.5 9B  |   10 |      1.000 |        1.000 | 1: 10              | 10/10 (100%) | 3 / 0 / 7                   |        142.6 s |           85.5 s |   20,570.2 |             24.8 |       8.7 |            8.0 |
+All scores were either 0 or 1. Full repair and agent termination are reported
+separately; reaching the turn limit is not normal completion, even when the
+record contains no agent error.
 
-`Mean loop time` includes the fixed 300-second timeout for timed-out model
-loops; the median is therefore a more representative view of ordinary runs.
+| Model       | Full repair | Mean score | Normal completion | Turn limit | Timeout |
+| ----------- | ----------: | ---------: | ----------------: | ---------: | ------: |
+| Gemma 4 E2B |        6/10 |      0.600 |                 9 |          0 |       1 |
+| Gemma 4 E4B |        9/10 |      0.900 |                10 |          0 |       0 |
+| Qwen3.5 4B  |       10/10 |      1.000 |                 4 |          2 |       4 |
+| Qwen3.5 9B  |       10/10 |      1.000 |                 7 |          0 |       3 |
 
-Per-attempt scores:
+Normal completion means `agent.termination = completed`. Of those attempts,
+six E2B, nine E4B, four Qwen 4B and seven Qwen 9B attempts passed both checks.
+Across both Gemma models, 15 of 20 attempts passed; all 20 Qwen attempts passed.
 
-```text
-Gemma 4 E2B:  1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0
-Gemma 4 E4B:  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0
-Qwen3.5 4B:   1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-Qwen3.5 9B:   1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-```
+| Model       | Mean loop time (s) | Median loop time (s) | Mean tokens | Mean turns | Mean tool calls |
+| ----------- | -----------------: | -------------------: | ----------: | ---------: | --------------: |
+| Gemma 4 E2B |               73.4 |                 44.2 |    12,460.6 |        6.5 |             5.6 |
+| Gemma 4 E4B |               53.7 |                 53.1 |    13,957.9 |        7.7 |             6.7 |
+| Qwen3.5 4B  |              156.1 |                 72.9 |    22,524.9 |        9.9 |             9.7 |
+| Qwen3.5 9B  |              142.6 |                 85.5 |    20,570.2 |        8.7 |             8.0 |
 
-Termination reasons were:
-
-| Model       | Completed | Turn limit | Timeout |
-| ----------- | --------: | ---------: | ------: |
-| Gemma 4 E2B |         9 |          0 |       1 |
-| Gemma 4 E4B |        10 |          0 |       0 |
-| Qwen3.5 4B  |         4 |          2 |       4 |
-| Qwen3.5 9B  |         7 |          0 |       3 |
-
-The Qwen timeout attempts generally repaired the deployment before issuing a
-long-running `kubectl get pods -w`/`--watch` command. Their deterministic
-post-attempt scores were still 1.0, but the execution errors remain failures
-of the complete agent run.
+These summaries include all 10 attempts per model. Loop time includes inference
+and tool execution, including approximately 300 seconds for each timeout;
+it excludes environment setup and grading. Mean tokens is the mean per-attempt
+sum of recorded response `usage.total_tokens` (prompt plus completion tokens).
+Repeated prompt context is counted again in each response; token totals are
+not a direct measure of GPU work or energy use.
 
 ## Qualitative review
 
-All 30 attempts began by discovering or inspecting Kubernetes resources, and
-the transcripts consistently inspected pods and deployments. The models
-identified the `ImagePullBackOff`/invalid `nginx:does-not-exist` image pattern.
-The main observed behaviours were:
+Most attempts began with Kubernetes resource inspection. Qwen 4B attempt
+[007](results/qwen35-4b/image-pull-failure/007.json) began with `pwd && ls -la`.
+The main failure patterns were:
 
-- Gemma 4 E2B completed nine loops and timed out once. Six attempts applied a
-  valid image repair and passed both checks; three completed attempts failed to
-  repair the deployment. The unsuccessful attempts included invalid or
-  placeholder-style commands, and the timeout occurred after repeated
-  troubleshooting commands.
-- Gemma 4 E4B completed all ten loops. Nine attempts applied a valid image repair and
-  passed both checks. One attempt only restarted the deployment without
-  correcting the image and scored 0.
-- Qwen3.5 4B repaired all ten scenarios, but often tried more commands than
-  necessary, including invalid patch/replace or edit forms. Four attempts timed
-  out while watching pods and two reached the turn limit after the repair.
-- Qwen3.5 9B repaired all ten scenarios. It usually used `kubectl set image`,
-  although some attempts deleted a ReplicaSet or pod and one used a rollout
-  undo. Three attempts timed out while watching pods after the repair.
-- No dominant irrelevant Linux/system-state investigation or hallucinated
-  external tool/resource pattern was observed. Repeated polling/watch commands
-  were the clearest tool-use weakness.
+- E2B used unresolved placeholders in attempt
+  [009](results/gemma-4-e2b/image-pull-failure/009.json). Attempt
+  [010](results/gemma-4-e2b/image-pull-failure/010.json) issued an invalid
+  `kubectl set image` command, then timed out waiting for rollout completion.
+- E4B attempt [008](results/gemma-4-e4b/image-pull-failure/008.json) restarted
+  the deployment without correcting its image and scored 0.
+- All seven Qwen timeouts ended in an unbounded `kubectl get pods -w` or
+  `--watch` command. The subsequent grader passed both checks in each case.
+  Qwen 4B attempts [004](results/qwen35-4b/image-pull-failure/004.json) and
+  [007](results/qwen35-4b/image-pull-failure/007.json) exhausted the turn limit
+  while continuing to inspect pods; both also passed grading.
 
-The deterministic grader independently confirmed the repaired deployment in
-all Qwen attempts and nine Gemma attempts. It does not make the timeout cases
-equivalent to cleanly completed executions.
+## Interpretation and limitations
 
-## Pilot conclusion
+Both Qwen models repaired 10/10 attempts. Repair scores therefore do not
+distinguish 9B from 4B. Qwen 9B had more normal completions (7 versus 4) and
+a lower mean loop time, but a higher median loop time. E4B had nine repairs,
+no forced stops and the lowest mean loop time. E2B had the lowest median loop
+time, but its single timeout raised its mean above E4B's.
 
-Qwen3.5 4B and Qwen3.5 9B were more effective than both Gemma models on this
-single scenario’s deterministic repair score, but both Qwen models showed
-poorer termination discipline and higher token use. Gemma 4 E2B was not faster
-in this run despite its smaller size and had the lowest score. Gemma 4 E4B was
-substantially faster and cheaper than the Qwen models, completed every loop,
-and failed only one repair.
+Ten repetitions of one fault measure variation on that fault, not performance
+across Kubernetes incidents. The one-repair difference between E4B and either
+Qwen model is insufficient to establish a reliable advantage. Model artifacts
+also differ in quantization, and loop durations include polling and waiting,
+so they cannot be interpreted as inference speed alone. No energy or monetary
+cost was measured.
 
-For subsequent thesis experiments, this pilot supports selecting **Qwen3.5
-9B** when repair effectiveness is the primary requirement and the additional
-latency is acceptable. It ran at the controlled 32k context on the target
-local hardware. Gemma 4 E4B remains the practical fallback when predictable
-completion time and lower computational cost are more important. The result is
-scenario-specific pilot evidence, not a general model ranking.
+The observed reason to prefer Qwen 9B over 4B would be fewer forced stops,
+not higher repair effectiveness. This is a candidate for further evaluation,
+not an approved model change. The current approved primary model remains
+Gemma 4 E4B ([D-007](../../decision-log.md)).
 
 ## Raw evidence
 
-Each run retains the normal JSON evidence, including the model artifact and
-runtime settings, exact task/prompt, transcript, Bash calls and outputs,
-stdout/stderr/exit codes, token usage, llama.cpp timings, durations, turns,
-tool-call counts, termination, deterministic grading and timeout/error
-evidence. The raw results are retained with this research record at:
+JSON records retain model revisions and hashes, configured runtime settings,
+prompts, transcripts, tool outputs, token usage, timings, termination and
+grading outcomes:
 
 - [Gemma 4 E2B raw evidence](results/gemma-4-e2b/)
 - [Gemma 4 E4B raw evidence](results/gemma-4-e4b/)
