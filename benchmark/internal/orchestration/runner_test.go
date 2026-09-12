@@ -298,6 +298,25 @@ func TestRunnerSupportsScenarioWithoutFaultInjection(t *testing.T) {
 	assert.Equal(t, []string{"create", "kubectl", "verify-clean", "implement", "verify-restored", "delete"}, events)
 }
 
+func TestRunnerSupportsVerifyOnlyFaultPhase(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:         &events,
+		kubeconfigPath: "/tmp/test.kubeconfig",
+		kubeconfigCtx:  "kind-test",
+	}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		Executor:       &recordingExecutor{events: &events},
+	}
+	definition := testDefinition()
+	definition.InjectFault = nil
+
+	_, err := runner.RunWithRepair(context.Background(), definition, scenario.Step{{Program: "repair"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"create", "kubectl", "verify-clean", "verify-fault", "repair", "verify-restored", "delete"}, events)
+}
+
 func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
