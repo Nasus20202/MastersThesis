@@ -157,12 +157,26 @@ func TestExecuteDoesNotStartQueuedTasksAfterCancellation(t *testing.T) {
 	case <-startedQueued:
 		t.Fatal("queued task started after cancellation")
 	case outcomes := <-done:
-		require.Len(t, outcomes, 2)
+		require.Len(t, outcomes, 1)
 		assert.ErrorIs(t, outcomes[0].Err, context.Canceled)
-		assert.ErrorIs(t, outcomes[1].Err, context.Canceled)
 	case <-time.After(time.Second):
 		t.Fatal("executor did not stop after cancellation")
 	}
+}
+
+func TestExecuteReportsCancellationWhenNoTaskStarts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tasks := []Task{{ScenarioID: "never-started", Run: func(context.Context) (orchestration.RunResult, error) {
+		t.Fatal("canceled task was started")
+		return orchestration.RunResult{}, nil
+	}}}
+
+	outcomes, err := collect(Execute(ctx, tasks, 1))
+
+	assert.Empty(t, outcomes)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestExecuteRejectsInvalidInput(t *testing.T) {

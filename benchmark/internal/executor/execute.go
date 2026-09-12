@@ -76,7 +76,6 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 			for index := range jobs {
 				task := tasks[index]
 				if err := ctx.Err(); err != nil {
-					emit(index, canceledOutcome(task, err))
 					continue
 				}
 				attempt := task.Attempt
@@ -89,19 +88,20 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 		}()
 	}
 	dispatchDone := make(chan struct{})
+	var dispatchErr error
 	go func() {
 		defer close(dispatchDone)
 		defer close(jobs)
 	dispatch:
 		for index := range tasks {
 			if err := ctx.Err(); err != nil {
-				markCanceled(tasks, index, err, emit)
+				dispatchErr = err
 				break
 			}
 			select {
 			case jobs <- index:
 			case <-ctx.Done():
-				markCanceled(tasks, index, ctx.Err(), emit)
+				dispatchErr = ctx.Err()
 				break dispatch
 			}
 		}
@@ -109,7 +109,10 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 	<-dispatchDone
 	workers.Wait()
 
-	errs := make([]error, 0)
+	errs := make([]error, 0, 1)
+	if dispatchErr != nil {
+		errs = append(errs, dispatchErr)
+	}
 	for index, outcome := range completed {
 		if outcome.Err != nil {
 			errs = append(errs, fmt.Errorf("task %d (%s): %w", index+1, outcome.ScenarioID, outcome.Err))
@@ -125,19 +128,5 @@ func outcome(task Task, attempt int, result orchestration.RunResult, err error) 
 		Attempt:    attempt,
 		Result:     result,
 		Err:        err,
-	}
-}
-
-func canceledOutcome(task Task, err error) Outcome {
-	attempt := task.Attempt
-	if attempt == 0 {
-		attempt = 1
-	}
-	return outcome(task, attempt, orchestration.RunResult{ScenarioID: task.ScenarioID}, err)
-}
-
-func markCanceled(tasks []Task, start int, err error, emit func(int, Outcome)) {
-	for index := start; index < len(tasks); index++ {
-		emit(index, canceledOutcome(tasks[index], err))
 	}
 }
