@@ -28,9 +28,6 @@ inject_fault:
 verify_fault:
   - program: verify-fault
 
-reset:
-  - program: reset
-
 grading:
   - id: workload-restored
     weight: 1
@@ -65,6 +62,30 @@ func validDefinition(t *testing.T) Definition {
 	definition, err := Parse([]byte(validScenarioYAML))
 	require.NoError(t, err)
 	return definition
+}
+
+func TestValidateAllowsScenarioWithoutFault(t *testing.T) {
+	definition := validDefinition(t)
+	definition.InjectFault = nil
+	definition.VerifyFault = nil
+
+	assert.NoError(t, definition.Validate())
+}
+
+func TestValidateAllowsIndependentFaultPhases(t *testing.T) {
+	t.Run("inject only", func(t *testing.T) {
+		definition := validDefinition(t)
+		definition.VerifyFault = nil
+
+		assert.NoError(t, definition.Validate())
+	})
+
+	t.Run("verify only", func(t *testing.T) {
+		definition := validDefinition(t)
+		definition.InjectFault = nil
+
+		assert.NoError(t, definition.Validate())
+	})
 }
 
 func TestValidateRejectsMissingPhase(t *testing.T) {

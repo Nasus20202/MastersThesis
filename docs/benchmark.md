@@ -2,15 +2,15 @@
 
 ## Document scope
 
-This document defines how benchmark incidents are represented, executed and verified.
+This document defines how benchmark operational tasks are represented, executed and verified.
 
 The research motivation and comparison rationale are described in [research-design.md](research-design.md). Technology choices are described in [tech-stack.md](tech-stack.md).
 
 ## Initial benchmark scope
 
-The initial benchmark direction is troubleshooting technical incidents in reproducible local `kind` clusters. The execution environment does not determine the final knowledge domain or source corpus.
+The development benchmark uses reproducible Kubernetes operational tasks in local `kind` clusters. It may include both troubleshooting tasks and constructive implementation or configuration tasks. The execution environment does not determine the final knowledge domain or source corpus.
 
-A benchmark scenario should require the model to inspect and modify a running system. Simple knowledge questions without an observable system state are outside the intended benchmark scope.
+A benchmark scenario should require the model to inspect or modify an observable system state. Simple knowledge questions without an executable environment are outside the intended benchmark scope.
 
 Changes to the benchmark scope are recorded in the [decision log](decision-log.md).
 
@@ -26,32 +26,32 @@ Each scenario should record the following fields in a small, human-readable form
 
 - a stable scenario identifier and title,
 - a known-good Kubernetes environment,
-- an application or workload with expected behaviour,
-- a controlled injected fault,
+- an application, workload or starting environment with expected behaviour,
 - a task description visible to the model,
-- observable repair criteria for the expected repaired state,
-- a reset procedure,
+- optional controlled fault injection and fault verification for troubleshooting tasks,
+- observable grading criteria for the expected final state,
 - source references and ground-truth metadata used during construction and validation.
 
-The task description is the model-facing part of the scenario. The injected fault, expected diagnosis, repair criteria, verifier implementation details, reset procedure and source/ground-truth metadata are evaluator data. They must not disclose the fault or answer to the model.
+The task description is the model-facing part of the scenario. Fault details, expected diagnosis, grading criteria, verifier implementation details and source/ground-truth metadata are evaluator data. They must not disclose a hidden fault or answer to the model.
 
-Repair criteria should be observable, binary and distinct. Criteria should not check the same outcome more than once where practical. Each criterion should have an explicit positive weight reflecting its importance to the repaired state; criteria therefore need not contribute equally to the score. A criterion may use bounded deterministic waiting or polling when Kubernetes convergence is asynchronous; its timeout, polling interval and success condition must be fixed and recorded as part of the verifier.
+Grading criteria should be observable, binary and distinct. Criteria should not check the same outcome more than once where practical. Each criterion should have an explicit positive weight reflecting its importance to the expected final state; criteria therefore need not contribute equally to the score. A criterion may use bounded deterministic waiting or polling when Kubernetes convergence is asynchronous; its timeout, polling interval and success condition must be fixed and recorded as part of the verifier.
 
 ## Scenario lifecycle
 
-Every scenario should follow the same lifecycle:
+Every scenario follows the same core lifecycle:
 
-1. prepare a known-good environment,
-2. verify that the clean state behaves as expected,
-3. inject the fault,
-4. verify that the fault produces an observable failure,
-5. provide the task and condition-specific capabilities to the model,
-6. allow the model to inspect and modify the environment,
-7. verify the resulting system behaviour,
-8. preserve the raw result and supporting evidence,
-9. reset the environment before the next run.
+1. prepare a known-good starting environment,
+2. verify that the initial state behaves as expected,
+3. optionally inject and verify a controlled fault,
+4. provide the task and condition-specific capabilities to the model,
+5. allow the model to inspect and modify the environment,
+6. verify the resulting system behaviour,
+7. preserve the raw result and supporting evidence,
+8. delete the disposable cluster.
 
-A scenario is suitable for evaluation only when its clean state, injected fault, repair verification and reset procedure are repeatable.
+`inject_fault` and `verify_fault` are independently optional. Troubleshooting scenarios may use both to create and confirm a reproducible failure, while a scenario may also verify an already-prepared failure without injecting it or inject a state change without a dedicated pre-model verification step. Constructive tasks can omit both and start directly from the verified environment.
+
+A scenario is suitable for evaluation only when its starting state, optional fault setup and grading are repeatable.
 
 ## Condition capabilities
 
@@ -78,13 +78,13 @@ The selected limits are preserved in each raw run result so later conditions can
 
 The model may see:
 
-- the troubleshooting task,
+- the operational task,
 - the capabilities available in its condition,
 - command output and other observations produced during execution.
 
 The model must not see:
 
-- the injected fault,
+- the injected fault, when present,
 - the expected root cause,
 - verifier implementation details,
 - hidden ground-truth data, including scenario source references.
@@ -93,11 +93,11 @@ Scenario source references are evaluator and analysis metadata. They must never 
 
 ## Verification and scoring
 
-Verification should be deterministic and based on observable system behaviour. It should check whether the expected behaviour has been restored, rather than require one exact command sequence or configuration representation.
+Verification should be deterministic and based on observable system behaviour. It should check whether the expected final state has been reached, rather than require one exact command sequence or configuration representation.
 
-The clean-state and fault-injection checks validate that the scenario is usable: the clean state must pass before fault injection, and the injected fault must produce the intended observable failure. These checks do not award repair credit.
+Initial-state checks validate that the scenario is usable. When fault verification is configured, it must confirm the intended observable failure or pre-model state. These checks do not award task credit.
 
-After the model attempt, each repair criterion is evaluated independently as pass or fail. If repair criterion `i` has positive weight `w_i` and pass value `p_i` (`1` for pass and `0` for fail), the partial score is:
+After the model attempt, each grading criterion is evaluated independently as pass or fail. If criterion `i` has positive weight `w_i` and pass value `p_i` (`1` for pass and `0` for fail), the partial score is:
 
 `partial score = sum(w_i * p_i) / sum(w_i)`
 
@@ -105,7 +105,7 @@ The score is therefore normalized to `[0, 1]`. Full task success is recorded sep
 
 Primary scoring does not use an LLM judge. The verifier may use bounded polling for convergence, but it must use a fixed bound and deterministic pass/fail condition rather than an unbounded wait or subjective interpretation.
 
-Each run should preserve the outcome and raw evidence for every repair criterion, together with the aggregate partial score and full-success result. Verifier internals and hidden scenario metadata remain evaluator-side data and must not be included in the model-visible task, capabilities or execution transcript.
+Each run should preserve the outcome and raw evidence for every grading criterion, together with the aggregate partial score and full-success result. Verifier internals and hidden scenario metadata remain evaluator-side data and must not be included in the model-visible task, capabilities or execution transcript.
 
 The current status of scoring decisions is recorded in the [decision log](decision-log.md).
 
@@ -126,7 +126,7 @@ Each run should preserve, where available:
 - token and tool usage,
 - model and tool transcript,
 - relevant runtime metadata,
-- failure and reset information.
+- failure and cleanup information.
 
 Raw results must be preserved, including negative and inconclusive results.
 
@@ -134,10 +134,10 @@ Raw results must be preserved, including negative and inconclusive results.
 
 A scenario should be accepted only when:
 
-- the clean environment passes verification,
-- the injected fault produces an observable failure,
-- an approved repair restores the expected behaviour,
+- the prepared environment passes initial-state verification,
+- any configured fault produces its intended observable failure,
+- an approved validation action reaches the expected final state,
 - scoring is deterministic,
-- the lifecycle can be repeated from a reset state.
+- the lifecycle is repeatable in a fresh disposable cluster.
 
 Operational benchmark decisions are maintained in the [decision log](decision-log.md).

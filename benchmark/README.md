@@ -1,15 +1,14 @@
 # Benchmark
 
 This directory contains the Go benchmark runner for the thesis project. The
-runner is intended to execute reproducible technical incident scenarios in
-disposable local Kubernetes clusters and observe whether the workload can be
-restored after a fault is injected.
+runner is intended to execute reproducible Kubernetes operational tasks in
+disposable local clusters and deterministically verify the resulting state.
 
 ## Scenarios
 
-Scenarios define the workload setup, clean-state verification, fault injection,
-fault verification and reset steps. A complete generic scenario looks like
-this:
+Scenarios define the environment setup, initial-state verification and grading.
+Troubleshooting scenarios may additionally define fault injection and fault
+verification. A generic troubleshooting scenario looks like this:
 
 ```yaml
 id: example-incident
@@ -41,23 +40,21 @@ grading:
     weight: 1
     check:
       program: ./scripts/check-restored.sh
-
-reset:
-  - program: kubectl
-    args: [apply, -f, manifests/app.yaml]
-  - program: kubectl
-    args: [rollout, status, deployment/app, --timeout=60s]
 ```
 
 The runner performs these steps in order:
 
 1. prepare;
-2. verify the clean state;
-3. inject the fault;
-4. verify the fault;
-5. leave a boundary for future model repair, or apply a declared repair in validation mode;
-6. grade the repaired state;
-7. reset the scenario.
+2. verify the initial state;
+3. optionally inject and verify a fault;
+4. run the model, or apply a declared action in validation mode;
+5. grade the resulting state;
+6. delete the disposable cluster.
+
+`inject_fault` and `verify_fault` are independently optional. A scenario may
+use either, both, or neither depending on how its pre-model state is prepared
+and verified. Scenarios without them can represent constructive tasks such as
+deploying or configuring Kubernetes resources.
 
 Command paths, manifest paths and the optional Kind config path are resolved
 relative to the scenario file. Without a Kind config, Kind uses its default

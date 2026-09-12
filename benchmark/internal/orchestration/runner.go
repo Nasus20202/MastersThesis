@@ -37,7 +37,6 @@ const (
 	phaseInjectFault      = "inject fault"
 	phaseVerifyFault      = "verify fault"
 	phaseRepair           = "repair"
-	phaseReset            = "reset"
 )
 
 type phase struct {
@@ -49,9 +48,9 @@ func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result
 	return r.run(ctx, definition, nil, true)
 }
 
-// RunWithRepair runs a scenario with a validation-only repair step between
-// fault verification and grading. The repair is supplied by validation data,
-// not by the scenario definition used for benchmark execution.
+// RunWithRepair runs a scenario with a validation-only repair step after
+// setup and optional fault verification, before grading. The repair is supplied
+// by validation data, not by the scenario definition used for benchmark execution.
 func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definition, repair scenario.Step) (RunResult, error) {
 	return r.run(ctx, definition, repair, false)
 }
@@ -235,8 +234,12 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 	beforeAgent := []phase{
 		{name: phasePrepare, step: definition.Prepare},
 		{name: phaseVerifyClean, step: definition.VerifyClean},
-		{name: phaseInjectFault, step: definition.InjectFault},
-		{name: phaseVerifyFault, step: definition.VerifyFault},
+	}
+	if len(definition.InjectFault) > 0 {
+		beforeAgent = append(beforeAgent, phase{name: phaseInjectFault, step: definition.InjectFault})
+	}
+	if len(definition.VerifyFault) > 0 {
+		beforeAgent = append(beforeAgent, phase{name: phaseVerifyFault, step: definition.VerifyFault})
 	}
 	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, logger); err != nil {
 		return GradingResult{}, nil, err
@@ -269,10 +272,6 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 		logger.Info("scenario grading completed", "score", result.Score, "full_success", result.FullSuccess)
 	}
 
-	afterGrading := []phase{{name: phaseReset, step: definition.Reset}}
-	if err := r.runPhaseSteps(ctx, afterGrading, kubeconfigPath, logger); err != nil {
-		return result, agentResult, errors.Join(agentErr, gradingErr, err)
-	}
 	if runErr := errors.Join(agentErr, gradingErr); runErr != nil {
 		return result, agentResult, runErr
 	}
