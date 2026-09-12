@@ -2,14 +2,23 @@ GO ?= go
 NPM ?= npm
 BENCHMARK_DIR := benchmark
 BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
+MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
 REPEAT ?= 1
 VALIDATION_PARALLEL ?= 4
-COMPOSE := docker compose --env-file $(BENCHMARK_CONFIG) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 include $(BENCHMARK_CONFIG)
 
-export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_DIR LLAMA_MODEL_NAME
+ifneq ($(strip $(MODEL_PROFILE)),)
+include $(MODEL_PROFILE)
+COMPOSE_ENV_FILES := --env-file $(BENCHMARK_CONFIG) --env-file $(MODEL_PROFILE)
+else
+COMPOSE_ENV_FILES := --env-file $(BENCHMARK_CONFIG)
+endif
+
+COMPOSE := docker compose $(COMPOSE_ENV_FILES) -f $(BENCHMARK_DIR)/docker-compose.yaml
+
+export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_QUANTIZATION LLAMA_MODEL_SHA256 LLAMA_MODEL_DIR LLAMA_MODEL_NAME
 export LLAMA_CONTEXT_SIZE LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
 export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
 export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
@@ -36,6 +45,7 @@ help:
 		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.'
 	@printf '%s\n' 'Benchmark parameters:'
 	@printf '  %-28s %s\n' \
+		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).'

@@ -33,6 +33,8 @@ func NewBaselineFactory() (rootagent.Factory, error) {
 		Metadata: inference.Metadata{
 			Model:           model,
 			Artifact:        modelArtifact(),
+			Quantization:    strings.TrimSpace(os.Getenv("LLAMA_MODEL_QUANTIZATION")),
+			SHA256:          strings.TrimSpace(os.Getenv("LLAMA_MODEL_SHA256")),
 			RuntimeSettings: runtimeSettings(),
 		},
 	})

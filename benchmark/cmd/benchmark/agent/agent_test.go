@@ -33,7 +33,10 @@ func TestModelArtifactAndRuntimeSettings(t *testing.T) {
 	t.Setenv("LLAMA_MODEL_REPOSITORY", "google/gemma")
 	t.Setenv("LLAMA_MODEL_REVISION", "revision")
 	t.Setenv("LLAMA_MODEL_FILE", "gemma.gguf")
+	t.Setenv("LLAMA_MODEL_QUANTIZATION", "Q4_0")
+	t.Setenv("LLAMA_MODEL_SHA256", "hash")
 	t.Setenv("LLAMA_CONTEXT_SIZE", "32768")
+	t.Setenv("LLAMA_FLASH_ATTN", "auto")
 	t.Setenv("LLAMA_REASONING", "on")
 
 	assert.Equal(t, "google/gemma@revision/gemma.gguf", modelArtifact())

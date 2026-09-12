@@ -13,6 +13,10 @@ This is a research project. The human researcher owns the methodology and coordi
 7. Review and approve the documentation.
 8. Merge only after code and required documentation are approved.
 
+## Approval gate
+
+Research and technical decisions must be explicitly approved by the human researcher before they are implemented, executed, frozen, or recorded as approved. First present the proposed decision, affected scope, rationale and alternatives, then wait for explicit approval in the conversation. Do not infer approval from a ticket, prior discussion, an implementation request, or silence. Exploratory checks may inspect the current state, but must not change the agreed methodology or document an unapproved decision as accepted. If an implementation request contains an unstated research or technical choice, stop and ask for approval before making that choice.
+
 ## Useful commands
 
 Run `make` from the repository root to list available commands. Before committing, run
