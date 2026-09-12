@@ -5,7 +5,7 @@ BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
 REPEAT ?= 1
-BENCHMARK_PARALLEL ?= 1
+BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 4
 
 include $(BENCHMARK_CONFIG)
@@ -49,7 +49,7 @@ help:
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
-		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 1).' \
+		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).'
 
 test:
