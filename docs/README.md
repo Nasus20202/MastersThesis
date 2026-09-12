@@ -15,3 +15,4 @@ This directory contains the research design, benchmark definition, technology ch
 ## Research evaluations
 
 - [Kubernetes knowledge check](research/kubernetes-knowledge-check/README.md) — evaluated Gemma 4 E4B on Kubernetes troubleshooting probes without documentation context and with fixed excerpts from the pinned Kubernetes 1.37 documentation, preserving the prompts, criteria, raw responses and runtime metadata.
+- [Baseline model comparison pilot](research/baseline-model-comparison/README.md) — compared Gemma 4 E4B, Qwen3.5 4B and Qwen3.5 9B on 10 sequential baseline `image-pull-failure` attempts each, preserving the comparison metrics, qualitative review and local raw-result paths.
