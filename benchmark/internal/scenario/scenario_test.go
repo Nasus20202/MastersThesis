@@ -72,11 +72,20 @@ func TestValidateAllowsScenarioWithoutFault(t *testing.T) {
 	assert.NoError(t, definition.Validate())
 }
 
-func TestValidateRejectsIncompleteFaultSetup(t *testing.T) {
-	definition := validDefinition(t)
-	definition.VerifyFault = nil
+func TestValidateAllowsIndependentFaultPhases(t *testing.T) {
+	t.Run("inject only", func(t *testing.T) {
+		definition := validDefinition(t)
+		definition.VerifyFault = nil
 
-	assert.ErrorContains(t, definition.Validate(), "inject_fault and verify_fault must be provided together")
+		assert.NoError(t, definition.Validate())
+	})
+
+	t.Run("verify only", func(t *testing.T) {
+		definition := validDefinition(t)
+		definition.InjectFault = nil
+
+		assert.NoError(t, definition.Validate())
+	})
 }
 
 func TestValidateRejectsMissingPhase(t *testing.T) {
