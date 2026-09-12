@@ -68,8 +68,6 @@ func (t *loopTool) Execute(_ context.Context, call inference.ToolCall) ToolResul
 	return t.result
 }
 
-
-
 type blockingTool struct {
 	definition inference.Tool
 }
@@ -447,4 +445,3 @@ func TestLoopTimesOutIndividualToolCallAndContinues(t *testing.T) {
 	assert.ErrorContains(t, errors.New(result.ToolCalls[0].Error), context.DeadlineExceeded.Error())
 	assert.Less(t, time.Since(started), time.Second)
 }
-
