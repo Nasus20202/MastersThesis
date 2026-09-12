@@ -37,8 +37,6 @@ inject_fault:
   - program: inject-fault
 verify_fault:
   - program: verify-fault
-reset:
-  - program: reset
 grading:
   - id: ready
     weight: 1
