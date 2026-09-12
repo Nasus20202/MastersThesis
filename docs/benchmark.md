@@ -49,7 +49,7 @@ Every scenario follows the same core lifecycle:
 7. preserve the raw result and supporting evidence,
 8. delete the disposable cluster.
 
-`inject_fault` and `verify_fault` are optional and must be present together. Troubleshooting scenarios use them to create a reproducible failure. Constructive tasks can omit them and start directly from the verified environment.
+`inject_fault` and `verify_fault` are independently optional. Troubleshooting scenarios may use both to create and confirm a reproducible failure, while a scenario may also verify an already-prepared failure without injecting it or inject a state change without a dedicated pre-model verification step. Constructive tasks can omit both and start directly from the verified environment.
 
 A scenario is suitable for evaluation only when its starting state, optional fault setup and grading are repeatable.
 
@@ -95,7 +95,7 @@ Scenario source references are evaluator and analysis metadata. They must never 
 
 Verification should be deterministic and based on observable system behaviour. It should check whether the expected final state has been reached, rather than require one exact command sequence or configuration representation.
 
-Initial-state checks validate that the scenario is usable. When fault injection is present, the fault check must also confirm the intended observable failure. These checks do not award task credit.
+Initial-state checks validate that the scenario is usable. When fault verification is configured, it must confirm the intended observable failure or pre-model state. These checks do not award task credit.
 
 After the model attempt, each grading criterion is evaluated independently as pass or fail. If criterion `i` has positive weight `w_i` and pass value `p_i` (`1` for pass and `0` for fail), the partial score is:
 
