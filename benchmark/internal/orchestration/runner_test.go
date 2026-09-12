@@ -26,7 +26,6 @@ func testDefinition() scenario.Definition {
 		VerifyClean: scenario.Step{{Program: "verify-clean"}},
 		InjectFault: scenario.Step{{Program: "inject-fault"}},
 		VerifyFault: scenario.Step{{Program: "verify-fault"}},
-		Reset:       scenario.Step{{Program: "reset"}},
 		Grading: []scenario.Criterion{{
 			ID:     "workload-restored",
 			Weight: 1,
@@ -61,7 +60,7 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	assert.Equal(t, "test-scenario", result.ScenarioID)
 	assert.True(t, strings.HasPrefix(clusterName, "benchmark-test-scenario-"))
 
-	assert.Equal(t, []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset", "delete"}, events)
+	assert.Equal(t, []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "delete"}, events)
 	require.NotEmpty(t, executor.specs)
 	assert.Equal(t, []string{"apply", "-f", "manifest.yaml"}, executor.specs[0].Args)
 	assert.Equal(t, "/tmp/test.kubeconfig", executor.specs[0].Env["KUBECONFIG"])
@@ -98,7 +97,7 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"factory", "create", "sandbox-factory", "sandbox-build", "sandbox-start",
-		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored",
 		"sandbox-stop", "delete",
 	}, events)
 }
@@ -130,7 +129,7 @@ func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"sandbox-image-build", "factory", "create", "sandbox-factory", "sandbox-start",
-		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "reset",
+		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored",
 		"sandbox-stop", "delete",
 	}, events)
 }
@@ -163,11 +162,11 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 	assert.Equal(t, testDefinition().Task, result.Agent.Task)
 	assert.Equal(t, []string{
 		"create", "sandbox-build", "sandbox-start", "agent-factory", "kubectl", "verify-clean",
-		"inject-fault", "verify-fault", "agent", "verify-restored", "reset", "sandbox-stop", "delete",
+		"inject-fault", "verify-fault", "agent", "verify-restored", "sandbox-stop", "delete",
 	}, events)
 }
 
-func TestRunnerPreservesAgentFailureAndStillResets(t *testing.T) {
+func TestRunnerPreservesAgentFailureAndStillCleansUp(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
@@ -191,7 +190,7 @@ func TestRunnerPreservesAgentFailureAndStillResets(t *testing.T) {
 	assert.Equal(t, common.TerminationCompleted, result.Agent.Termination)
 	assert.Equal(t, []string{
 		"create", "sandbox-build", "sandbox-start", "kubectl", "verify-clean", "inject-fault", "verify-fault",
-		"agent", "verify-restored", "reset", "sandbox-stop", "delete",
+		"agent", "verify-restored", "sandbox-stop", "delete",
 	}, events)
 }
 
@@ -279,6 +278,26 @@ func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {
 	assert.Empty(t, events)
 }
 
+func TestRunnerSupportsScenarioWithoutFaultInjection(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:         &events,
+		kubeconfigPath: "/tmp/test.kubeconfig",
+		kubeconfigCtx:  "kind-test",
+	}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		Executor:       &recordingExecutor{events: &events},
+	}
+	definition := testDefinition()
+	definition.InjectFault = nil
+	definition.VerifyFault = nil
+
+	_, err := runner.RunWithRepair(context.Background(), definition, scenario.Step{{Program: "implement"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"create", "kubectl", "verify-clean", "implement", "verify-restored", "delete"}, events)
+}
+
 func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
@@ -294,7 +313,7 @@ func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 	_, err := runner.RunWithRepair(context.Background(), testDefinition(), scenario.Step{{Program: "repair"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "repair", "verify-restored", "reset", "delete",
+		"create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "repair", "verify-restored", "delete",
 	}, events)
 }
 
