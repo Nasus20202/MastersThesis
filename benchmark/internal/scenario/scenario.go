@@ -61,9 +61,8 @@ type Definition struct {
 	Cluster     ClusterConfig `yaml:"cluster,omitempty"`
 	Prepare     Step          `yaml:"prepare" validate:"required,min=1,dive"`
 	VerifyClean Step          `yaml:"verify_clean" validate:"required,min=1,dive"`
-	InjectFault Step          `yaml:"inject_fault" validate:"required,min=1,dive"`
-	VerifyFault Step          `yaml:"verify_fault" validate:"required,min=1,dive"`
-	Reset       Step          `yaml:"reset" validate:"required,min=1,dive"`
+	InjectFault Step          `yaml:"inject_fault,omitempty" validate:"omitempty,dive"`
+	VerifyFault Step          `yaml:"verify_fault,omitempty" validate:"omitempty,dive"`
 	Grading     []Criterion   `yaml:"grading" validate:"required,min=1,dive"`
 }
 
@@ -73,7 +72,6 @@ func (d *Definition) setDir(dir string) {
 	d.VerifyClean.setDir(dir)
 	d.InjectFault.setDir(dir)
 	d.VerifyFault.setDir(dir)
-	d.Reset.setDir(dir)
 	for index := range d.Grading {
 		d.Grading[index].Check.dir = dir
 	}
@@ -85,6 +83,9 @@ var definitionValidator = mustNewValidator()
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
 		return formatValidationError(err)
+	}
+	if (len(d.InjectFault) == 0) != (len(d.VerifyFault) == 0) {
+		return errors.New("invalid scenario: inject_fault and verify_fault must be provided together")
 	}
 
 	seenIDs := make(map[string]struct{}, len(d.Grading))
