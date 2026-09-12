@@ -23,7 +23,7 @@ const (
 	colorRed           = "\x1b[31m"
 	prettyMessageWidth = 32
 	prettyTimeFormat   = "15:04:05"
-	prettyAttrSpacing  = "\t"
+	prettyAttrSpacing  = "  "
 )
 
 type prettyHandler struct {

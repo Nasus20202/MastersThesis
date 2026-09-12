@@ -24,7 +24,7 @@ func TestNewFormatsMultilineTextLogs(t *testing.T) {
 
 	text := output.String()
 	assert.Regexp(t, regexp.MustCompile(`(?m)^\d{2}:\d{2}:\d{2} INFO  \|`), text)
-	assert.Contains(t, text, fmt.Sprintf("INFO  | %-32s | component=agent\tturn=8", "inference message sent"))
+	assert.Contains(t, text, fmt.Sprintf("INFO  | %-32s | component=agent  turn=8", "inference message sent"))
 	assert.Contains(t, text, "  details:\n    exit_code: 0\n    stdout:\n    healthy\n")
 	assert.NotContains(t, text, `details="exit_code: 0\nstdout:\nhealthy"`)
 }
