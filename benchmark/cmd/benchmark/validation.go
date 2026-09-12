@@ -57,35 +57,45 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			tasks = append(tasks, task)
 		}
 	}
-	outcomes, _ := executor.Execute(ctx, tasks, parallelism)
+	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
 	caseByKey := make(map[string]validation.ValidationCase, len(cases))
 	for _, item := range cases {
 		caseByKey[item.Scenario.ID+"/"+item.ID] = item
 	}
 	validationErrors := make([]error, 0)
-	for _, outcome := range outcomes {
+	var writeErr error
+	var outputErr error
+	for outcome := range outcomes {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
-			return fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID)
+			validationErrors = append(validationErrors, fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID))
+			continue
 		}
 		caseErr := outcome.Err
 		if caseErr == nil {
 			caseErr = validation.Check(item, outcome.Result)
 		}
 		if err := store.WriteValidationAttempt(outcome.Attempt, item.Scenario.ID, item.ID, item.ExpectedScore, item.ExpectedFullSuccess, outcome.Result, caseErr); err != nil {
-			return err
+			writeErr = errors.Join(writeErr, err)
 		}
 		if caseErr != nil {
 			logger.Error("validation case failed", "scenario", item.Scenario.ID, "case", item.ID, "error", caseErr)
 			validationErrors = append(validationErrors, fmt.Errorf("%s/%s: %w", item.Scenario.ID, item.ID, caseErr))
 			if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: failed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-				return fmt.Errorf("write validation summary: %w", err)
+				outputErr = errors.Join(outputErr, fmt.Errorf("write validation summary: %w", err))
 			}
 			continue
 		}
 		if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: passed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-			return fmt.Errorf("write validation summary: %w", err)
+			outputErr = errors.Join(outputErr, fmt.Errorf("write validation summary: %w", err))
 		}
+	}
+	_ = <-executeErrors
+	if writeErr != nil {
+		return writeErr
+	}
+	if outputErr != nil {
+		return outputErr
 	}
 	if err := store.Finalize(time.Now().UTC()); err != nil {
 		return err
