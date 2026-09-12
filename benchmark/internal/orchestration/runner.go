@@ -236,10 +236,10 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 		{name: phaseVerifyClean, step: definition.VerifyClean},
 	}
 	if len(definition.InjectFault) > 0 {
-		beforeAgent = append(beforeAgent,
-			phase{name: phaseInjectFault, step: definition.InjectFault},
-			phase{name: phaseVerifyFault, step: definition.VerifyFault},
-		)
+		beforeAgent = append(beforeAgent, phase{name: phaseInjectFault, step: definition.InjectFault})
+	}
+	if len(definition.VerifyFault) > 0 {
+		beforeAgent = append(beforeAgent, phase{name: phaseVerifyFault, step: definition.VerifyFault})
 	}
 	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, logger); err != nil {
 		return GradingResult{}, nil, err
