@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -152,6 +153,7 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	result.LoopConfig = l.config
 	result.Tools = slices.Clone(l.definitions)
 	result.Messages = []inference.Message{{Role: "user", Content: task}}
+	logger := slog.With("component", "agent")
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := runCtx.Err(); ctxErr != nil {
 			return l.finishContext(&result, ctxErr)
@@ -159,6 +161,16 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 
 		requestMessages := cloneMessages(result.Messages)
 		requestTools := slices.Clone(l.definitions)
+		turn := result.Turns + 1
+		lastMessage := requestMessages[len(requestMessages)-1]
+		logger.InfoContext(runCtx, "inference message sent",
+			"turn", turn,
+			"message_count", len(requestMessages),
+			"message_role", lastMessage.Role,
+			"message_content_bytes", len(lastMessage.Content),
+			"message_tool_call_count", len(lastMessage.ToolCalls),
+		)
+		logger.DebugContext(runCtx, "inference message sent", "turn", turn, "message_content", lastMessage.Content)
 		responseStarted := time.Now()
 		response, chatErr := l.client.Chat(runCtx, requestMessages, requestTools, inference.Options{
 			Temperature: l.config.Temperature,
@@ -170,11 +182,17 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 			DurationSeconds: time.Since(responseStarted).Seconds(),
 		})
 		if chatErr != nil {
+			logger.ErrorContext(runCtx, "inference response failed",
+				"turn", turn,
+				"duration_seconds", time.Since(responseStarted).Seconds(),
+				"error", chatErr,
+			)
 			if ctxErr := runCtx.Err(); ctxErr != nil {
 				return l.finishContext(&result, ctxErr)
 			}
 			return l.finish(&result, TerminationInference, chatErr)
 		}
+		logInferenceResponse(logger, runCtx, turn, response, time.Since(responseStarted))
 		message := response.Message
 		result.Messages = append(result.Messages, message)
 		if len(message.ToolCalls) == 0 {
@@ -182,6 +200,12 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 		}
 
 		if result.ToolCallCount+len(message.ToolCalls) > l.config.MaxToolCalls {
+			logger.InfoContext(runCtx, "tool calls rejected",
+				"turn", turn,
+				"reason", "maximum tool call limit reached",
+				"requested_count", len(message.ToolCalls),
+				"remaining_count", l.config.MaxToolCalls-result.ToolCallCount,
+			)
 			for _, call := range message.ToolCalls {
 				result.ToolCalls = append(result.ToolCalls, ToolCallEvidence{
 					Call:  call,
@@ -193,9 +217,24 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 
 		for _, call := range message.ToolCalls {
 			result.ToolCallCount++
+			logger.InfoContext(runCtx, "tool call started",
+				"turn", turn,
+				"tool_call_id", call.ID,
+				"tool", call.Name,
+				"tool_type", call.Type,
+				"arguments", call.Arguments,
+			)
 			toolMessage, evidence := l.executeToolCall(runCtx, call)
 			result.ToolCalls = append(result.ToolCalls, evidence)
 			result.Messages = append(result.Messages, toolMessage)
+			logger.InfoContext(runCtx, "tool call completed",
+				"turn", turn,
+				"tool_call_id", call.ID,
+				"tool", call.Name,
+				"duration_seconds", evidence.DurationSeconds,
+				"success", evidence.Error == "",
+				"error", evidence.Error,
+			)
 			if ctxErr := runCtx.Err(); ctxErr != nil {
 				return l.finishContext(&result, ctxErr)
 			}
@@ -203,6 +242,37 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	}
 
 	return l.finish(&result, TerminationTurnLimit, nil)
+}
+
+func logInferenceResponse(logger *slog.Logger, ctx context.Context, turn int, response inference.Result, duration time.Duration) {
+	args := []any{
+		"turn", turn,
+		"response_id", response.ID,
+		"response_role", response.Message.Role,
+		"response_content_bytes", len(response.Message.Content),
+		"response_tool_call_count", len(response.Message.ToolCalls),
+		"finish_reason", response.FinishReason,
+		"duration_seconds", duration.Seconds(),
+	}
+	if response.Usage != nil {
+		args = append(args,
+			"prompt_tokens", response.Usage.PromptTokens,
+			"completion_tokens", response.Usage.CompletionTokens,
+			"total_tokens", response.Usage.TotalTokens,
+		)
+	}
+	if response.Timings != nil {
+		args = append(args,
+			"prompt_tokens_per_second", response.Timings.PromptPerSecond,
+			"predicted_tokens_per_second", response.Timings.PredictedPerSecond,
+			"prompt_tokens_timed", response.Timings.PromptN,
+			"predicted_tokens_timed", response.Timings.PredictedN,
+		)
+	}
+	logger.InfoContext(ctx, "inference response received", args...)
+	logger.DebugContext(ctx, "inference response received",
+		append(slices.Clone(args), "response_content", response.Message.Content)...,
+	)
 }
 
 func (l *Loop) executeToolCall(ctx context.Context, call inference.ToolCall) (inference.Message, ToolCallEvidence) {

@@ -24,37 +24,58 @@ type Outcome struct {
 	Err        error
 }
 
-func Execute(ctx context.Context, tasks []Task, parallelism int) ([]Outcome, error) {
+// Execute runs tasks concurrently and streams each completed outcome on the
+// returned channel. The error channel receives the aggregate execution error
+// after the outcomes channel is closed.
+func Execute(ctx context.Context, tasks []Task, parallelism int) (<-chan Outcome, <-chan error) {
+	outcomes := make(chan Outcome)
+	errorChannel := make(chan error, 1)
+	go execute(ctx, tasks, parallelism, outcomes, errorChannel)
+	return outcomes, errorChannel
+}
+
+func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<- Outcome, errorChannel chan<- error) {
+	defer close(outcomes)
+	defer close(errorChannel)
+
 	if len(tasks) == 0 {
-		return nil, errors.New("benchmark requires at least one task")
+		errorChannel <- errors.New("benchmark requires at least one task")
+		return
 	}
 	if parallelism < 1 {
-		return nil, errors.New("benchmark parallelism must be at least 1")
+		errorChannel <- errors.New("benchmark parallelism must be at least 1")
+		return
 	}
 	for index, task := range tasks {
 		if task.Run == nil {
-			return nil, fmt.Errorf("benchmark task %d has no executor", index+1)
+			errorChannel <- fmt.Errorf("benchmark task %d has no executor", index+1)
+			return
 		}
 		if task.ScenarioID == "" {
-			return nil, fmt.Errorf("benchmark task %d has no scenario ID", index+1)
+			errorChannel <- fmt.Errorf("benchmark task %d has no scenario ID", index+1)
+			return
 		}
 		if task.Attempt < 0 {
-			return nil, fmt.Errorf("benchmark task %d has invalid attempt", index+1)
+			errorChannel <- fmt.Errorf("benchmark task %d has invalid attempt", index+1)
+			return
 		}
 	}
 
 	workerCount := min(parallelism, len(tasks))
 	jobs := make(chan int)
-	outcomes := make([]Outcome, len(tasks))
+	completed := make([]Outcome, len(tasks))
 	var workers sync.WaitGroup
 	workers.Add(workerCount)
+	emit := func(index int, result Outcome) {
+		completed[index] = result
+		outcomes <- result
+	}
 	for range workerCount {
 		go func() {
 			defer workers.Done()
 			for index := range jobs {
 				task := tasks[index]
 				if err := ctx.Err(); err != nil {
-					outcomes[index] = canceledOutcome(task, err)
 					continue
 				}
 				attempt := task.Attempt
@@ -62,33 +83,42 @@ func Execute(ctx context.Context, tasks []Task, parallelism int) ([]Outcome, err
 					attempt = 1
 				}
 				result, err := task.Run(ctx)
-				outcomes[index] = outcome(task, attempt, result, err)
+				emit(index, outcome(task, attempt, result, err))
 			}
 		}()
 	}
-dispatch:
-	for index := range tasks {
-		if err := ctx.Err(); err != nil {
-			markCanceled(outcomes, tasks, index, err)
-			break
+	dispatchDone := make(chan struct{})
+	var dispatchErr error
+	go func() {
+		defer close(dispatchDone)
+		defer close(jobs)
+	dispatch:
+		for index := range tasks {
+			if err := ctx.Err(); err != nil {
+				dispatchErr = err
+				break
+			}
+			select {
+			case jobs <- index:
+			case <-ctx.Done():
+				dispatchErr = ctx.Err()
+				break dispatch
+			}
 		}
-		select {
-		case jobs <- index:
-		case <-ctx.Done():
-			markCanceled(outcomes, tasks, index, ctx.Err())
-			break dispatch
-		}
-	}
-	close(jobs)
+	}()
+	<-dispatchDone
 	workers.Wait()
 
-	errs := make([]error, 0)
-	for index, outcome := range outcomes {
+	errs := make([]error, 0, 1)
+	if dispatchErr != nil {
+		errs = append(errs, dispatchErr)
+	}
+	for index, outcome := range completed {
 		if outcome.Err != nil {
 			errs = append(errs, fmt.Errorf("task %d (%s): %w", index+1, outcome.ScenarioID, outcome.Err))
 		}
 	}
-	return outcomes, errors.Join(errs...)
+	errorChannel <- errors.Join(errs...)
 }
 
 func outcome(task Task, attempt int, result orchestration.RunResult, err error) Outcome {
@@ -98,19 +128,5 @@ func outcome(task Task, attempt int, result orchestration.RunResult, err error) 
 		Attempt:    attempt,
 		Result:     result,
 		Err:        err,
-	}
-}
-
-func canceledOutcome(task Task, err error) Outcome {
-	attempt := task.Attempt
-	if attempt == 0 {
-		attempt = 1
-	}
-	return outcome(task, attempt, orchestration.RunResult{ScenarioID: task.ScenarioID}, err)
-}
-
-func markCanceled(outcomes []Outcome, tasks []Task, start int, err error) {
-	for index := start; index < len(tasks); index++ {
-		outcomes[index] = canceledOutcome(tasks[index], err)
 	}
 }

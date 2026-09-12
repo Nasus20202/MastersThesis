@@ -1,8 +1,12 @@
 package common
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,6 +231,85 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 	assert.Equal(t, []inference.Tool{tool.definition}, client.requests[0].tools)
 	assert.Equal(t, &temperature, client.requests[0].options.Temperature)
 	assert.Equal(t, &maxTokens, client.requests[0].options.MaxTokens)
+}
+
+func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	client := &loopClient{results: []inference.Result{
+		{
+			ID: "response-1",
+			Message: inference.Message{
+				Role:    "assistant",
+				Content: "I will inspect the workload.",
+				ToolCalls: []inference.ToolCall{{
+					ID: "call-1", Type: "function", Name: "inspect", Arguments: `{}`,
+				}},
+			},
+			FinishReason: "tool_calls",
+			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14},
+			Timings:      &inference.Timings{PromptPerSecond: 20.5, PredictedPerSecond: 30.5},
+		},
+		{ID: "response-2", Message: inference.Message{Role: "assistant", Content: "The workload is healthy."}, FinishReason: "stop"},
+	}}
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
+	loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 2, MaxToolCalls: 1})
+	require.NoError(t, err)
+
+	_, err = loop.Run(context.Background(), "Inspect the workload.")
+	require.NoError(t, err)
+
+	records := make([]map[string]any, 0)
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		var record map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &record))
+		records = append(records, record)
+	}
+	require.Len(t, records, 10)
+
+	sent := make([]map[string]any, 0, 2)
+	responses := make([]map[string]any, 0, 2)
+	debugSent := make([]map[string]any, 0, 2)
+	debugResponses := make([]map[string]any, 0, 2)
+	byMessage := make(map[string]map[string]any, len(records))
+	for _, record := range records {
+		message := record["msg"].(string)
+		if record["level"] == "DEBUG" {
+			switch message {
+			case "inference message sent":
+				debugSent = append(debugSent, record)
+			case "inference response received":
+				debugResponses = append(debugResponses, record)
+			}
+			continue
+		}
+		switch message {
+		case "inference message sent":
+			sent = append(sent, record)
+		case "inference response received":
+			responses = append(responses, record)
+		default:
+			byMessage[message] = record
+		}
+	}
+	require.Len(t, sent, 2)
+	require.Len(t, responses, 2)
+	require.Len(t, debugSent, 2)
+	require.Len(t, debugResponses, 2)
+	assert.Equal(t, float64(len("Inspect the workload.")), sent[0]["message_content_bytes"])
+	assert.NotContains(t, sent[0], "message_content")
+	assert.Equal(t, "Inspect the workload.", debugSent[0]["message_content"])
+	assert.Equal(t, float64(len("The workload is healthy.")), responses[1]["response_content_bytes"])
+	assert.NotContains(t, responses[1], "response_content")
+	assert.Equal(t, "The workload is healthy.", debugResponses[1]["response_content"])
+	assert.Equal(t, float64(20.5), responses[0]["prompt_tokens_per_second"])
+	assert.Equal(t, float64(30.5), responses[0]["predicted_tokens_per_second"])
+	assert.Equal(t, "inspect", byMessage["tool call started"]["tool"])
+	assert.Equal(t, "{}", byMessage["tool call started"]["arguments"])
+	assert.Equal(t, true, byMessage["tool call completed"]["success"])
 }
 
 func TestLoopExecutesToolCallsAndAppendsEvidence(t *testing.T) {

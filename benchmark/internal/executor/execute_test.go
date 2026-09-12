@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExecuteRunsTasksInInputOrder(t *testing.T) {
+func TestExecuteStreamsTasksAsTheyComplete(t *testing.T) {
 	tasks := []Task{
 		{ScenarioID: "first", Attempt: 2, Run: func(context.Context) (orchestration.RunResult, error) {
 			time.Sleep(20 * time.Millisecond)
@@ -22,14 +22,49 @@ func TestExecuteRunsTasksInInputOrder(t *testing.T) {
 		}},
 	}
 
-	outcomes, err := Execute(context.Background(), tasks, 2)
+	outcomeChannel, errorChannel := Execute(context.Background(), tasks, 2)
+	outcomes, err := collect(outcomeChannel, errorChannel)
 
 	require.NoError(t, err)
 	require.Len(t, outcomes, 2)
-	assert.Equal(t, "first", outcomes[0].ScenarioID)
-	assert.Equal(t, 2, outcomes[0].Attempt)
-	assert.Equal(t, "second", outcomes[1].ScenarioID)
-	assert.Equal(t, 1, outcomes[1].Attempt)
+	assert.ElementsMatch(t, []string{"first", "second"}, []string{outcomes[0].ScenarioID, outcomes[1].ScenarioID})
+	for _, outcome := range outcomes {
+		if outcome.ScenarioID == "first" {
+			assert.Equal(t, 2, outcome.Attempt)
+		}
+	}
+}
+
+func TestExecutePublishesAnOutcomeBeforeAllTasksComplete(t *testing.T) {
+	release := make(chan struct{})
+	tasks := []Task{
+		{ScenarioID: "slow", Run: func(context.Context) (orchestration.RunResult, error) {
+			<-release
+			return orchestration.RunResult{ScenarioID: "slow"}, nil
+		}},
+		{ScenarioID: "fast", Run: func(context.Context) (orchestration.RunResult, error) {
+			return orchestration.RunResult{ScenarioID: "fast"}, nil
+		}},
+	}
+
+	outcomeChannel, errorChannel := Execute(context.Background(), tasks, 2)
+	select {
+	case outcome := <-outcomeChannel:
+		assert.Equal(t, "fast", outcome.ScenarioID)
+	case <-time.After(time.Second):
+		t.Fatal("executor did not publish the completed outcome")
+	}
+
+	select {
+	case err := <-errorChannel:
+		t.Fatalf("executor completed while a task was still running: %v", err)
+	default:
+	}
+
+	close(release)
+	for range outcomeChannel {
+	}
+	assert.NoError(t, <-errorChannel)
 }
 
 func TestExecuteLimitsConcurrentTasks(t *testing.T) {
@@ -47,9 +82,12 @@ func TestExecuteLimitsConcurrentTasks(t *testing.T) {
 		}
 	}
 
+	outcomeChannel, errorChannel := Execute(context.Background(), tasks, 2)
 	done := make(chan struct{})
 	go func() {
-		_, _ = Execute(context.Background(), tasks, 2)
+		for range outcomeChannel {
+		}
+		<-errorChannel
 		close(done)
 	}()
 
@@ -80,7 +118,8 @@ func TestExecuteCollectsAllTaskErrors(t *testing.T) {
 		}},
 	}
 
-	outcomes, err := Execute(context.Background(), tasks, 2)
+	outcomeChannel, errorChannel := Execute(context.Background(), tasks, 2)
+	outcomes, err := collect(outcomeChannel, errorChannel)
 
 	assert.ErrorIs(t, err, wantErr)
 	require.Len(t, outcomes, 2)
@@ -107,7 +146,8 @@ func TestExecuteDoesNotStartQueuedTasksAfterCancellation(t *testing.T) {
 
 	done := make(chan []Outcome, 1)
 	go func() {
-		outcomes, _ := Execute(ctx, tasks, 1)
+		outcomeChannel, errorChannel := Execute(ctx, tasks, 1)
+		outcomes, _ := collect(outcomeChannel, errorChannel)
 		done <- outcomes
 	}()
 	<-started
@@ -117,33 +157,55 @@ func TestExecuteDoesNotStartQueuedTasksAfterCancellation(t *testing.T) {
 	case <-startedQueued:
 		t.Fatal("queued task started after cancellation")
 	case outcomes := <-done:
-		require.Len(t, outcomes, 2)
+		require.Len(t, outcomes, 1)
 		assert.ErrorIs(t, outcomes[0].Err, context.Canceled)
-		assert.ErrorIs(t, outcomes[1].Err, context.Canceled)
 	case <-time.After(time.Second):
 		t.Fatal("executor did not stop after cancellation")
 	}
 }
 
+func TestExecuteReportsCancellationWhenNoTaskStarts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tasks := []Task{{ScenarioID: "never-started", Run: func(context.Context) (orchestration.RunResult, error) {
+		t.Fatal("canceled task was started")
+		return orchestration.RunResult{}, nil
+	}}}
+
+	outcomes, err := collect(Execute(ctx, tasks, 1))
+
+	assert.Empty(t, outcomes)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestExecuteRejectsInvalidInput(t *testing.T) {
-	_, err := Execute(context.Background(), nil, 1)
+	_, err := collect(Execute(context.Background(), nil, 1))
 	assert.ErrorContains(t, err, "at least one task")
 
-	_, err = Execute(context.Background(), []Task{{ScenarioID: "scenario", Run: func(context.Context) (orchestration.RunResult, error) {
+	_, err = collect(Execute(context.Background(), []Task{{ScenarioID: "scenario", Run: func(context.Context) (orchestration.RunResult, error) {
 		return orchestration.RunResult{}, nil
-	}}}, 0)
+	}}}, 0))
 	assert.ErrorContains(t, err, "parallelism")
 
-	_, err = Execute(context.Background(), []Task{{ScenarioID: "scenario"}}, 1)
+	_, err = collect(Execute(context.Background(), []Task{{ScenarioID: "scenario"}}, 1))
 	assert.ErrorContains(t, err, "no executor")
 
-	_, err = Execute(context.Background(), []Task{{Run: func(context.Context) (orchestration.RunResult, error) {
+	_, err = collect(Execute(context.Background(), []Task{{Run: func(context.Context) (orchestration.RunResult, error) {
 		return orchestration.RunResult{}, nil
-	}}}, 1)
+	}}}, 1))
 	assert.ErrorContains(t, err, "scenario ID")
 
-	_, err = Execute(context.Background(), []Task{{ScenarioID: "scenario", Attempt: -1, Run: func(context.Context) (orchestration.RunResult, error) {
+	_, err = collect(Execute(context.Background(), []Task{{ScenarioID: "scenario", Attempt: -1, Run: func(context.Context) (orchestration.RunResult, error) {
 		return orchestration.RunResult{}, nil
-	}}}, 1)
+	}}}, 1))
 	assert.ErrorContains(t, err, "invalid attempt")
+}
+
+func collect(outcomeChannel <-chan Outcome, errorChannel <-chan error) ([]Outcome, error) {
+	outcomes := make([]Outcome, 0)
+	for outcome := range outcomeChannel {
+		outcomes = append(outcomes, outcome)
+	}
+	return outcomes, <-errorChannel
 }

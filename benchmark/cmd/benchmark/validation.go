@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -16,7 +16,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, output io.Writer) error {
+func runValidation(ctx context.Context, inputs []string, parallelism, repeat int) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		"total_tasks", len(cases)*repeat,
 	)
 
-	commandExecutor := command.LocalExecutor{}
+	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
 	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
 	if err != nil {
 		return err
@@ -57,35 +57,51 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			tasks = append(tasks, task)
 		}
 	}
-	outcomes, _ := executor.Execute(ctx, tasks, parallelism)
+	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
 	caseByKey := make(map[string]validation.ValidationCase, len(cases))
 	for _, item := range cases {
 		caseByKey[item.Scenario.ID+"/"+item.ID] = item
 	}
 	validationErrors := make([]error, 0)
-	for _, outcome := range outcomes {
+	var writeErr error
+	for outcome := range outcomes {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
-			return fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID)
+			validationErrors = append(validationErrors, fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID))
+			continue
 		}
 		caseErr := outcome.Err
 		if caseErr == nil {
 			caseErr = validation.Check(item, outcome.Result)
 		}
 		if err := store.WriteValidationAttempt(outcome.Attempt, item.Scenario.ID, item.ID, item.ExpectedScore, item.ExpectedFullSuccess, outcome.Result, caseErr); err != nil {
-			return err
+			writeErr = errors.Join(writeErr, err)
 		}
 		if caseErr != nil {
-			logger.Error("validation case failed", "scenario", item.Scenario.ID, "case", item.ID, "error", caseErr)
+			logger.Error("validation case failed",
+				"run_id", metadata.RunID,
+				"scenario", item.Scenario.ID,
+				"case", item.ID,
+				"attempt", outcome.Attempt,
+				"score", outcome.Result.Grading.Score,
+				"full_success", outcome.Result.Grading.FullSuccess,
+				"error", caseErr,
+			)
 			validationErrors = append(validationErrors, fmt.Errorf("%s/%s: %w", item.Scenario.ID, item.ID, caseErr))
-			if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: failed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-				return fmt.Errorf("write validation summary: %w", err)
-			}
 			continue
 		}
-		if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: passed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-			return fmt.Errorf("write validation summary: %w", err)
-		}
+		logger.Info("validation case passed",
+			"run_id", metadata.RunID,
+			"scenario", item.Scenario.ID,
+			"case", item.ID,
+			"attempt", outcome.Attempt,
+			"score", outcome.Result.Grading.Score,
+			"full_success", outcome.Result.Grading.FullSuccess,
+		)
+	}
+	_ = <-executeErrors
+	if writeErr != nil {
+		return writeErr
 	}
 	if err := store.Finalize(time.Now().UTC()); err != nil {
 		return err
