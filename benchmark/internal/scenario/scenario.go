@@ -84,10 +84,6 @@ func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
 		return formatValidationError(err)
 	}
-	if (len(d.InjectFault) == 0) != (len(d.VerifyFault) == 0) {
-		return errors.New("invalid scenario: inject_fault and verify_fault must be provided together")
-	}
-
 	seenIDs := make(map[string]struct{}, len(d.Grading))
 	for _, criterion := range d.Grading {
 		if _, exists := seenIDs[criterion.ID]; exists {
