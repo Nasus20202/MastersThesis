@@ -68,8 +68,19 @@ func (t *loopTool) Execute(_ context.Context, call inference.ToolCall) ToolResul
 	return t.result
 }
 
+type blockingTool struct {
+	definition inference.Tool
+}
+
+func (t *blockingTool) Definition() inference.Tool { return t.definition }
+
+func (t *blockingTool) Execute(ctx context.Context, _ inference.ToolCall) ToolResult {
+	<-ctx.Done()
+	return ToolResult{Error: ctx.Err()}
+}
+
 func TestDefaultConfig(t *testing.T) {
-	assert.Equal(t, Config{MaxTurns: 12, MaxToolCalls: 24, TimeoutSeconds: 300}, DefaultConfig())
+	assert.Equal(t, Config{MaxTurns: 25, MaxToolCalls: 50, ToolTimeoutSeconds: 60, TimeoutSeconds: 300}, DefaultConfig())
 }
 
 func TestNewLoopValidatesDependenciesAndConfiguration(t *testing.T) {
@@ -117,6 +128,12 @@ func TestNewLoopValidatesDependenciesAndConfiguration(t *testing.T) {
 			tools:  []Tool{tool},
 			config: Config{MaxTurns: 1, MaxToolCalls: 1, MaxTokens: func() *int { value := 0; return &value }()},
 			want:   "agent maximum tokens must be at least 1",
+		},
+		"negative tool timeout": {
+			client: client,
+			tools:  []Tool{tool},
+			config: Config{MaxTurns: 1, MaxToolCalls: 1, ToolTimeoutSeconds: -1},
+			want:   "agent tool timeout must not be negative",
 		},
 		"negative timeout": {
 			client: client,
@@ -401,4 +418,30 @@ func TestLoopRejectsEmptyTasks(t *testing.T) {
 	result, err := loop.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")
 	assert.Empty(t, result)
+}
+
+func TestLoopTimesOutIndividualToolCallAndContinues(t *testing.T) {
+	client := &loopClient{results: []inference.Result{
+		{Message: inference.Message{Role: "assistant", ToolCalls: []inference.ToolCall{{
+			ID: "call-1", Type: "function", Name: "inspect",
+		}}}},
+		{Message: inference.Message{Role: "assistant", Content: "finished"}, FinishReason: "stop"},
+	}}
+	tool := &blockingTool{definition: inference.Tool{Name: "inspect"}}
+	loop, err := NewLoop(client, []Tool{tool}, Config{
+		MaxTurns:           2,
+		MaxToolCalls:       1,
+		ToolTimeoutSeconds: 0.01,
+		TimeoutSeconds:     1,
+	})
+	require.NoError(t, err)
+
+	started := time.Now()
+	result, err := loop.Run(context.Background(), "Inspect the workload.")
+	require.NoError(t, err)
+	assert.Equal(t, TerminationCompleted, result.Termination)
+	assert.Equal(t, 1, result.ToolCallCount)
+	require.Len(t, result.ToolCalls, 1)
+	assert.ErrorContains(t, errors.New(result.ToolCalls[0].Error), context.DeadlineExceeded.Error())
+	assert.Less(t, time.Since(started), time.Second)
 }

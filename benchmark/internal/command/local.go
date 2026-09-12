@@ -46,6 +46,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 	}
 	if err == nil {
 		logger.InfoContext(ctx, "command completed",
+			"args", spec.Args,
 			"exit_code", result.ExitCode,
 			"duration", result.Duration,
 		)
@@ -54,6 +55,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		runErr := fmt.Errorf("run %q: %w", spec.Program, ctxErr)
 		logger.ErrorContext(ctx, "command failed",
+			"args", spec.Args,
 			"exit_code", result.ExitCode,
 			"duration", result.Duration,
 			"error", runErr,
@@ -62,6 +64,7 @@ func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 	}
 	runErr := fmt.Errorf("run %q: %w", spec.Program, err)
 	logger.WarnContext(ctx, "command exited with non-zero status",
+		"args", spec.Args,
 		"exit_code", result.ExitCode,
 		"duration", result.Duration,
 		"error", runErr,

@@ -27,17 +27,23 @@ const (
 // Config controls the safety limits and generation settings for one model
 // loop. The limits apply to one call to Run.
 type Config struct {
-	MaxTurns       int      `json:"max_turns"`
-	MaxToolCalls   int      `json:"max_tool_calls"`
-	TimeoutSeconds float64  `json:"timeout_seconds"`
-	Temperature    *float64 `json:"temperature,omitempty"`
-	MaxTokens      *int     `json:"max_tokens,omitempty"`
+	MaxTurns           int      `json:"max_turns"`
+	MaxToolCalls       int      `json:"max_tool_calls"`
+	ToolTimeoutSeconds float64  `json:"tool_timeout_seconds"`
+	TimeoutSeconds     float64  `json:"timeout_seconds"`
+	Temperature        *float64 `json:"temperature,omitempty"`
+	MaxTokens          *int     `json:"max_tokens,omitempty"`
 }
 
-// DefaultConfig returns conservative limits suitable for a benchmark smoke
-// test. Callers should persist the selected values with the run result.
+// DefaultConfig returns the approved development benchmark limits. Callers
+// should persist the selected values with the run result.
 func DefaultConfig() Config {
-	return Config{MaxTurns: 12, MaxToolCalls: 24, TimeoutSeconds: 300}
+	return Config{
+		MaxTurns:           25,
+		MaxToolCalls:       50,
+		ToolTimeoutSeconds: 60,
+		TimeoutSeconds:     300,
+	}
 }
 
 type Loop struct {
@@ -60,6 +66,12 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	}
 	if config.MaxToolCalls < 1 {
 		return nil, errors.New("agent maximum tool calls must be at least 1")
+	}
+	if config.ToolTimeoutSeconds == 0 {
+		config.ToolTimeoutSeconds = DefaultConfig().ToolTimeoutSeconds
+	}
+	if config.ToolTimeoutSeconds < 0 {
+		return nil, errors.New("agent tool timeout must not be negative")
 	}
 	if config.TimeoutSeconds == 0 {
 		config.TimeoutSeconds = DefaultConfig().TimeoutSeconds
@@ -206,8 +218,14 @@ func (l *Loop) executeToolCall(ctx context.Context, call inference.ToolCall) (in
 		return toolMessage(call.ID, evidence.Error), evidence
 	}
 
+	toolCtx, cancel := context.WithTimeout(ctx, time.Duration(l.config.ToolTimeoutSeconds*float64(time.Second)))
+	defer cancel()
+
 	started := time.Now()
-	toolResult := tool.Execute(ctx, call)
+	toolResult := tool.Execute(toolCtx, call)
+	if toolResult.Error == nil && toolCtx.Err() != nil {
+		toolResult.Error = toolCtx.Err()
+	}
 	evidence.DurationSeconds = time.Since(started).Seconds()
 	evidence.Content = toolResult.Content
 	evidence.Details = toolResult.Details

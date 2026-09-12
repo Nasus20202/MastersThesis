@@ -1,8 +1,10 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -39,6 +41,34 @@ func TestLocalExecutorReturnsExitCodeAndOutput(t *testing.T) {
 	var executionErr *ExecutionError
 	assert.True(t, errors.As(err, &executionErr))
 	assert.Equal(t, result, executionErr.Result)
+}
+
+func TestLocalExecutorLogsArgumentsOnCompletion(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	args := []string{"-c", "printf test"}
+	_, err := (LocalExecutor{}).Run(context.Background(), Spec{Program: "sh", Args: args})
+
+	require.NoError(t, err)
+	assert.Contains(t, logs.String(), `"msg":"command completed"`)
+	assert.Contains(t, logs.String(), `"args":["-c","printf test"]`)
+}
+
+func TestLocalExecutorLogsArgumentsOnFailure(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	args := []string{"-c", "exit 7"}
+	_, err := (LocalExecutor{}).Run(context.Background(), Spec{Program: "sh", Args: args})
+
+	require.Error(t, err)
+	assert.Contains(t, logs.String(), `"msg":"command exited with non-zero status"`)
+	assert.Contains(t, logs.String(), `"args":["-c","exit 7"]`)
 }
 
 func TestLocalExecutorUsesDirectoryAndEnvironment(t *testing.T) {

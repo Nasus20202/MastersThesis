@@ -68,6 +68,12 @@ The benchmark conditions initially have these operational differences:
 
 The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
 
+## Agent execution limits
+
+The common model/tool loop uses per-attempt limits of 25 model turns, 50 tool calls, 60 seconds per tool call and 300 seconds total agent runtime. The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 300-second deadline stops the entire attempt.
+
+The selected limits are preserved in each raw run result so later conditions can be compared under the same execution budget.
+
 ## Model visibility
 
 The model may see:
