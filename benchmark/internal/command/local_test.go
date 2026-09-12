@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -101,12 +100,10 @@ func TestLocalExecutorHonorsContext(t *testing.T) {
 }
 
 func TestLocalExecutorPreservesInheritedEnvironment(t *testing.T) {
-	t.Setenv("COMMAND_TEST_INHERITED", "present")
-
-	result, err := (LocalExecutor{}).Run(context.Background(), Spec{
+	result, err := (LocalExecutor{Environment: []string{"COMMAND_TEST_INHERITED=present"}}).Run(context.Background(), Spec{
 		Program: "sh",
 		Args:    []string{"-c", "printf '%s' \"$COMMAND_TEST_INHERITED\""},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, os.Getenv("COMMAND_TEST_INHERITED"), result.Stdout)
+	assert.Equal(t, "present", result.Stdout)
 }

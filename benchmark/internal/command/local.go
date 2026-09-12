@@ -6,24 +6,28 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"os/exec"
 	"sort"
 	"strings"
 	"time"
 )
 
-type LocalExecutor struct{}
+type LocalExecutor struct {
+	Environment []string
+}
 
-func (LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
+func (e LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 	if err := spec.Validate(); err != nil {
 		return Result{}, err
 	}
 
 	process := exec.CommandContext(ctx, spec.Program, spec.Args...)
 	process.Dir = spec.Dir
+	if e.Environment != nil || len(spec.Env) > 0 {
+		process.Env = e.Environment
+	}
 	if len(spec.Env) > 0 {
-		process.Env = mergeEnvironment(os.Environ(), spec.Env)
+		process.Env = mergeEnvironment(e.Environment, spec.Env)
 	}
 	logger := slog.With("program", spec.Program)
 	logger.DebugContext(ctx, "running command",

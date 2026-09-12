@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -16,7 +16,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, output io.Writer) error {
+func runValidation(ctx context.Context, inputs []string, parallelism, repeat int) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		"total_tasks", len(cases)*repeat,
 	)
 
-	commandExecutor := command.LocalExecutor{}
+	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
 	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
 	if err != nil {
 		return err
@@ -64,7 +64,6 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	}
 	validationErrors := make([]error, 0)
 	var writeErr error
-	var outputErr error
 	for outcome := range outcomes {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
@@ -79,23 +78,30 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			writeErr = errors.Join(writeErr, err)
 		}
 		if caseErr != nil {
-			logger.Error("validation case failed", "scenario", item.Scenario.ID, "case", item.ID, "error", caseErr)
+			logger.Error("validation case failed",
+				"run_id", metadata.RunID,
+				"scenario", item.Scenario.ID,
+				"case", item.ID,
+				"attempt", outcome.Attempt,
+				"score", outcome.Result.Grading.Score,
+				"full_success", outcome.Result.Grading.FullSuccess,
+				"error", caseErr,
+			)
 			validationErrors = append(validationErrors, fmt.Errorf("%s/%s: %w", item.Scenario.ID, item.ID, caseErr))
-			if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: failed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-				outputErr = errors.Join(outputErr, fmt.Errorf("write validation summary: %w", err))
-			}
 			continue
 		}
-		if _, err := fmt.Fprintf(output, "%s %s/%s attempt %03d: passed (score %.3f, full_success=%t)\n", metadata.RunID, item.Scenario.ID, item.ID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-			outputErr = errors.Join(outputErr, fmt.Errorf("write validation summary: %w", err))
-		}
+		logger.Info("validation case passed",
+			"run_id", metadata.RunID,
+			"scenario", item.Scenario.ID,
+			"case", item.ID,
+			"attempt", outcome.Attempt,
+			"score", outcome.Result.Grading.Score,
+			"full_success", outcome.Result.Grading.FullSuccess,
+		)
 	}
 	_ = <-executeErrors
 	if writeErr != nil {
 		return writeErr
-	}
-	if outputErr != nil {
-		return outputErr
 	}
 	if err := store.Finalize(time.Now().UTC()); err != nil {
 		return err

@@ -28,8 +28,8 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var logs, output bytes.Buffer
-			err := run(context.Background(), test.args, &logs, &output)
+			var logs bytes.Buffer
+			err := run(context.Background(), test.args, &logs)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, test.want)
 		})
@@ -37,8 +37,8 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 }
 
 func TestRunHelpListsModesAndParameters(t *testing.T) {
-	var logs, output bytes.Buffer
-	err := run(context.Background(), []string{"--help"}, &logs, &output)
+	var logs bytes.Buffer
+	err := run(context.Background(), []string{"--help"}, &logs)
 
 	assert.ErrorIs(t, err, flag.ErrHelp)
 	assert.Contains(t, logs.String(), "benchmark --scenario PATH")
@@ -65,6 +65,17 @@ func TestNewLoggerRejectsInvalidEnvironment(t *testing.T) {
 	t.Setenv("BENCHMARK_LOG_FORMAT", "xml")
 	_, err = newLogger(&bytes.Buffer{})
 	assert.ErrorContains(t, err, "unsupported log format")
+}
+
+func TestNewLoggerReadsColorEnvironmentAtApplicationBoundary(t *testing.T) {
+	t.Setenv("BENCHMARK_LOG_COLOR", "always")
+	var output bytes.Buffer
+	logger, err := newLogger(&output)
+	require.NoError(t, err)
+
+	logger.Info("visible")
+
+	assert.Contains(t, output.String(), "\x1b[")
 }
 
 func TestScenarioIDs(t *testing.T) {

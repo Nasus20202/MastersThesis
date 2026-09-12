@@ -16,6 +16,14 @@ const (
 )
 
 func New(w io.Writer, format Format, level slog.Level) (*slog.Logger, error) {
+	return newLogger(w, format, level, colorEnabled(w))
+}
+
+func NewWithColor(w io.Writer, format Format, level slog.Level, color bool) (*slog.Logger, error) {
+	return newLogger(w, format, level, color)
+}
+
+func newLogger(w io.Writer, format Format, level slog.Level, color bool) (*slog.Logger, error) {
 	if w == nil {
 		return nil, errors.New("log writer is required")
 	}
@@ -27,7 +35,7 @@ func New(w io.Writer, format Format, level slog.Level) (*slog.Logger, error) {
 
 	switch strings.ToLower(strings.TrimSpace(string(format))) {
 	case "", string(FormatText):
-		return slog.New(slog.NewTextHandler(w, options)), nil
+		return slog.New(newPrettyHandler(w, options, color)), nil
 	case string(FormatJSON):
 		return slog.New(slog.NewJSONHandler(w, options)), nil
 	default:

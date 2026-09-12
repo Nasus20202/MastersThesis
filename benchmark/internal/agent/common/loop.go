@@ -167,9 +167,10 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 			"turn", turn,
 			"message_count", len(requestMessages),
 			"message_role", lastMessage.Role,
-			"message_content", lastMessage.Content,
+			"message_content_bytes", len(lastMessage.Content),
 			"message_tool_call_count", len(lastMessage.ToolCalls),
 		)
+		logger.DebugContext(runCtx, "inference message sent", "turn", turn, "message_content", lastMessage.Content)
 		responseStarted := time.Now()
 		response, chatErr := l.client.Chat(runCtx, requestMessages, requestTools, inference.Options{
 			Temperature: l.config.Temperature,
@@ -248,7 +249,7 @@ func logInferenceResponse(logger *slog.Logger, ctx context.Context, turn int, re
 		"turn", turn,
 		"response_id", response.ID,
 		"response_role", response.Message.Role,
-		"response_content", response.Message.Content,
+		"response_content_bytes", len(response.Message.Content),
 		"response_tool_call_count", len(response.Message.ToolCalls),
 		"finish_reason", response.FinishReason,
 		"duration_seconds", duration.Seconds(),
@@ -269,6 +270,9 @@ func logInferenceResponse(logger *slog.Logger, ctx context.Context, turn int, re
 		)
 	}
 	logger.InfoContext(ctx, "inference response received", args...)
+	logger.DebugContext(ctx, "inference response received",
+		append(slices.Clone(args), "response_content", response.Message.Content)...,
+	)
 }
 
 func (l *Loop) executeToolCall(ctx context.Context, call inference.ToolCall) (inference.Message, ToolCallEvidence) {

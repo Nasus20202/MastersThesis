@@ -18,7 +18,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stderr, os.Stdout); err != nil {
+	if err := run(ctx, os.Args[1:], os.Stderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
@@ -28,7 +28,7 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, args []string, logOutput, resultOutput io.Writer) error {
+func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	logger, err := newLogger(logOutput)
 	if err != nil {
 		return err
@@ -70,9 +70,9 @@ func run(ctx context.Context, args []string, logOutput, resultOutput io.Writer) 
 	}
 
 	if len(validationPaths) > 0 {
-		return runValidation(ctx, validationPaths, *parallel, *repeat, resultOutput)
+		return runValidation(ctx, validationPaths, *parallel, *repeat)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, resultOutput)
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat)
 }
 
 type stringList []string
@@ -99,5 +99,18 @@ func newLogger(output io.Writer) (*slog.Logger, error) {
 	if format == "" {
 		format = logging.FormatText
 	}
+	if color, configured := logColorSetting(); configured {
+		return logging.NewWithColor(output, format, level, color)
+	}
 	return logging.New(output, format, level)
+}
+
+func logColorSetting() (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("BENCHMARK_LOG_COLOR"))) {
+	case "always", "true", "1":
+		return true, true
+	case "never", "false", "0":
+		return false, true
+	}
+	return false, os.Getenv("NO_COLOR") != ""
 }

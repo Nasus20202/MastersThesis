@@ -236,7 +236,7 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 	var logs bytes.Buffer
 	previousLogger := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 
 	client := &loopClient{results: []inference.Result{
@@ -268,25 +268,43 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(line), &record))
 		records = append(records, record)
 	}
-	require.Len(t, records, 6)
+	require.Len(t, records, 10)
 
 	sent := make([]map[string]any, 0, 2)
 	responses := make([]map[string]any, 0, 2)
+	debugSent := make([]map[string]any, 0, 2)
+	debugResponses := make([]map[string]any, 0, 2)
 	byMessage := make(map[string]map[string]any, len(records))
 	for _, record := range records {
-		switch record["msg"] {
+		message := record["msg"].(string)
+		if record["level"] == "DEBUG" {
+			switch message {
+			case "inference message sent":
+				debugSent = append(debugSent, record)
+			case "inference response received":
+				debugResponses = append(debugResponses, record)
+			}
+			continue
+		}
+		switch message {
 		case "inference message sent":
 			sent = append(sent, record)
 		case "inference response received":
 			responses = append(responses, record)
 		default:
-			byMessage[record["msg"].(string)] = record
+			byMessage[message] = record
 		}
 	}
 	require.Len(t, sent, 2)
 	require.Len(t, responses, 2)
-	assert.Equal(t, "Inspect the workload.", sent[0]["message_content"])
-	assert.Equal(t, "The workload is healthy.", responses[1]["response_content"])
+	require.Len(t, debugSent, 2)
+	require.Len(t, debugResponses, 2)
+	assert.Equal(t, float64(len("Inspect the workload.")), sent[0]["message_content_bytes"])
+	assert.NotContains(t, sent[0], "message_content")
+	assert.Equal(t, "Inspect the workload.", debugSent[0]["message_content"])
+	assert.Equal(t, float64(len("The workload is healthy.")), responses[1]["response_content_bytes"])
+	assert.NotContains(t, responses[1], "response_content")
+	assert.Equal(t, "The workload is healthy.", debugResponses[1]["response_content"])
 	assert.Equal(t, float64(20.5), responses[0]["prompt_tokens_per_second"])
 	assert.Equal(t, float64(30.5), responses[0]["predicted_tokens_per_second"])
 	assert.Equal(t, "inspect", byMessage["tool call started"]["tool"])

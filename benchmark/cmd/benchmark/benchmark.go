@@ -3,9 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -28,7 +27,7 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, output io.Writer) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
@@ -54,7 +53,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		"total_tasks", len(definitions)*repeat,
 	)
 
-	commandExecutor := command.LocalExecutor{}
+	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
 	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
 	if err != nil {
 		return err
@@ -80,21 +79,27 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	var writeErr error
 	for outcome := range outcomes {
 		if outcome.Err != nil {
-			logger.Error("benchmark task failed", "scenario", outcome.ScenarioID, "error", outcome.Err)
+			logger.Error("benchmark attempt failed",
+				"run_id", metadata.RunID,
+				"scenario", outcome.ScenarioID,
+				"attempt", outcome.Attempt,
+				"error", outcome.Err,
+			)
 			if err := store.WriteAttemptFailure(outcome.Attempt, outcome.ScenarioID, outcome.Result, outcome.Err); err != nil {
 				writeErr = errors.Join(writeErr, err)
-			}
-			if _, err := fmt.Fprintf(output, "%s %s attempt %03d: failed\n", metadata.RunID, outcome.ScenarioID, outcome.Attempt); err != nil {
-				writeErr = errors.Join(writeErr, fmt.Errorf("write benchmark summary: %w", err))
 			}
 			continue
 		}
 		if err := store.WriteAttempt(outcome.Attempt, outcome.Result); err != nil {
 			writeErr = errors.Join(writeErr, err)
 		}
-		if _, err := fmt.Fprintf(output, "%s %s attempt %03d: score %.3f, full_success=%t\n", metadata.RunID, outcome.ScenarioID, outcome.Attempt, outcome.Result.Grading.Score, outcome.Result.Grading.FullSuccess); err != nil {
-			writeErr = errors.Join(writeErr, fmt.Errorf("write benchmark summary: %w", err))
-		}
+		logger.Info("benchmark attempt completed",
+			"run_id", metadata.RunID,
+			"scenario", outcome.ScenarioID,
+			"attempt", outcome.Attempt,
+			"score", outcome.Result.Grading.Score,
+			"full_success", outcome.Result.Grading.FullSuccess,
+		)
 	}
 	runErr := <-executeErrors
 	if writeErr != nil {
