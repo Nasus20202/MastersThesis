@@ -51,9 +51,10 @@ The runner performs these steps in order:
 5. grade the resulting state;
 6. delete the disposable cluster.
 
-`inject_fault` and `verify_fault` are optional, but must be provided together.
-Scenarios without them can represent constructive tasks such as deploying or
-configuring Kubernetes resources.
+`inject_fault` and `verify_fault` are independently optional. A scenario may
+use either, both, or neither depending on how its pre-model state is prepared
+and verified. Scenarios without them can represent constructive tasks such as
+deploying or configuring Kubernetes resources.
 
 Command paths, manifest paths and the optional Kind config path are resolved
 relative to the scenario file. Without a Kind config, Kind uses its default
