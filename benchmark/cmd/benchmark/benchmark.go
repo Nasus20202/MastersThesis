@@ -9,6 +9,7 @@ import (
 	"time"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
@@ -27,7 +28,7 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, terminal *ui.Terminal) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
@@ -75,9 +76,21 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int)
 			})
 		}
 	}
+	progress, err := terminal.NewProgress(len(tasks), parallelism)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := progress.Finish(); err != nil {
+			logger.Error("benchmark progress display failed", "error", err)
+		}
+	}()
 	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
 	var writeErr error
 	for outcome := range outcomes {
+		if err := progress.Update(ui.Outcome{Success: outcome.Err == nil && outcome.Result.Grading.FullSuccess}); err != nil {
+			logger.Error("benchmark progress display failed", "error", err)
+		}
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
