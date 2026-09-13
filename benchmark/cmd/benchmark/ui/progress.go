@@ -3,60 +3,14 @@ package ui
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
-
-	"golang.org/x/term"
 )
 
-const (
-	clearLine            = "\r\x1b[2K"
-	defaultTerminalWidth = 80
-	minimumBarWidth      = 10
-)
+const minimumBarWidth = 10
 
 var refreshInterval = time.Second
-
-type Terminal struct {
-	writer      io.Writer
-	interactive bool
-	mu          sync.Mutex
-	progress    *Progress
-}
-
-func NewTerminal(writer io.Writer) *Terminal {
-	return &Terminal{
-		writer:      writer,
-		interactive: isInteractive(writer),
-	}
-}
-
-func (t *Terminal) Write(data []byte) (int, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if !t.interactive || t.progress == nil {
-		return t.writer.Write(data)
-	}
-	if _, err := io.WriteString(t.writer, clearLine); err != nil {
-		return 0, err
-	}
-	n, err := t.writer.Write(data)
-	if err != nil {
-		return n, err
-	}
-	if renderErr := t.renderProgress(); renderErr != nil {
-		return n, renderErr
-	}
-	return n, nil
-}
-
-func (t *Terminal) ColorEnabled() bool {
-	return t.interactive
-}
 
 func (t *Terminal) NewProgress(total, parallelism int) (*Progress, error) {
 	if total < 1 {
@@ -168,14 +122,6 @@ func (p *Progress) refresh() {
 	}
 }
 
-func (t *Terminal) renderProgress() error {
-	if !t.interactive || t.progress == nil {
-		return nil
-	}
-	_, err := io.WriteString(t.writer, clearLine+t.progress.String())
-	return err
-}
-
 func (p *Progress) String() string {
 	percent := p.completed * 100 / p.total
 	elapsed := time.Since(p.started)
@@ -185,8 +131,8 @@ func (p *Progress) String() string {
 		etaDuration := time.Duration(float64(elapsed) * float64(remaining) / float64(p.completed))
 		eta = formatDuration(etaDuration)
 	}
-	suffix := fmt.Sprintf(" %d/%d | %3d%% | passed %d | elapsed %s | ETA %s",
-		p.completed, p.total, percent, p.successful, formatDuration(elapsed), eta)
+	suffix := fmt.Sprintf(" %d/%d | %3d%% | passed %d | parallel %d | elapsed %s | ETA %s",
+		p.completed, p.total, percent, p.successful, p.parallelism, formatDuration(elapsed), eta)
 	barWidth := p.terminal.width() - utf8.RuneCountInString(suffix) - 2
 	if barWidth < minimumBarWidth {
 		barWidth = minimumBarWidth
@@ -208,24 +154,4 @@ func formatDuration(duration time.Duration) string {
 		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
 	}
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
-}
-
-func isInteractive(writer io.Writer) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	return term.IsTerminal(int(file.Fd()))
-}
-
-func (t *Terminal) width() int {
-	file, ok := t.writer.(*os.File)
-	if !ok {
-		return defaultTerminalWidth
-	}
-	width, _, err := term.GetSize(int(file.Fd()))
-	if err != nil || width < 1 {
-		return defaultTerminalWidth
-	}
-	return width
 }
