@@ -23,7 +23,7 @@ func TestProgressIsSilentForNonInteractiveWriters(t *testing.T) {
 	assert.Empty(t, output.String())
 }
 
-func TestProgressRendersCompletionAndETA(t *testing.T) {
+func TestProgressRendersCompletionParallelismAndETA(t *testing.T) {
 	var output bytes.Buffer
 	terminal := NewTerminal(&output)
 	terminal.interactive = true
@@ -39,6 +39,7 @@ func TestProgressRendersCompletionAndETA(t *testing.T) {
 	assert.Contains(t, text, "2/4")
 	assert.Contains(t, text, "50%")
 	assert.Contains(t, text, "passed 1")
+	assert.Contains(t, text, "parallel 2")
 	assert.Contains(t, text, "ETA")
 	assert.Equal(t, 80, utf8.RuneCountInString(progress.String()))
 	assert.True(t, strings.HasSuffix(text, "\n"))
