@@ -12,7 +12,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/logging"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/logging"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 )
 
 func main() {
@@ -28,7 +29,8 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, logOutput io.Writer) error {
-	logger, err := newLogger(logOutput)
+	terminal := ui.NewTerminal(logOutput)
+	logger, err := newLogger(terminal)
 	if err != nil {
 		return err
 	}
@@ -69,9 +71,9 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	}
 
 	if len(validationPaths) > 0 {
-		return runValidation(ctx, validationPaths, *parallel, *repeat)
+		return runValidation(ctx, validationPaths, *parallel, *repeat, terminal)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat)
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, terminal)
 }
 
 type stringList []string
@@ -100,6 +102,9 @@ func newLogger(output io.Writer) (*slog.Logger, error) {
 	}
 	if color, configured := logColorSetting(); configured {
 		return logging.NewWithColor(output, format, level, color)
+	}
+	if colorProvider, ok := output.(interface{ ColorEnabled() bool }); ok {
+		return logging.NewWithColor(output, format, level, colorProvider.ColorEnabled())
 	}
 	return logging.New(output, format, level)
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
@@ -16,7 +17,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int) error {
+func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, terminal *ui.Terminal) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
@@ -57,6 +58,15 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			tasks = append(tasks, task)
 		}
 	}
+	progress, err := terminal.NewProgress(len(tasks), parallelism)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := progress.Finish(); err != nil {
+			logger.Error("validation progress display failed", "error", err)
+		}
+	}()
 	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
 	caseByKey := make(map[string]validation.ValidationCase, len(cases))
 	for _, item := range cases {
@@ -67,6 +77,9 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	for outcome := range outcomes {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
+			if err := progress.Update(ui.Outcome{}); err != nil {
+				logger.Error("validation progress display failed", "error", err)
+			}
 			validationErrors = append(validationErrors, fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID))
 			continue
 		}
@@ -76,6 +89,9 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		}
 		if err := store.WriteValidationAttempt(outcome.Attempt, item.Scenario.ID, item.ID, item.ExpectedScore, item.ExpectedFullSuccess, outcome.Result, caseErr); err != nil {
 			writeErr = errors.Join(writeErr, err)
+		}
+		if err := progress.Update(ui.Outcome{Success: caseErr == nil}); err != nil {
+			logger.Error("validation progress display failed", "error", err)
 		}
 		if caseErr != nil {
 			logger.Error("validation case failed",

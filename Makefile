@@ -6,7 +6,7 @@ MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
 REPEAT ?= 1
 BENCHMARK_PARALLEL ?= 4
-VALIDATION_PARALLEL ?= 4
+VALIDATION_PARALLEL ?= 8
 
 include $(BENCHMARK_CONFIG)
 
@@ -50,7 +50,7 @@ help:
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
-		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).'
+		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).'
 
 test:
 	$(MAKE) benchmark-go-test
