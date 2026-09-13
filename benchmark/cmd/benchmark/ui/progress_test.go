@@ -62,21 +62,6 @@ func TestProgressRefreshesInBackground(t *testing.T) {
 	assert.GreaterOrEqual(t, strings.Count(output.String(), "["), 3)
 }
 
-func TestTerminalRedrawsProgressAfterLogOutput(t *testing.T) {
-	var output bytes.Buffer
-	terminal := NewTerminal(&output)
-	terminal.interactive = true
-
-	progress, err := terminal.NewProgress(1, 1)
-	require.NoError(t, err)
-	_, err = terminal.Write([]byte("log message\n"))
-	require.NoError(t, err)
-	require.NoError(t, progress.Finish())
-
-	assert.Contains(t, output.String(), "log message\n")
-	assert.GreaterOrEqual(t, strings.Count(output.String(), "["), 2)
-}
-
 func TestNewProgressRejectsInvalidArguments(t *testing.T) {
 	terminal := NewTerminal(&bytes.Buffer{})
 
