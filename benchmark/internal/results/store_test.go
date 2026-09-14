@@ -24,6 +24,7 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 		Parallelism: 2,
 		RepeatCount: 2,
 		Scenarios:   []string{"image-pull-failure"},
+		Agents:      []string{"baseline", "prompt", "skill"},
 	})
 	require.NoError(t, err)
 
@@ -56,8 +57,9 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 	assert.Equal(t, 2, metadata.Parallelism)
 	assert.Equal(t, 2, metadata.RepeatCount)
 	assert.Equal(t, []string{"image-pull-failure"}, metadata.Scenarios)
+	assert.Equal(t, []string{"baseline", "prompt", "skill"}, metadata.Agents)
 
-	attemptData, err := os.ReadFile(filepath.Join(root, "run-1", "image-pull-failure", "002.json"))
+	attemptData, err := os.ReadFile(filepath.Join(root, "run-1", "baseline", "image-pull-failure", "002.json"))
 	require.NoError(t, err)
 	var attempt AttemptResult
 	require.NoError(t, json.Unmarshal(attemptData, &attempt))
@@ -77,6 +79,7 @@ func TestStoreRejectsInvalidMetadataAndAttempts(t *testing.T) {
 	require.NoError(t, err)
 	assert.ErrorContains(t, store.WriteAttempt(0, orchestration.RunResult{ScenarioID: "scenario"}), "attempt number")
 	assert.ErrorContains(t, store.WriteAttempt(1, orchestration.RunResult{}), "scenario ID")
+	assert.ErrorContains(t, store.WriteAttempt(1, orchestration.RunResult{ScenarioID: "scenario"}), "condition")
 	assert.ErrorContains(t, store.WriteAttemptFailure(1, "scenario", orchestration.RunResult{}, nil), "execution error")
 
 	_, err = New(t.TempDir(), RunMetadata{RunID: "run-1", Parallelism: 1, RepeatCount: 0, Scenarios: []string{"scenario"}})
@@ -92,9 +95,9 @@ func TestStoreWritesFailedAttemptEvidence(t *testing.T) {
 	require.NoError(t, err)
 	wantErr := errors.New("cluster creation failed")
 	failure := &orchestration.FailureEvidence{Phase: "create cluster", Program: "kind", Stderr: "kind failed", ExitCode: 1}
-	require.NoError(t, store.WriteAttemptFailure(2, "scenario", orchestration.RunResult{Failure: failure}, wantErr))
+	require.NoError(t, store.WriteAttemptFailure(2, "scenario", orchestration.RunResult{Condition: "baseline", Failure: failure}, wantErr))
 
-	data, err := os.ReadFile(filepath.Join(store.runDir, "scenario", "002.json"))
+	data, err := os.ReadFile(filepath.Join(store.runDir, "baseline", "scenario", "002.json"))
 	require.NoError(t, err)
 	var artifact AttemptResult
 	require.NoError(t, json.Unmarshal(data, &artifact))

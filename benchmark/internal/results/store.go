@@ -32,6 +32,7 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 		return nil, errors.New("result requires at least one scenario")
 	}
 	metadata.Scenarios = slices.Clone(metadata.Scenarios)
+	metadata.Agents = slices.Clone(metadata.Agents)
 	runDir := filepath.Join(root, metadata.RunID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create result directory: %w", err)
@@ -61,8 +62,18 @@ func (s *Store) writeAttempt(attempt int, scenarioID string, result orchestratio
 	if strings.TrimSpace(scenarioID) == "" {
 		return errors.New("result scenario ID is required")
 	}
+	condition := strings.TrimSpace(result.Condition)
+	if condition == "" {
+		return errors.New("result condition is required")
+	}
+	if !validResultSegment(condition) {
+		return errors.New("result condition is invalid")
+	}
+	if !validResultSegment(scenarioID) {
+		return errors.New("result scenario ID is invalid")
+	}
 
-	scenarioDir := filepath.Join(s.runDir, scenarioID)
+	scenarioDir := filepath.Join(s.runDir, condition, scenarioID)
 	if err := os.MkdirAll(scenarioDir, 0o755); err != nil {
 		return fmt.Errorf("create scenario result directory: %w", err)
 	}
@@ -83,6 +94,10 @@ func (s *Store) writeAttempt(attempt int, scenarioID string, result orchestratio
 		return fmt.Errorf("write attempt result: %w", err)
 	}
 	return nil
+}
+
+func validResultSegment(value string) bool {
+	return value == strings.TrimSpace(value) && value != "." && value != ".." && !strings.ContainsAny(value, `/\\`)
 }
 
 func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, expectedScore float64, expectedFullSuccess bool, result orchestration.RunResult, validationErr error) error {

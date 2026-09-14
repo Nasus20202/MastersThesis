@@ -85,13 +85,22 @@ scenarios:
 The `--scenario` and `--validate` options accept files or directories. Directory
 inputs are scanned recursively for YAML files. Use `--parallel N` to bound
 concurrent attempts and `--repeat N` to run each scenario or validation case
-more than once.
+more than once. Benchmark runs accept the repeatable `--agent NAME` option with
+`baseline`, `prompt` and `skill` values. If it is omitted, all three agents run;
+for example, `--agent prompt --agent skill` selects only those two conditions.
+`--agent` is not used with validation mode.
+
+The skill condition discovers project-owned skills under `skills/`. It presents
+their manifest metadata to the model and exposes `load_skill` for loading a
+selected skill or an optional reference file on demand. The current skills are
+`bash`, `kubectl`, `troubleshooting` and `kubernetes`.
 
 Each run writes machine-readable evidence under `results/<run-id>/`, including
-run metadata and one JSON file per attempt. Grading criteria preserve command
-stdout, stderr, exit status and duration. Failed lifecycle commands also record
-their phase, command details and captured output in the attempt's `failure`
-object.
+run metadata and one JSON file per benchmark attempt under
+`<agent>/<scenario>/<attempt>.json`; validation attempts remain under
+`<scenario>/<case>/<attempt>.json`. Grading criteria preserve command stdout,
+stderr, exit status and duration. Failed lifecycle commands also record their
+phase, command details and captured output in the attempt's `failure` object.
 
 ## Development
 

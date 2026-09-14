@@ -60,13 +60,26 @@ The benchmark conditions initially have these operational differences:
 | Condition   | Additional capability                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Baseline    | Bash access and the command-line tools required to interact with the Kubernetes environment                                       |
-| Prompt      | Baseline capabilities plus an approved troubleshooting system prompt                                                              |
-| Skill       | Baseline capabilities plus approved reusable troubleshooting skills                                                               |
+| Prompt      | Baseline capabilities plus one verbose, generic system prompt describing Bash, kubectl and evidence-first troubleshooting        |
+| Skill       | Baseline capabilities plus a short sandbox prompt, a manifest-derived skill catalog and an on-demand `load_skill` tool           |
 | RAG         | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
 | Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples                                      |
 | Harness     | Baseline capabilities plus approved structured operational tools and controlled external knowledge access                         |
 
-The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
+The prompt condition has the verbose generic guidance. The skill condition's
+system message contains only short sandbox context and data derived from the
+skill manifests; skill bodies and optional references are loaded only through
+`load_skill`. The current project-owned skills are `bash`, `kubectl`,
+`troubleshooting` and `kubernetes`; the Kubernetes skill routes to focused
+references for related topics. The exact tools, prompts, skills, retrieved
+context, model artifacts and access limits must be recorded for each evaluated
+condition.
+
+The benchmark CLI accepts a repeatable `--agent NAME` option for benchmark
+scenarios. Supported values are `baseline`, `prompt` and `skill`; omitting the
+option selects all three in that order. Validation mode does not select a
+model agent. Run metadata records the resolved selection, and benchmark
+attempts are separated by agent in the result directory.
 
 ## Agent execution limits
 

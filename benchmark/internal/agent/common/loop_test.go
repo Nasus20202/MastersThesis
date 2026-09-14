@@ -233,6 +233,23 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 	assert.Equal(t, &maxTokens, client.requests[0].options.MaxTokens)
 }
 
+func TestLoopPreservesConfiguredSystemPromptInTranscriptAndRequest(t *testing.T) {
+	client := &loopClient{results: []inference.Result{{
+		Message:      inference.Message{Role: "assistant", Content: "done"},
+		FinishReason: "stop",
+	}}}
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}}
+	loop, err := NewLoopWithSystemPrompt(client, []Tool{tool}, Config{MaxTurns: 1, MaxToolCalls: 1}, "short system context")
+	require.NoError(t, err)
+
+	result, err := loop.Run(context.Background(), "Inspect the environment.")
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 3)
+	assert.Equal(t, inference.Message{Role: "system", Content: "short system context"}, result.Messages[0])
+	assert.Equal(t, inference.Message{Role: "user", Content: "Inspect the environment."}, result.Messages[1])
+	assert.Equal(t, result.Messages[:2], client.requests[0].messages)
+}
+
 func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 	var logs bytes.Buffer
 	previousLogger := slog.Default()

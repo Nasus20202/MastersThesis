@@ -28,8 +28,21 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, terminal *ui.Terminal) error {
+func runBenchmark(ctx context.Context, inputs []string, agents []string, parallelism, repeat int, terminal *ui.Terminal) error {
+	selectedAgents, err := commandagent.ResolveNames(agents)
+	if err != nil {
+		return err
+	}
 	definitions, err := scenario.LoadInputs(inputs)
+	if err != nil {
+		return err
+	}
+	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
+	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
+	if err != nil {
+		return err
+	}
+	agentFactories, err := commandagent.NewFactories(selectedAgents)
 	if err != nil {
 		return err
 	}
@@ -40,6 +53,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		Parallelism: parallelism,
 		RepeatCount: repeat,
 		Scenarios:   scenarioIDs(definitions),
+		Agents:      selectedAgents,
 	}
 	store, err := results.New("results", metadata)
 	if err != nil {
@@ -49,31 +63,27 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	logger.Info("benchmark runner started",
 		"run_id", metadata.RunID,
 		"scenarios", len(definitions),
+		"agents", selectedAgents,
 		"parallelism", parallelism,
 		"repeat_count", repeat,
-		"total_tasks", len(definitions)*repeat,
+		"total_tasks", len(definitions)*repeat*len(selectedAgents),
 	)
 
-	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
-	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
-	if err != nil {
-		return err
-	}
-	agentFactory, err := commandagent.NewBaselineFactory()
-	if err != nil {
-		return err
-	}
-	tasks := make([]executor.Task, 0, len(definitions)*repeat)
-	for attempt := 1; attempt <= repeat; attempt++ {
-		for _, definition := range definitions {
-			definition := definition
-			tasks = append(tasks, executor.Task{
-				ScenarioID: definition.ID,
-				Attempt:    attempt,
-				Run: func(ctx context.Context) (orchestration.RunResult, error) {
-					return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentFactory).Run(ctx, definition)
-				},
-			})
+	tasks := make([]executor.Task, 0, len(definitions)*repeat*len(selectedAgents))
+	for _, agentName := range selectedAgents {
+		agentName := agentName
+		agentFactory := agentFactories[agentName]
+		for attempt := 1; attempt <= repeat; attempt++ {
+			for _, definition := range definitions {
+				definition := definition
+				tasks = append(tasks, executor.Task{
+					ScenarioID: definition.ID,
+					Attempt:    attempt,
+					Run: func(ctx context.Context) (orchestration.RunResult, error) {
+						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
+					},
+				})
+			}
 		}
 	}
 	progress, err := terminal.NewProgress(len(tasks), parallelism)
@@ -94,6 +104,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
+				"agent", outcome.Result.Condition,
 				"scenario", outcome.ScenarioID,
 				"attempt", outcome.Attempt,
 				"error", outcome.Err,
@@ -108,6 +119,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		}
 		logger.Info("benchmark attempt completed",
 			"run_id", metadata.RunID,
+			"agent", outcome.Result.Condition,
 			"scenario", outcome.ScenarioID,
 			"attempt", outcome.Attempt,
 			"score", outcome.Result.Grading.Score,
@@ -129,11 +141,12 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentFactory rootagent.Factory) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, condition string, agentFactory rootagent.Factory) orchestration.Runner {
 	return orchestration.Runner{
 		Executor:            commandExecutor,
 		SandboxImageBuilder: imageBuilder,
 		AgentFactory:        agentFactory,
+		Condition:           condition,
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{
 				Name:       name,
