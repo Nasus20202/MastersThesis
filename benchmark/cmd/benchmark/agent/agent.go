@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
@@ -18,27 +17,32 @@ import (
 	projectskills "github.com/Nasus20202/MastersThesis/benchmark/internal/skills"
 )
 
+type Name string
+
 const (
-	Baseline = "baseline"
-	Prompt   = "prompt"
-	Skill    = "skill"
+	Baseline Name = "baseline"
+	Prompt   Name = "prompt"
+	Skill    Name = "skill"
 )
 
-var allAgents = []string{Baseline, Prompt, Skill}
+var allAgents = [...]Name{Baseline, Prompt, Skill}
 
-// AllNames returns the stable default condition order.
-func AllNames() []string { return slices.Clone(allAgents) }
+func AllNames() []string {
+	names := make([]string, len(allAgents))
+	for index, name := range allAgents {
+		names[index] = string(name)
+	}
+	return names
+}
 
-// ResolveNames validates the repeatable --agent values and expands an omitted
-// selection to every supported condition.
 func ResolveNames(requested []string) ([]string, error) {
 	if len(requested) == 0 {
 		return AllNames(), nil
 	}
 	resolved := make([]string, 0, len(requested))
-	seen := make(map[string]struct{}, len(requested))
+	seen := make(map[Name]struct{}, len(requested))
 	for _, value := range requested {
-		name := strings.TrimSpace(value)
+		name := Name(strings.TrimSpace(value))
 		if name == "" {
 			return nil, fmt.Errorf("agent name must not be blank")
 		}
@@ -51,7 +55,7 @@ func ResolveNames(requested []string) ([]string, error) {
 			return nil, fmt.Errorf("agent %q was selected more than once", name)
 		}
 		seen[name] = struct{}{}
-		resolved = append(resolved, name)
+		resolved = append(resolved, string(name))
 	}
 	return resolved, nil
 }
@@ -69,7 +73,8 @@ func NewFactories(selected []string) (map[string]rootagent.Factory, error) {
 	}
 	loopConfig := common.DefaultConfig()
 	var registry *projectskills.Registry
-	for _, name := range names {
+	for _, value := range names {
+		name := Name(value)
 		if name != Skill {
 			continue
 		}
@@ -85,18 +90,19 @@ func NewFactories(selected []string) (map[string]rootagent.Factory, error) {
 	}
 
 	factories := make(map[string]rootagent.Factory, len(names))
-	for _, name := range names {
+	for _, value := range names {
+		name := Name(value)
 		switch name {
 		case Baseline:
-			factories[name] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			factories[string(name)] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
 				return baseline.New(inferenceClient, shell, loopConfig)
 			}
 		case Prompt:
-			factories[name] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			factories[string(name)] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
 				return prompt.New(inferenceClient, shell, loopConfig)
 			}
 		case Skill:
-			factories[name] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			factories[string(name)] = func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
 				return skillagent.New(inferenceClient, shell, loopConfig, registry)
 			}
 		}
@@ -105,11 +111,11 @@ func NewFactories(selected []string) (map[string]rootagent.Factory, error) {
 }
 
 func NewBaselineFactory() (rootagent.Factory, error) {
-	factories, err := NewFactories([]string{Baseline})
+	factories, err := NewFactories([]string{string(Baseline)})
 	if err != nil {
 		return nil, err
 	}
-	return factories[Baseline], nil
+	return factories[string(Baseline)], nil
 }
 
 func newInferenceClient() (inference.Client, error) {

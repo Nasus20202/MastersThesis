@@ -33,17 +33,17 @@ func TestNewBaselineFactoryConstructsAgent(t *testing.T) {
 func TestResolveNamesUsesAllAgentsByDefaultAndPreservesSelectionOrder(t *testing.T) {
 	names, err := ResolveNames(nil)
 	require.NoError(t, err)
-	assert.Equal(t, []string{Baseline, Prompt, Skill}, names)
+	assert.Equal(t, []string{string(Baseline), string(Prompt), string(Skill)}, names)
 
-	names, err = ResolveNames([]string{Skill, Baseline})
+	names, err = ResolveNames([]string{string(Skill), string(Baseline)})
 	require.NoError(t, err)
-	assert.Equal(t, []string{Skill, Baseline}, names)
+	assert.Equal(t, []string{string(Skill), string(Baseline)}, names)
 }
 
 func TestResolveNamesRejectsUnknownAndDuplicateAgents(t *testing.T) {
 	_, err := ResolveNames([]string{"unknown"})
 	assert.ErrorContains(t, err, "unsupported agent")
-	_, err = ResolveNames([]string{Baseline, Baseline})
+	_, err = ResolveNames([]string{string(Baseline), string(Baseline)})
 	assert.ErrorContains(t, err, "selected more than once")
 }
 
@@ -70,11 +70,11 @@ func TestNewFactoriesLoadsSkillsOnlyWhenSelected(t *testing.T) {
 	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
 	t.Setenv("BENCHMARK_SKILLS_DIR", filepath.Join(t.TempDir(), "missing"))
 
-	factories, err := NewFactories([]string{Baseline})
+	factories, err := NewFactories([]string{string(Baseline)})
 	require.NoError(t, err)
 	assert.Len(t, factories, 1)
 
-	_, err = NewFactories([]string{Skill})
+	_, err = NewFactories([]string{string(Skill)})
 	assert.ErrorContains(t, err, "load benchmark skills")
 }
 
