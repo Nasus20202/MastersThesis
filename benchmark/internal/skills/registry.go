@@ -100,9 +100,9 @@ func Load(root string) (*Registry, error) {
 			return nil, fmt.Errorf("load references for skill %q: %w", entry.Name(), err)
 		}
 		registry.documents[header.Name] = document{
-			header:          header,
-			content:         content,
-			references:      references,
+			header:         header,
+			content:        content,
+			references:     references,
 			referenceNames: referenceNames,
 		}
 	}

@@ -60,8 +60,8 @@ The benchmark conditions initially have these operational differences:
 | Condition   | Additional capability                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Baseline    | Bash access and the command-line tools required to interact with the Kubernetes environment                                       |
-| Prompt      | Baseline capabilities plus one verbose, generic system prompt describing Bash, kubectl and evidence-first troubleshooting        |
-| Skill       | Baseline capabilities plus a short sandbox prompt, a manifest-derived skill catalog and an on-demand `load_skill` tool           |
+| Prompt      | Baseline capabilities plus one verbose, generic system prompt describing Bash, kubectl and evidence-first troubleshooting         |
+| Skill       | Baseline capabilities plus a short sandbox prompt, a manifest-derived skill catalog and an on-demand `load_skill` tool            |
 | RAG         | Baseline capabilities plus context retrieved from the technical documentation corpus selected through source-corpus qualification |
 | Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples                                      |
 | Harness     | Baseline capabilities plus approved structured operational tools and controlled external knowledge access                         |
