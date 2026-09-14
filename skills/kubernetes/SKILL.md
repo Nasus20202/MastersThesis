@@ -1,8 +1,8 @@
 ---
 name: kubernetes
-description: Interpret Kubernetes resources, control loops, networking, scheduling, configuration and authorization from observed cluster state.
+description: Reason about Kubernetes API objects, controllers, workloads, networking, storage, scheduling, security and cluster operations from observed state.
 metadata:
-  version: "1.0"
+  version: "1.1"
   domain: Kubernetes
   corpus: kubernetes/website
   corpus_revision: ea639c1d22a60365d07b78692b1b1a2eb866bd15
@@ -10,25 +10,40 @@ metadata:
 
 # Kubernetes
 
-Use this skill to build an evidence-based model of Kubernetes state. API
-objects express desired state; controllers reconcile it; Pods are execution
-units whose status, events and logs show observed state. Namespaces, labels,
-selectors, owner references, ports and identities are relationships to inspect,
-not values to assume.
+Use this skill to build an evidence-based model of Kubernetes state. Start with
+object identity and scope, then compare desired state with observed status and
+conditions. Trace ownership and references between API objects, and locate the
+failure at the relevant layer: API or admission, controller, scheduling, node
+execution, container lifecycle, networking, storage or policy.
 
-Distinguish the declarative object that owns a result from the Pods or other
-objects it creates. Check status and conditions, recent events, dependencies,
-configuration references, node placement and authorization according to what
-the evidence makes relevant. Make changes at the owning boundary, preserve
-least privilege and verify the resulting state with fresh observations.
+Controllers reconcile asynchronously, and Pods are execution units rather than
+the durable source of workload configuration. Treat namespaces, labels,
+selectors, owner references, ports, identities and configuration references as
+relationships to verify, not values to assume. Make changes at the authoritative
+boundary, preserve unrelated settings and access scope, and verify the result
+with fresh observations.
 
-Load a focused reference only when its subject is relevant:
+Load one or more focused references only when their subjects are relevant. For
+cross-layer problems, load the smallest set that covers the observed path; do
+not load the entire reference set by default.
 
-| Reference          | Load when                                                        |
-| ------------------ | ---------------------------------------------------------------- |
-| `workloads.md`     | Following controllers, ownership, replicas or rollouts.          |
-| `pods.md`          | Interpreting Pod lifecycle, containers, probes, logs or volumes. |
-| `services.md`      | Tracing service discovery, selectors, ports or EndpointSlices.   |
-| `scheduling.md`    | Explaining placement, Pending state or resource fit.             |
-| `rbac.md`          | Checking identities, roles, bindings or authorization.           |
-| `configuration.md` | Tracing ConfigMaps, Secrets or configuration propagation.        |
+| Area          | Reference          | Load when                                                           |
+| ------------- | ------------------ | ------------------------------------------------------------------- |
+| Foundation    | `api.md`           | Inspecting object identity, scope, metadata or API behaviour.       |
+| Foundation    | `architecture.md`  | Localizing a failure across control-plane and node components.      |
+| Workloads     | `workloads.md`     | Following controllers, ownership, replicas or rollouts.             |
+| Execution     | `pods.md`          | Interpreting Pod lifecycle, containers, probes, logs or volumes.    |
+| Execution     | `nodes.md`         | Checking node health, taints, cordons or kubelet/runtime state.     |
+| Scheduling    | `scheduling.md`    | Explaining placement, Pending state or resource fit.                |
+| Resources     | `resources.md`     | Interpreting requests, limits, quotas, QoS or eviction.             |
+| Networking    | `services.md`      | Tracing selectors, ports, EndpointSlices or ready backends.         |
+| Networking    | `networking.md`    | Checking DNS, NetworkPolicy, Ingress, Gateway or CNI paths.         |
+| Storage       | `storage.md`       | Following PVC/PV binding, provisioning, attach or mount state.      |
+| Configuration | `configuration.md` | Tracing ConfigMaps, Secrets or configuration propagation.           |
+| Security      | `rbac.md`          | Checking identities, roles, bindings or authorization.              |
+| Security      | `security.md`      | Checking security contexts, admission or Pod Security Admission.    |
+| Policy        | `policies.md`      | Interpreting admission, disruption or namespace-level policies.     |
+| Operations    | `observability.md` | Selecting and correlating events, logs, status or metrics.          |
+| Operations    | `lifecycle.md`     | Explaining deletion, termination, finalizers or garbage collection. |
+| Operations    | `autoscaling.md`   | Diagnosing HPA targets, metrics or replica convergence.             |
+| Extensions    | `extensions.md`    | Working with CRDs, custom resources or operators.                   |
