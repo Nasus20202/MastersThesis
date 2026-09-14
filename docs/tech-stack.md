@@ -65,12 +65,21 @@ The sandbox boundary should prevent access to the host environment. The selected
 The adaptation methods may add the following components:
 
 - prompt condition: an approved system prompt,
-- skill condition: prepared procedural skill content,
+- skill condition: project-owned skills under `skills/`, each with a universal
+  YAML manifest header and optional on-demand reference files,
 - RAG condition: an embedding and retrieval pipeline over the frozen common experiment corpus recorded in [sources.md](sources.md),
 - fine-tuning condition: a separately trained model adapter and its training tooling,
 - harness condition: predefined operational tools and controlled external context access.
 
 These components are benchmark conditions, not separate primary execution stacks. They should reuse the common runner, environment and result format wherever possible.
+
+The prompt and skill conditions share the same model loop, Bash execution
+boundary, tool and time limits. The prompt condition injects verbose generic
+operating guidance. The skill condition injects only short sandbox context and
+the catalog generated from skill manifest metadata, then exposes a bounded
+loader for selected skill content. This keeps the skill condition's system
+message distinct from the prompt intervention while preserving the same
+runtime and raw transcript format.
 
 ## Version and provenance records
 

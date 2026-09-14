@@ -6,7 +6,10 @@ MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
 REPEAT ?= 1
 BENCHMARK_PARALLEL ?= 4
+BENCHMARK_AGENTS ?=
 VALIDATION_PARALLEL ?= 8
+
+BENCHMARK_AGENT_FLAGS := $(foreach agent,$(BENCHMARK_AGENTS),--agent $(agent))
 
 include $(BENCHMARK_CONFIG)
 
@@ -50,6 +53,7 @@ help:
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
+		'BENCHMARK_AGENTS=LIST' 'Space-separated agent names; empty runs all agents.' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).'
 
 test:
@@ -86,7 +90,7 @@ build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
 
 benchmark:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_AGENT_FLAGS)
 
 benchmark-validate:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)

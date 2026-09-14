@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -27,6 +28,54 @@ func TestNewBaselineFactoryConstructsAgent(t *testing.T) {
 	agent, err := factory(baselineTestExecutor{})
 	require.NoError(t, err)
 	assert.NotNil(t, agent)
+}
+
+func TestResolveNamesUsesAllAgentsByDefaultAndPreservesSelectionOrder(t *testing.T) {
+	names, err := ResolveNames(nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{Baseline, Prompt, Skill}, names)
+
+	names, err = ResolveNames([]string{Skill, Baseline})
+	require.NoError(t, err)
+	assert.Equal(t, []string{Skill, Baseline}, names)
+}
+
+func TestResolveNamesRejectsUnknownAndDuplicateAgents(t *testing.T) {
+	_, err := ResolveNames([]string{"unknown"})
+	assert.ErrorContains(t, err, "unsupported agent")
+	_, err = ResolveNames([]string{Baseline, Baseline})
+	assert.ErrorContains(t, err, "selected more than once")
+}
+
+func TestNewFactoriesConstructsAllSelectedAgents(t *testing.T) {
+	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
+	t.Setenv("BENCHMARK_SKILLS_DIR", "")
+	skillsRoot, err := skillsDirectory()
+	require.NoError(t, err)
+	t.Setenv("BENCHMARK_SKILLS_DIR", filepath.Clean(skillsRoot))
+
+	factories, err := NewFactories(nil)
+	require.NoError(t, err)
+	assert.Len(t, factories, 3)
+	for _, name := range AllNames() {
+		factory := factories[name]
+		require.NotNil(t, factory)
+		modelAgent, err := factory(baselineTestExecutor{})
+		require.NoError(t, err)
+		assert.NotNil(t, modelAgent)
+	}
+}
+
+func TestNewFactoriesLoadsSkillsOnlyWhenSelected(t *testing.T) {
+	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
+	t.Setenv("BENCHMARK_SKILLS_DIR", filepath.Join(t.TempDir(), "missing"))
+
+	factories, err := NewFactories([]string{Baseline})
+	require.NoError(t, err)
+	assert.Len(t, factories, 1)
+
+	_, err = NewFactories([]string{Skill})
+	assert.ErrorContains(t, err, "load benchmark skills")
 }
 
 func TestModelArtifactAndRuntimeSettings(t *testing.T) {

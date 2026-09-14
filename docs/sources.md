@@ -49,6 +49,14 @@ The pinned Kubernetes website repository is licensed under Creative Commons Attr
 | [Kubernetes concepts](https://kubernetes.io/docs/concepts/)  | Kubernetes concepts and resource behaviour               | Technical reference |
 | [Kubernetes tasks](https://kubernetes.io/docs/tasks/)        | Operational and troubleshooting procedures               | Technical reference |
 | [kind documentation](https://kind.sigs.k8s.io/docs/)         | Local Kubernetes cluster setup and operation             | Technical reference |
+| [kubectl reference](https://kubernetes.io/docs/reference/kubectl/) | Command-line syntax and object inspection guidance for the kubectl skill | Technical reference |
+| [Kubernetes debugging documentation](https://kubernetes.io/docs/tasks/debug/) | Evidence-first Pod and workload investigation guidance for the troubleshooting and Kubernetes skills | Technical reference |
+| [Kubernetes RBAC documentation](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) | ServiceAccount, Role, ClusterRole and binding guidance for the Kubernetes skill | Technical reference |
+
+The project-owned skills under `skills/` are concise adaptations of these
+official references. Their manifest metadata records the pinned Kubernetes
+website corpus revision where applicable; they do not contain scenario names,
+expected answers or evaluator-only references.
 
 ## Execution environment
 

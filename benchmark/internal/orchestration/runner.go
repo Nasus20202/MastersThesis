@@ -25,6 +25,7 @@ type Runner struct {
 	SandboxFactory      sandboxintegration.Factory
 	SandboxImageBuilder sandboxintegration.ImageBuilder
 	AgentFactory        rootagent.Factory
+	Condition           string
 	Executor            command.Executor
 	CleanupTimeout      time.Duration
 }
@@ -57,27 +58,27 @@ func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definitio
 
 func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step, useAgent bool) (result RunResult, runErr error) {
 	if useAgent {
-		result.Condition = "baseline"
+		result.Condition = r.agentCondition()
 	} else {
 		result.Condition = "validation"
 	}
 	if r.ClusterFactory == nil {
-		return RunResult{}, errors.New("orchestration cluster factory is required")
+		return result, errors.New("orchestration cluster factory is required")
 	}
 	if r.Executor == nil {
-		return RunResult{}, errors.New("orchestration command executor is required")
+		return result, errors.New("orchestration command executor is required")
 	}
 	if !useAgent && r.AgentFactory != nil {
-		return RunResult{}, errors.New("validation run cannot use a model agent")
+		return result, errors.New("validation run cannot use a model agent")
 	}
 	if useAgent && r.AgentFactory == nil {
-		return RunResult{}, errors.New("baseline run requires a model agent factory")
+		return result, fmt.Errorf("%s run requires a model agent factory", r.agentCondition())
 	}
 	if useAgent && r.SandboxFactory == nil {
-		return RunResult{}, errors.New("model agent requires an orchestration sandbox")
+		return result, errors.New("model agent requires an orchestration sandbox")
 	}
 	if err := definition.Validate(); err != nil {
-		return RunResult{}, err
+		return result, err
 	}
 	result.ScenarioID = definition.ID
 
@@ -92,7 +93,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	}
 	cluster, err := r.newCluster(clusterName, logger)
 	if err != nil {
-		return RunResult{}, err
+		return result, err
 	}
 
 	defer func() {
@@ -347,6 +348,13 @@ func (r Runner) cleanupTimeout() time.Duration {
 		return r.CleanupTimeout
 	}
 	return defaultCleanupTimeout
+}
+
+func (r Runner) agentCondition() string {
+	if condition := strings.TrimSpace(r.Condition); condition != "" {
+		return condition
+	}
+	return "baseline"
 }
 
 func clusterNameFor(scenarioID string) string {
