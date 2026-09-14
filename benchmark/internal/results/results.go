@@ -14,6 +14,7 @@ type RunMetadata struct {
 	Parallelism int        `json:"parallelism"`
 	RepeatCount int        `json:"repeat_count"`
 	Scenarios   []string   `json:"scenarios"`
+	Agents      []string   `json:"agents,omitempty"`
 }
 
 type AttemptResult struct {

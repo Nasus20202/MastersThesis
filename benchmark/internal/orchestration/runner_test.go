@@ -147,6 +147,7 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		SandboxFactory: func(string, string) (sandboxintegration.Sandbox, error) { return sandbox, nil },
+		Condition:      "prompt",
 		AgentFactory: rootagent.Factory(func(executor sandboxintegration.Executor) (rootagent.Agent, error) {
 			assert.Same(t, sandbox, executor)
 			events = append(events, "agent-factory")
@@ -157,6 +158,7 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 
 	result, err := runner.Run(context.Background(), testDefinition())
 	require.NoError(t, err)
+	assert.Equal(t, "prompt", result.Condition)
 	assert.Equal(t, testDefinition().Task, agent.task)
 	require.NotNil(t, result.Agent)
 	assert.Equal(t, testDefinition().Task, result.Agent.Task)

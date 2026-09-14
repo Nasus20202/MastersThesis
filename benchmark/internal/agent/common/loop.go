@@ -48,14 +48,25 @@ func DefaultConfig() Config {
 }
 
 type Loop struct {
-	client      inference.Client
-	tools       map[string]Tool
-	definitions []inference.Tool
-	config      Config
-	metadata    inference.Metadata
+	client       inference.Client
+	tools        map[string]Tool
+	definitions  []inference.Tool
+	config       Config
+	metadata     inference.Metadata
+	systemPrompt string
 }
 
 func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error) {
+	return newLoop(client, tools, config, "")
+}
+
+// NewLoopWithSystemPrompt constructs a loop with a fixed system message. The
+// message is preserved in the result transcript alongside the user task.
+func NewLoopWithSystemPrompt(client inference.Client, tools []Tool, config Config, systemPrompt string) (*Loop, error) {
+	return newLoop(client, tools, config, systemPrompt)
+}
+
+func newLoop(client inference.Client, tools []Tool, config Config, systemPrompt string) (*Loop, error) {
 	if client == nil {
 		return nil, errors.New("agent llama client is required")
 	}
@@ -110,7 +121,14 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 		metadata = provider.Metadata()
 		metadata.RuntimeSettings = cloneRuntimeSettings(metadata.RuntimeSettings)
 	}
-	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config, metadata: metadata}, nil
+	return &Loop{
+		client:       client,
+		tools:        toolMap,
+		definitions:  definitions,
+		config:       config,
+		metadata:     metadata,
+		systemPrompt: strings.TrimSpace(systemPrompt),
+	}, nil
 }
 
 // ResponseEvidence preserves the raw response and the client round-trip
@@ -152,7 +170,11 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	result.Inference = l.metadata
 	result.LoopConfig = l.config
 	result.Tools = slices.Clone(l.definitions)
-	result.Messages = []inference.Message{{Role: "user", Content: task}}
+	result.Messages = make([]inference.Message, 0, 2)
+	if l.systemPrompt != "" {
+		result.Messages = append(result.Messages, inference.Message{Role: "system", Content: l.systemPrompt})
+	}
+	result.Messages = append(result.Messages, inference.Message{Role: "user", Content: task})
 	logger := slog.With("component", "agent")
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := runCtx.Err(); ctxErr != nil {
