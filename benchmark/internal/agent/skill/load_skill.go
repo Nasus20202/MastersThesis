@@ -25,8 +25,6 @@ type SkillLoadEvidence struct {
 	Bytes     int    `json:"bytes"`
 }
 
-// NewLoadSkillTool constructs the allowlisted skill loader used by the skill
-// condition.
 func NewLoadSkillTool(registry *skills.Registry) (common.Tool, error) {
 	if registry == nil {
 		return nil, errors.New("skills registry is required")
