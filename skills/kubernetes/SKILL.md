@@ -24,11 +24,11 @@ least privilege and verify the resulting state with fresh observations.
 
 Load a focused reference only when its subject is relevant:
 
-| Reference | Load when |
-| --- | --- |
-| `workloads.md` | Following controllers, ownership, replicas or rollouts. |
-| `pods.md` | Interpreting Pod lifecycle, containers, probes, logs or volumes. |
-| `services.md` | Tracing service discovery, selectors, ports or EndpointSlices. |
-| `scheduling.md` | Explaining placement, Pending state or resource fit. |
-| `rbac.md` | Checking identities, roles, bindings or authorization. |
-| `configuration.md` | Tracing ConfigMaps, Secrets or configuration propagation. |
+| Reference          | Load when                                                        |
+| ------------------ | ---------------------------------------------------------------- |
+| `workloads.md`     | Following controllers, ownership, replicas or rollouts.          |
+| `pods.md`          | Interpreting Pod lifecycle, containers, probes, logs or volumes. |
+| `services.md`      | Tracing service discovery, selectors, ports or EndpointSlices.   |
+| `scheduling.md`    | Explaining placement, Pending state or resource fit.             |
+| `rbac.md`          | Checking identities, roles, bindings or authorization.           |
+| `configuration.md` | Tracing ConfigMaps, Secrets or configuration propagation.        |
