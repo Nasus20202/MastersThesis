@@ -5,6 +5,17 @@ objects. A Deployment commonly manages a ReplicaSet, which manages Pods;
 StatefulSet, DaemonSet, Job and CronJob use different ownership and rollout
 semantics. Do not treat a Pod as the durable source of workload configuration.
 
+- Deployment and ReplicaSet changes create revisions and converge through a
+  rollout; compare desired, updated, available and ready replicas.
+- StatefulSet manages stable identities and may coordinate ordering and
+  persistent claims. Check its update policy and per-Pod identity before
+  changing replicas or deleting a Pod.
+- DaemonSet targets eligible nodes rather than a fixed replica count. Inspect
+  node selectors, affinity, taints and tolerations when coverage is unexpected.
+- Job and CronJob express completion and scheduling behavior, not continuous
+  service availability. Check completions, parallelism, backoff, deadlines and
+  the Jobs created by a CronJob.
+
 When tracing a workload:
 
 1. Identify the relevant controller and inspect its desired and observed
