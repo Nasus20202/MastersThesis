@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -29,27 +29,21 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, terminal *ui.Terminal) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
 	}
-
-	var runErr error
-	for _, agentName := range agentNames {
-		if err := runAgentBenchmark(ctx, definitions, parallelism, repeat, agentName, terminal); err != nil {
-			runErr = errors.Join(runErr, fmt.Errorf("%s agent: %w", agentName, err))
-		}
+	if len(agentNames) == 0 {
+		return errors.New("benchmark requires at least one agent")
 	}
-	return runErr
-}
+	totalTasks := len(definitions) * repeat * len(agentNames)
 
-func runAgentBenchmark(ctx context.Context, definitions []scenario.Definition, parallelism, repeat int, agentName commandagent.Name, terminal *ui.Terminal) error {
 	startedAt := time.Now().UTC()
 	metadata := results.RunMetadata{
 		RunID:       runID(startedAt),
 		StartedAt:   startedAt,
-		Agent:       string(agentName),
+		Agents:      agentNamesToStrings(agentNames),
 		Parallelism: parallelism,
 		RepeatCount: repeat,
 		Scenarios:   scenarioIDs(definitions),
@@ -61,11 +55,11 @@ func runAgentBenchmark(ctx context.Context, definitions []scenario.Definition, p
 	logger := slog.Default()
 	logger.Info("benchmark runner started",
 		"run_id", metadata.RunID,
-		"agent", agentName,
+		"agents", metadata.Agents,
 		"scenarios", len(definitions),
 		"parallelism", parallelism,
 		"repeat_count", repeat,
-		"total_tasks", len(definitions)*repeat,
+		"total_tasks", totalTasks,
 	)
 
 	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
@@ -73,21 +67,30 @@ func runAgentBenchmark(ctx context.Context, definitions []scenario.Definition, p
 	if err != nil {
 		return err
 	}
-	agentFactory, err := commandagent.NewFactory(agentName)
-	if err != nil {
-		return err
+	agentFactories := make(map[commandagent.Name]rootagent.Factory, len(agentNames))
+	for _, agentName := range agentNames {
+		agentFactory, err := commandagent.NewFactory(agentName, benchmarkConfig)
+		if err != nil {
+			return err
+		}
+		agentFactories[agentName] = agentFactory
 	}
-	tasks := make([]executor.Task, 0, len(definitions)*repeat)
-	for attempt := 1; attempt <= repeat; attempt++ {
-		for _, definition := range definitions {
-			definition := definition
-			tasks = append(tasks, executor.Task{
-				ScenarioID: definition.ID,
-				Attempt:    attempt,
-				Run: func(ctx context.Context) (orchestration.RunResult, error) {
-					return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
-				},
-			})
+	tasks := make([]executor.Task, 0, totalTasks)
+	for _, agentName := range agentNames {
+		agentName := agentName
+		agentFactory := agentFactories[agentName]
+		for attempt := 1; attempt <= repeat; attempt++ {
+			for _, definition := range definitions {
+				definition := definition
+				tasks = append(tasks, executor.Task{
+					ScenarioID: definition.ID,
+					Agent:      string(agentName),
+					Attempt:    attempt,
+					Run: func(ctx context.Context) (orchestration.RunResult, error) {
+						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
+					},
+				})
+			}
 		}
 	}
 	progress, err := terminal.NewProgress(len(tasks), parallelism)
@@ -108,22 +111,22 @@ func runAgentBenchmark(ctx context.Context, definitions []scenario.Definition, p
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
-				"agent", agentName,
+				"agent", outcome.Agent,
 				"scenario", outcome.ScenarioID,
 				"attempt", outcome.Attempt,
 				"error", outcome.Err,
 			)
-			if err := store.WriteAttemptFailure(outcome.Attempt, outcome.ScenarioID, outcome.Result, outcome.Err); err != nil {
+			if err := store.WriteAttemptFailure(outcome.Attempt, outcome.ScenarioID, outcome.Agent, outcome.Result, outcome.Err); err != nil {
 				writeErr = errors.Join(writeErr, err)
 			}
 			continue
 		}
-		if err := store.WriteAttempt(outcome.Attempt, outcome.Result); err != nil {
+		if err := store.WriteAttempt(outcome.Attempt, outcome.Agent, outcome.Result); err != nil {
 			writeErr = errors.Join(writeErr, err)
 		}
 		logger.Info("benchmark attempt completed",
 			"run_id", metadata.RunID,
-			"agent", agentName,
+			"agent", outcome.Agent,
 			"scenario", outcome.ScenarioID,
 			"attempt", outcome.Attempt,
 			"score", outcome.Result.Grading.Score,
@@ -186,4 +189,12 @@ func scenarioIDs(definitions []scenario.Definition) []string {
 		ids[index] = definition.ID
 	}
 	return ids
+}
+
+func agentNamesToStrings(names []commandagent.Name) []string {
+	values := make([]string, len(names))
+	for index, name := range names {
+		values[index] = string(name)
+	}
+	return values
 }

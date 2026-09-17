@@ -13,11 +13,11 @@ import (
 
 func TestExecuteStreamsTasksAsTheyComplete(t *testing.T) {
 	tasks := []Task{
-		{ScenarioID: "first", Attempt: 2, Run: func(context.Context) (orchestration.RunResult, error) {
+		{ScenarioID: "first", Agent: "baseline", Attempt: 2, Run: func(context.Context) (orchestration.RunResult, error) {
 			time.Sleep(20 * time.Millisecond)
 			return orchestration.RunResult{ScenarioID: "first"}, nil
 		}},
-		{ScenarioID: "second", Run: func(context.Context) (orchestration.RunResult, error) {
+		{ScenarioID: "second", Agent: "prompt", Run: func(context.Context) (orchestration.RunResult, error) {
 			return orchestration.RunResult{ScenarioID: "second"}, nil
 		}},
 	}
@@ -31,6 +31,9 @@ func TestExecuteStreamsTasksAsTheyComplete(t *testing.T) {
 	for _, outcome := range outcomes {
 		if outcome.ScenarioID == "first" {
 			assert.Equal(t, 2, outcome.Attempt)
+			assert.Equal(t, "baseline", outcome.Agent)
+		} else {
+			assert.Equal(t, "prompt", outcome.Agent)
 		}
 	}
 }
@@ -110,7 +113,7 @@ func TestExecuteLimitsConcurrentTasks(t *testing.T) {
 func TestExecuteCollectsAllTaskErrors(t *testing.T) {
 	wantErr := errors.New("task failed")
 	tasks := []Task{
-		{ScenarioID: "failed", Run: func(context.Context) (orchestration.RunResult, error) {
+		{ScenarioID: "failed", Agent: "baseline", Run: func(context.Context) (orchestration.RunResult, error) {
 			return orchestration.RunResult{}, wantErr
 		}},
 		{ScenarioID: "successful", Run: func(context.Context) (orchestration.RunResult, error) {
@@ -122,6 +125,7 @@ func TestExecuteCollectsAllTaskErrors(t *testing.T) {
 	outcomes, err := collect(outcomeChannel, errorChannel)
 
 	assert.ErrorIs(t, err, wantErr)
+	assert.ErrorContains(t, err, "failed/baseline")
 	require.Len(t, outcomes, 2)
 	assert.ErrorIs(t, outcomes[0].Err, wantErr)
 	assert.NoError(t, outcomes[1].Err)

@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -22,26 +24,59 @@ const (
 	Prompt   Name = "prompt"
 )
 
-func Select(value string) ([]Name, error) {
-	switch Name(strings.ToLower(strings.TrimSpace(value))) {
-	case All:
+func Select(values ...string) ([]Name, error) {
+	if len(values) == 0 {
 		return []Name{Baseline, Prompt}, nil
-	case Baseline:
-		return []Name{Baseline}, nil
-	case Prompt:
-		return []Name{Prompt}, nil
-	default:
-		return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, or prompt", value)
 	}
+
+	selected := make([]Name, 0, len(values))
+	seen := make(map[Name]struct{}, len(values))
+	allSelected := false
+	for _, value := range values {
+		for _, item := range strings.Split(value, ",") {
+			normalized := Name(strings.ToLower(strings.TrimSpace(item)))
+			if normalized == "" {
+				return nil, errors.New("agent must not be blank")
+			}
+			if normalized == All {
+				if len(values) != 1 || len(strings.Split(value, ",")) != 1 || len(selected) > 0 {
+					return nil, errors.New("agent all cannot be combined with other agents")
+				}
+				allSelected = true
+				continue
+			}
+			if normalized != Baseline && normalized != Prompt {
+				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, or prompt", item)
+			}
+			if _, exists := seen[normalized]; exists {
+				return nil, fmt.Errorf("agent %q was selected more than once", normalized)
+			}
+			seen[normalized] = struct{}{}
+			selected = append(selected, normalized)
+		}
+	}
+	if allSelected {
+		return []Name{Baseline, Prompt}, nil
+	}
+	return selected, nil
 }
 
-func NewFactory(name Name) (rootagent.Factory, error) {
+func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Factory, error) {
+	loopConfig, err := configuredLoopConfig(benchmarkConfig.Agents.Loop)
+	if err != nil {
+		return nil, err
+	}
+	var customPrompt string
+	if name == Prompt {
+		customPrompt, err = loadPromptSystemPrompt(benchmarkConfig.Agents.Prompt.SystemPromptFile)
+		if err != nil {
+			return nil, err
+		}
+	}
 	inferenceClient, err := newInferenceClient()
 	if err != nil {
 		return nil, err
 	}
-	loopConfig := common.DefaultConfig()
-
 	switch name {
 	case Baseline:
 		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
@@ -49,6 +84,9 @@ func NewFactory(name Name) (rootagent.Factory, error) {
 		}, nil
 	case Prompt:
 		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			if customPrompt != "" {
+				return promptagent.NewWithSystemPrompt(inferenceClient, shell, loopConfig, customPrompt)
+			}
 			return promptagent.New(inferenceClient, shell, loopConfig)
 		}, nil
 	default:
@@ -56,8 +94,53 @@ func NewFactory(name Name) (rootagent.Factory, error) {
 	}
 }
 
-func NewBaselineFactory() (rootagent.Factory, error) {
-	return NewFactory(Baseline)
+func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, error) {
+	result := common.DefaultConfig()
+	if values.MaxTurns != nil {
+		if *values.MaxTurns < 1 {
+			return common.Config{}, errors.New("agents.loop.max_turns must be at least 1")
+		}
+		result.MaxTurns = *values.MaxTurns
+	}
+	if values.MaxToolCalls != nil {
+		if *values.MaxToolCalls < 1 {
+			return common.Config{}, errors.New("agents.loop.max_tool_calls must be at least 1")
+		}
+		result.MaxToolCalls = *values.MaxToolCalls
+	}
+	if values.ToolTimeoutSeconds != nil {
+		if *values.ToolTimeoutSeconds <= 0 {
+			return common.Config{}, errors.New("agents.loop.tool_timeout_seconds must be greater than 0")
+		}
+		result.ToolTimeoutSeconds = *values.ToolTimeoutSeconds
+	}
+	if values.TimeoutSeconds != nil {
+		if *values.TimeoutSeconds <= 0 {
+			return common.Config{}, errors.New("agents.loop.timeout_seconds must be greater than 0")
+		}
+		result.TimeoutSeconds = *values.TimeoutSeconds
+	}
+	return result, nil
+}
+
+func loadPromptSystemPrompt(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read prompt system prompt %q: %w", path, err)
+	}
+	prompt := string(data)
+	if strings.TrimSpace(prompt) == "" {
+		return "", fmt.Errorf("prompt system prompt file must not be blank")
+	}
+	return prompt, nil
+}
+
+func NewBaselineFactory(benchmarkConfig benchmarkconfig.Config) (rootagent.Factory, error) {
+	return NewFactory(Baseline, benchmarkConfig)
 }
 
 func newInferenceClient() (inference.Client, error) {

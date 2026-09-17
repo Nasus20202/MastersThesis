@@ -10,6 +10,8 @@ import (
 
 const (
 	clearLine            = "\r\x1b[2K"
+	hideCursor           = "\x1b[?25l"
+	showCursor           = "\x1b[?25h"
 	defaultTerminalWidth = 80
 )
 
@@ -55,7 +57,7 @@ func (t *Terminal) renderProgress() error {
 	if !t.interactive || t.progress == nil {
 		return nil
 	}
-	_, err := io.WriteString(t.writer, clearLine+t.progress.String())
+	_, err := io.WriteString(t.writer, hideCursor+clearLine+t.progress.String())
 	return err
 }
 

@@ -56,3 +56,14 @@ func TestRunRejectsInvalidAgentAndTask(t *testing.T) {
 	_, err = agent.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")
 }
+
+func TestNewWithSystemPromptUsesConfiguredPrompt(t *testing.T) {
+	client := &promptTestClient{}
+	agent, err := NewWithSystemPrompt(client, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "custom instructions")
+	require.NoError(t, err)
+
+	_, err = agent.Run(context.Background(), "Restore the application.")
+	require.NoError(t, err)
+	require.Len(t, client.messages, 2)
+	assert.Equal(t, "custom instructions", client.messages[0].Content)
+}

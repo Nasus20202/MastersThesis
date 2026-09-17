@@ -120,6 +120,14 @@ type ResponseEvidence struct {
 	DurationSeconds float64          `json:"duration_seconds"`
 }
 
+// TokenUsage contains the aggregate token usage reported by all model
+// responses in one loop run.
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 // Result is the complete model-loop evidence produced by Run.
 type Result struct {
 	Condition       string              `json:"condition,omitempty"`
@@ -129,6 +137,7 @@ type Result struct {
 	Tools           []inference.Tool    `json:"tools"`
 	Messages        []inference.Message `json:"messages"`
 	Responses       []ResponseEvidence  `json:"responses"`
+	TokenUsage      TokenUsage          `json:"token_usage"`
 	ToolCalls       []ToolCallEvidence  `json:"tool_calls"`
 	Turns           int                 `json:"turns"`
 	ToolCallCount   int                 `json:"tool_call_count"`
@@ -195,6 +204,11 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 			Response:        response,
 			DurationSeconds: time.Since(responseStarted).Seconds(),
 		})
+		if response.Usage != nil {
+			result.TokenUsage.PromptTokens += response.Usage.PromptTokens
+			result.TokenUsage.CompletionTokens += response.Usage.CompletionTokens
+			result.TokenUsage.TotalTokens += response.Usage.TotalTokens
+		}
 		if chatErr != nil {
 			logger.ErrorContext(runCtx, "inference response failed",
 				"turn", turn,

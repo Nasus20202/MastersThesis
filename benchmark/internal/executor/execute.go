@@ -12,6 +12,7 @@ import (
 type Task struct {
 	ScenarioID string
 	CaseID     string
+	Agent      string
 	Attempt    int
 	Run        func(context.Context) (orchestration.RunResult, error)
 }
@@ -19,6 +20,7 @@ type Task struct {
 type Outcome struct {
 	ScenarioID string
 	CaseID     string
+	Agent      string
 	Attempt    int
 	Result     orchestration.RunResult
 	Err        error
@@ -115,7 +117,11 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 	}
 	for index, outcome := range completed {
 		if outcome.Err != nil {
-			errs = append(errs, fmt.Errorf("task %d (%s): %w", index+1, outcome.ScenarioID, outcome.Err))
+			label := outcome.ScenarioID
+			if outcome.Agent != "" {
+				label += "/" + outcome.Agent
+			}
+			errs = append(errs, fmt.Errorf("task %d (%s): %w", index+1, label, outcome.Err))
 		}
 	}
 	errorChannel <- errors.Join(errs...)
@@ -125,6 +131,7 @@ func outcome(task Task, attempt int, result orchestration.RunResult, err error) 
 	return Outcome{
 		ScenarioID: task.ScenarioID,
 		CaseID:     task.CaseID,
+		Agent:      task.Agent,
 		Attempt:    attempt,
 		Result:     result,
 		Err:        err,
