@@ -137,7 +137,21 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
-func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) {
+func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
+	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
+}
+
+func (l *Loop) RunWithSystemPrompt(ctx context.Context, task, systemPrompt string) (Result, error) {
+	if strings.TrimSpace(systemPrompt) == "" {
+		return Result{}, errors.New("agent system prompt is required")
+	}
+	return l.run(ctx, task, []inference.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: task},
+	})
+}
+
+func (l *Loop) run(ctx context.Context, task string, initialMessages []inference.Message) (result Result, err error) {
 	if strings.TrimSpace(task) == "" {
 		return Result{}, errors.New("agent task is required")
 	}
@@ -152,7 +166,7 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	result.Inference = l.metadata
 	result.LoopConfig = l.config
 	result.Tools = slices.Clone(l.definitions)
-	result.Messages = []inference.Message{{Role: "user", Content: task}}
+	result.Messages = cloneMessages(initialMessages)
 	logger := slog.With("component", "agent")
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := runCtx.Err(); ctxErr != nil {

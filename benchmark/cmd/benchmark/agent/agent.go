@@ -8,12 +8,59 @@ import (
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+	promptagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/prompt"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/llama"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 )
 
+type Name string
+
+const (
+	All      Name = "all"
+	Baseline Name = "baseline"
+	Prompt   Name = "prompt"
+)
+
+func Select(value string) ([]Name, error) {
+	switch Name(strings.ToLower(strings.TrimSpace(value))) {
+	case All:
+		return []Name{Baseline, Prompt}, nil
+	case Baseline:
+		return []Name{Baseline}, nil
+	case Prompt:
+		return []Name{Prompt}, nil
+	default:
+		return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, or prompt", value)
+	}
+}
+
+func NewFactory(name Name) (rootagent.Factory, error) {
+	inferenceClient, err := newInferenceClient()
+	if err != nil {
+		return nil, err
+	}
+	loopConfig := common.DefaultConfig()
+
+	switch name {
+	case Baseline:
+		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return baseline.New(inferenceClient, shell, loopConfig)
+		}, nil
+	case Prompt:
+		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return promptagent.New(inferenceClient, shell, loopConfig)
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported agent %q", name)
+	}
+}
+
 func NewBaselineFactory() (rootagent.Factory, error) {
+	return NewFactory(Baseline)
+}
+
+func newInferenceClient() (inference.Client, error) {
 	model := strings.TrimSpace(os.Getenv("LLAMA_MODEL_NAME"))
 	if model == "" {
 		return nil, fmt.Errorf("LLAMA_MODEL_NAME is required")
@@ -45,10 +92,7 @@ func NewBaselineFactory() (rootagent.Factory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create inference adapter: %w", err)
 	}
-	loopConfig := common.DefaultConfig()
-	return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
-		return baseline.New(inferenceClient, shell, loopConfig)
-	}, nil
+	return inferenceClient, nil
 }
 
 func modelArtifact() string {

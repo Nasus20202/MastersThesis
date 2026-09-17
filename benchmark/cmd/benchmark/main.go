@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/logging"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 )
@@ -40,7 +41,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.SetOutput(logOutput)
 	flags.Usage = func() {
 		fmt.Fprintln(logOutput, "Usage:")
-		fmt.Fprintln(logOutput, "  benchmark --scenario PATH [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --scenario PATH [--agent NAME] [--parallel N] [--repeat N]")
 		fmt.Fprintln(logOutput, "  benchmark --validate PATH [--parallel N] [--repeat N]")
 		fmt.Fprintln(logOutput, "\nOptions:")
 		flags.PrintDefaults()
@@ -49,6 +50,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.Var(&scenarioPaths, "scenario", "path to a scenario YAML file or directory; may be repeated")
 	var validationPaths stringList
 	flags.Var(&validationPaths, "validate", "path to a validation YAML file or directory; may be repeated")
+	agentName := flags.String("agent", string(commandagent.All), "benchmark agent: all, baseline, or prompt")
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
 	if err := flags.Parse(args); err != nil {
@@ -69,11 +71,18 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	if *repeat < 1 {
 		return errors.New("repeat must be at least 1")
 	}
+	agentNames, err := commandagent.Select(*agentName)
+	if err != nil {
+		return err
+	}
 
 	if len(validationPaths) > 0 {
+		if strings.ToLower(strings.TrimSpace(*agentName)) != string(commandagent.All) {
+			return errors.New("agent selection is only supported with scenario runs")
+		}
 		return runValidation(ctx, validationPaths, *parallel, *repeat, terminal)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, terminal)
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, terminal)
 }
 
 type stringList []string

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,15 +29,27 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, terminal *ui.Terminal) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, terminal *ui.Terminal) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
 	}
+
+	var runErr error
+	for _, agentName := range agentNames {
+		if err := runAgentBenchmark(ctx, definitions, parallelism, repeat, agentName, terminal); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("%s agent: %w", agentName, err))
+		}
+	}
+	return runErr
+}
+
+func runAgentBenchmark(ctx context.Context, definitions []scenario.Definition, parallelism, repeat int, agentName commandagent.Name, terminal *ui.Terminal) error {
 	startedAt := time.Now().UTC()
 	metadata := results.RunMetadata{
 		RunID:       runID(startedAt),
 		StartedAt:   startedAt,
+		Agent:       string(agentName),
 		Parallelism: parallelism,
 		RepeatCount: repeat,
 		Scenarios:   scenarioIDs(definitions),
@@ -48,6 +61,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	logger := slog.Default()
 	logger.Info("benchmark runner started",
 		"run_id", metadata.RunID,
+		"agent", agentName,
 		"scenarios", len(definitions),
 		"parallelism", parallelism,
 		"repeat_count", repeat,
@@ -59,7 +73,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if err != nil {
 		return err
 	}
-	agentFactory, err := commandagent.NewBaselineFactory()
+	agentFactory, err := commandagent.NewFactory(agentName)
 	if err != nil {
 		return err
 	}
@@ -71,7 +85,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 				ScenarioID: definition.ID,
 				Attempt:    attempt,
 				Run: func(ctx context.Context) (orchestration.RunResult, error) {
-					return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentFactory).Run(ctx, definition)
+					return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
 				},
 			})
 		}
@@ -94,6 +108,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
+				"agent", agentName,
 				"scenario", outcome.ScenarioID,
 				"attempt", outcome.Attempt,
 				"error", outcome.Err,
@@ -108,6 +123,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		}
 		logger.Info("benchmark attempt completed",
 			"run_id", metadata.RunID,
+			"agent", agentName,
 			"scenario", outcome.ScenarioID,
 			"attempt", outcome.Attempt,
 			"score", outcome.Result.Grading.Score,
@@ -129,11 +145,12 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentFactory rootagent.Factory) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory) orchestration.Runner {
 	return orchestration.Runner{
 		Executor:            commandExecutor,
 		SandboxImageBuilder: imageBuilder,
 		AgentFactory:        agentFactory,
+		Condition:           string(agentName),
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{
 				Name:       name,

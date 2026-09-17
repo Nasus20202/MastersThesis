@@ -11,6 +11,7 @@ type RunMetadata struct {
 	RunID       string     `json:"run_id"`
 	StartedAt   time.Time  `json:"started_at"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Agent       string     `json:"agent,omitempty"`
 	Parallelism int        `json:"parallelism"`
 	RepeatCount int        `json:"repeat_count"`
 	Scenarios   []string   `json:"scenarios"`

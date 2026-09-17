@@ -21,6 +21,7 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 	store, err := New(root, RunMetadata{
 		RunID:       "run-1",
 		StartedAt:   startedAt,
+		Agent:       "baseline",
 		Parallelism: 2,
 		RepeatCount: 2,
 		Scenarios:   []string{"image-pull-failure"},
@@ -53,6 +54,7 @@ func TestStoreWritesRunMetadataAndAttemptEvidence(t *testing.T) {
 	assert.Equal(t, startedAt, metadata.StartedAt)
 	require.NotNil(t, metadata.CompletedAt)
 	assert.Equal(t, completedAt, *metadata.CompletedAt)
+	assert.Equal(t, "baseline", metadata.Agent)
 	assert.Equal(t, 2, metadata.Parallelism)
 	assert.Equal(t, 2, metadata.RepeatCount)
 	assert.Equal(t, []string{"image-pull-failure"}, metadata.Scenarios)

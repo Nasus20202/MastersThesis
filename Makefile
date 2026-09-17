@@ -4,6 +4,7 @@ BENCHMARK_DIR := benchmark
 BENCHMARK_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
+AGENT ?= all
 REPEAT ?= 1
 BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 8
@@ -48,6 +49,7 @@ help:
 	@printf '  %-28s %s\n' \
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
+		'AGENT=NAME' 'Select all, baseline, or prompt benchmark agents (default: all).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).'
@@ -86,7 +88,7 @@ build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
 
 benchmark:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT)
 
 benchmark-validate:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
