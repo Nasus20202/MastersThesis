@@ -120,6 +120,14 @@ type ResponseEvidence struct {
 	DurationSeconds float64          `json:"duration_seconds"`
 }
 
+// TokenUsage contains the aggregate token usage reported by all model
+// responses in one loop run.
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 // Result is the complete model-loop evidence produced by Run.
 type Result struct {
 	Condition       string              `json:"condition,omitempty"`
@@ -129,6 +137,7 @@ type Result struct {
 	Tools           []inference.Tool    `json:"tools"`
 	Messages        []inference.Message `json:"messages"`
 	Responses       []ResponseEvidence  `json:"responses"`
+	TokenUsage      TokenUsage          `json:"token_usage"`
 	ToolCalls       []ToolCallEvidence  `json:"tool_calls"`
 	Turns           int                 `json:"turns"`
 	ToolCallCount   int                 `json:"tool_call_count"`
@@ -137,7 +146,21 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
-func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) {
+func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
+	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
+}
+
+func (l *Loop) RunWithSystemPrompt(ctx context.Context, task, systemPrompt string) (Result, error) {
+	if strings.TrimSpace(systemPrompt) == "" {
+		return Result{}, errors.New("agent system prompt is required")
+	}
+	return l.run(ctx, task, []inference.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: task},
+	})
+}
+
+func (l *Loop) run(ctx context.Context, task string, initialMessages []inference.Message) (result Result, err error) {
 	if strings.TrimSpace(task) == "" {
 		return Result{}, errors.New("agent task is required")
 	}
@@ -152,7 +175,7 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 	result.Inference = l.metadata
 	result.LoopConfig = l.config
 	result.Tools = slices.Clone(l.definitions)
-	result.Messages = []inference.Message{{Role: "user", Content: task}}
+	result.Messages = cloneMessages(initialMessages)
 	logger := slog.With("component", "agent")
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := runCtx.Err(); ctxErr != nil {
@@ -181,6 +204,11 @@ func (l *Loop) Run(ctx context.Context, task string) (result Result, err error) 
 			Response:        response,
 			DurationSeconds: time.Since(responseStarted).Seconds(),
 		})
+		if response.Usage != nil {
+			result.TokenUsage.PromptTokens += response.Usage.PromptTokens
+			result.TokenUsage.CompletionTokens += response.Usage.CompletionTokens
+			result.TokenUsage.TotalTokens += response.Usage.TotalTokens
+		}
 		if chatErr != nil {
 			logger.ErrorContext(runCtx, "inference response failed",
 				"turn", turn,

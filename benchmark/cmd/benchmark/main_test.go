@@ -6,6 +6,7 @@ import (
 	"flag"
 	"testing"
 
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 	"github.com/stretchr/testify/assert"
@@ -22,6 +23,8 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 		{name: "both modes", args: []string{"--scenario", "scenario.yaml", "--validate", "validation.yaml"}, want: "cannot be combined"},
 		{name: "invalid parallelism", args: []string{"--scenario", "scenario.yaml", "--parallel", "0"}, want: "parallel must be at least 1"},
 		{name: "invalid repeat", args: []string{"--scenario", "scenario.yaml", "--repeat", "0"}, want: "repeat must be at least 1"},
+		{name: "invalid agent", args: []string{"--scenario", "scenario.yaml", "--agent", "unknown"}, want: "unsupported agent"},
+		{name: "agent with validation", args: []string{"--validate", "validation.yaml", "--agent", "prompt"}, want: "only supported with scenario runs"},
 		{name: "unexpected argument", args: []string{"--scenario", "scenario.yaml", "unexpected"}, want: "unexpected arguments"},
 		{name: "blank path", args: []string{"--scenario", ""}, want: "path must not be blank"},
 	}
@@ -41,8 +44,11 @@ func TestRunHelpListsModesAndParameters(t *testing.T) {
 	err := run(context.Background(), []string{"--help"}, &logs)
 
 	assert.ErrorIs(t, err, flag.ErrHelp)
-	assert.Contains(t, logs.String(), "benchmark --scenario PATH")
-	assert.Contains(t, logs.String(), "benchmark --validate PATH")
+	assert.Contains(t, logs.String(), "benchmark --config PATH ... --scenario PATH")
+	assert.Contains(t, logs.String(), "NAME[,NAME]")
+	assert.Contains(t, logs.String(), "benchmark --config PATH ... --validate PATH")
+	assert.Contains(t, logs.String(), "-config")
+	assert.Contains(t, logs.String(), "-agent")
 	assert.Contains(t, logs.String(), "-repeat")
 }
 
@@ -55,22 +61,32 @@ func TestStringList(t *testing.T) {
 	assert.ErrorContains(t, paths.Set(" "), "path must not be blank")
 }
 
-func TestNewLoggerRejectsInvalidEnvironment(t *testing.T) {
-	t.Setenv("BENCHMARK_LOG_LEVEL", "trace")
-	t.Setenv("BENCHMARK_LOG_FORMAT", "")
-	_, err := newLogger(&bytes.Buffer{})
+func TestAgentList(t *testing.T) {
+	var agents agentList
+	require.NoError(t, agents.Set("baseline"))
+	require.NoError(t, agents.Set("prompt"))
+
+	assert.Equal(t, "baseline,prompt", agents.String())
+	assert.ErrorContains(t, agents.Set(" "), "agent must not be blank")
+}
+
+func TestExplicitAllAgentSelection(t *testing.T) {
+	assert.True(t, explicitAllAgentSelection(agentList{" all "}))
+	assert.False(t, explicitAllAgentSelection(agentList{"baseline,prompt"}))
+	assert.False(t, explicitAllAgentSelection(agentList{"all", "all"}))
+}
+
+func TestNewLoggerRejectsInvalidConfig(t *testing.T) {
+	_, err := newLogger(&bytes.Buffer{}, benchmarkconfig.LoggingConfig{Level: "trace"})
 	assert.ErrorContains(t, err, "parse log level")
 
-	t.Setenv("BENCHMARK_LOG_LEVEL", "")
-	t.Setenv("BENCHMARK_LOG_FORMAT", "xml")
-	_, err = newLogger(&bytes.Buffer{})
+	_, err = newLogger(&bytes.Buffer{}, benchmarkconfig.LoggingConfig{Format: "xml"})
 	assert.ErrorContains(t, err, "unsupported log format")
 }
 
-func TestNewLoggerReadsColorEnvironmentAtApplicationBoundary(t *testing.T) {
-	t.Setenv("BENCHMARK_LOG_COLOR", "always")
+func TestNewLoggerReadsConfiguredColor(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := newLogger(&output)
+	logger, err := newLogger(&output, benchmarkconfig.LoggingConfig{Color: "always"})
 	require.NoError(t, err)
 
 	logger.Info("visible")

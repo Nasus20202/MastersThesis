@@ -86,14 +86,36 @@ func TestBashToolReturnsArgumentAndExecutionErrors(t *testing.T) {
 	assert.Contains(t, execution.Content, "error: command failed")
 }
 
-func TestFormatCommandResultIncludesOutputAndError(t *testing.T) {
+func TestFormatCommandResultShowsCommandExitWithoutSandboxError(t *testing.T) {
 	content := formatCommandResult(command.Result{
 		Stdout:   "output",
 		Stderr:   "diagnostic",
 		ExitCode: 7,
-	}, errors.New("command failed"))
+	}, errors.New(`execute sandbox command: run "docker": exit status 7`))
 	assert.True(t, strings.Contains(content, "exit_code: 7"))
 	assert.Contains(t, content, "stdout:\noutput")
 	assert.Contains(t, content, "stderr:\ndiagnostic")
-	assert.Contains(t, content, "error: command failed")
+	assert.NotContains(t, content, "execute sandbox command")
+}
+
+func TestBashToolKeepsFailedExitInEvidenceWithoutMisleadingAgent(t *testing.T) {
+	shell := &bashTestShell{
+		result: command.Result{ExitCode: 1},
+		err:    errors.New(`execute sandbox command: run "docker": exit status 1`),
+	}
+	tool, err := NewBashTool(shell)
+	require.NoError(t, err)
+
+	result := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"command":"grep -i config-reader"}`})
+	assert.Equal(t, "exit_code: 1\nstdout:\n\nstderr:\n\n", result.Content)
+	assert.ErrorContains(t, result.Error, "execute sandbox command")
+	details, ok := result.Details.(CommandEvidence)
+	require.True(t, ok)
+	assert.Equal(t, 1, details.ExitCode)
+}
+
+func TestFormatCommandResultShowsActualExecutionError(t *testing.T) {
+	content := formatCommandResult(command.Result{ExitCode: -1}, errors.New("sandbox unavailable"))
+	assert.Contains(t, content, "exit_code: -1")
+	assert.Contains(t, content, "error: sandbox unavailable")
 }

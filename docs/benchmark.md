@@ -128,6 +128,11 @@ Each run should preserve, where available:
 - relevant runtime metadata,
 - failure and cleanup information.
 
+For a scenario benchmark invocation, one logical run contains every selected
+agent, scenario and repetition. Agent attempt evidence is stored under
+`results/<run-id>/<scenario-id>/<agent-name>/<attempt>.json`; validation
+results retain their separate scenario/case layout.
+
 Raw results must be preserved, including negative and inconclusive results.
 
 ## Scenario acceptance

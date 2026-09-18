@@ -217,6 +217,7 @@ func TestLoopCompletesAndPassesConfiguredRequest(t *testing.T) {
 	assert.Equal(t, TerminationCompleted, result.Termination)
 	assert.Equal(t, "Inspect the workload.", result.Task)
 	assert.Equal(t, 1, result.Turns)
+	assert.Equal(t, TokenUsage{TotalTokens: 7}, result.TokenUsage)
 	assert.Empty(t, result.ToolCalls)
 	assert.Len(t, result.Messages, 2)
 	assert.Equal(t, "done", result.Messages[1].Content)
@@ -253,14 +254,20 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14},
 			Timings:      &inference.Timings{PromptPerSecond: 20.5, PredictedPerSecond: 30.5},
 		},
-		{ID: "response-2", Message: inference.Message{Role: "assistant", Content: "The workload is healthy."}, FinishReason: "stop"},
+		{
+			ID:           "response-2",
+			Message:      inference.Message{Role: "assistant", Content: "The workload is healthy."},
+			FinishReason: "stop",
+			Usage:        &inference.Usage{PromptTokens: 20, CompletionTokens: 8, TotalTokens: 28},
+		},
 	}}
 	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
 	loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 2, MaxToolCalls: 1})
 	require.NoError(t, err)
 
-	_, err = loop.Run(context.Background(), "Inspect the workload.")
+	result, err := loop.Run(context.Background(), "Inspect the workload.")
 	require.NoError(t, err)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42}, result.TokenUsage)
 
 	records := make([]map[string]any, 0)
 	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {

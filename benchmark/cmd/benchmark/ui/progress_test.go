@@ -42,7 +42,21 @@ func TestProgressRendersCompletionParallelismAndETA(t *testing.T) {
 	assert.Contains(t, text, "parallel 2")
 	assert.Contains(t, text, "ETA")
 	assert.Equal(t, 80, utf8.RuneCountInString(progress.String()))
-	assert.True(t, strings.HasSuffix(text, "\n"))
+	assert.Contains(t, text, "\n"+showCursor)
+}
+
+func TestProgressHidesCursorUntilFinished(t *testing.T) {
+	var output bytes.Buffer
+	terminal := NewTerminal(&output)
+	terminal.interactive = true
+
+	progress, err := terminal.NewProgress(1, 1)
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), hideCursor)
+	assert.NotContains(t, output.String(), showCursor)
+
+	require.NoError(t, progress.Finish())
+	assert.Contains(t, output.String(), showCursor)
 }
 
 func TestProgressRefreshesInBackground(t *testing.T) {

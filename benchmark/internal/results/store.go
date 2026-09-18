@@ -31,6 +31,7 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 	if len(metadata.Scenarios) == 0 {
 		return nil, errors.New("result requires at least one scenario")
 	}
+	metadata.Agents = slices.Clone(metadata.Agents)
 	metadata.Scenarios = slices.Clone(metadata.Scenarios)
 	runDir := filepath.Join(root, metadata.RunID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
@@ -43,26 +44,29 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 	return store, nil
 }
 
-func (s *Store) WriteAttempt(attempt int, result orchestration.RunResult) error {
-	return s.writeAttempt(attempt, result.ScenarioID, result, nil)
+func (s *Store) WriteAttempt(attempt int, agent string, result orchestration.RunResult) error {
+	return s.writeAttempt(attempt, result.ScenarioID, agent, result, nil)
 }
 
-func (s *Store) WriteAttemptFailure(attempt int, scenarioID string, result orchestration.RunResult, runErr error) error {
+func (s *Store) WriteAttemptFailure(attempt int, scenarioID, agent string, result orchestration.RunResult, runErr error) error {
 	if runErr == nil {
 		return errors.New("result execution error is required")
 	}
-	return s.writeAttempt(attempt, scenarioID, result, runErr)
+	return s.writeAttempt(attempt, scenarioID, agent, result, runErr)
 }
 
-func (s *Store) writeAttempt(attempt int, scenarioID string, result orchestration.RunResult, runErr error) error {
+func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orchestration.RunResult, runErr error) error {
 	if attempt < 1 {
 		return errors.New("result attempt number must be at least 1")
 	}
 	if strings.TrimSpace(scenarioID) == "" {
 		return errors.New("result scenario ID is required")
 	}
+	if strings.TrimSpace(agent) == "" {
+		return errors.New("result agent is required")
+	}
 
-	scenarioDir := filepath.Join(s.runDir, scenarioID)
+	scenarioDir := filepath.Join(s.runDir, scenarioID, agent)
 	if err := os.MkdirAll(scenarioDir, 0o755); err != nil {
 		return fmt.Errorf("create scenario result directory: %w", err)
 	}

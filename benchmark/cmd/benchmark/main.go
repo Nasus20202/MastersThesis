@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 
+	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/logging"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 )
@@ -30,18 +32,12 @@ func main() {
 
 func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	terminal := ui.NewTerminal(logOutput)
-	logger, err := newLogger(terminal)
-	if err != nil {
-		return err
-	}
-	slog.SetDefault(logger)
-
 	flags := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	flags.SetOutput(logOutput)
 	flags.Usage = func() {
 		fmt.Fprintln(logOutput, "Usage:")
-		fmt.Fprintln(logOutput, "  benchmark --scenario PATH [--parallel N] [--repeat N]")
-		fmt.Fprintln(logOutput, "  benchmark --validate PATH [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--agent NAME[,NAME] ...] [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --validate PATH [--parallel N] [--repeat N]")
 		fmt.Fprintln(logOutput, "\nOptions:")
 		flags.PrintDefaults()
 	}
@@ -49,6 +45,10 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.Var(&scenarioPaths, "scenario", "path to a scenario YAML file or directory; may be repeated")
 	var validationPaths stringList
 	flags.Var(&validationPaths, "validate", "path to a validation YAML file or directory; may be repeated")
+	var configPaths stringList
+	flags.Var(&configPaths, "config", "load benchmark YAML configuration; may be repeated in overlay order")
+	var agentValues agentList
+	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, or prompt; may be repeated or comma-separated (default: all)")
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
 	if err := flags.Parse(args); err != nil {
@@ -63,17 +63,33 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	if flags.NArg() > 0 {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
+	benchmarkConfig, err := config.Load(configPaths...)
+	if err != nil {
+		return err
+	}
+	logger, err := newLogger(terminal, benchmarkConfig.Logging)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(logger)
 	if *parallel < 1 {
 		return errors.New("parallel must be at least 1")
 	}
 	if *repeat < 1 {
 		return errors.New("repeat must be at least 1")
 	}
+	agentNames, err := commandagent.Select(agentValues...)
+	if err != nil {
+		return err
+	}
 
 	if len(validationPaths) > 0 {
+		if len(agentValues) > 0 && !explicitAllAgentSelection(agentValues) {
+			return errors.New("agent selection is only supported with scenario runs")
+		}
 		return runValidation(ctx, validationPaths, *parallel, *repeat, terminal)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, terminal)
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal)
 }
 
 type stringList []string
@@ -90,17 +106,35 @@ func (s *stringList) Set(value string) error {
 	return nil
 }
 
-func newLogger(output io.Writer) (*slog.Logger, error) {
-	level, err := logging.ParseLevel(os.Getenv("BENCHMARK_LOG_LEVEL"))
+type agentList []string
+
+func (a *agentList) String() string {
+	return strings.Join(*a, ",")
+}
+
+func (a *agentList) Set(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("agent must not be blank")
+	}
+	*a = append(*a, value)
+	return nil
+}
+
+func explicitAllAgentSelection(values agentList) bool {
+	return len(values) == 1 && strings.EqualFold(strings.TrimSpace(values[0]), string(commandagent.All))
+}
+
+func newLogger(output io.Writer, settings config.LoggingConfig) (*slog.Logger, error) {
+	level, err := logging.ParseLevel(settings.Level)
 	if err != nil {
 		return nil, err
 	}
 
-	format := logging.Format(os.Getenv("BENCHMARK_LOG_FORMAT"))
+	format := logging.Format(settings.Format)
 	if format == "" {
 		format = logging.FormatText
 	}
-	if color, configured := logColorSetting(); configured {
+	if color, configured := logColorSetting(settings.Color); configured {
 		return logging.NewWithColor(output, format, level, color)
 	}
 	if colorProvider, ok := output.(interface{ ColorEnabled() bool }); ok {
@@ -109,8 +143,8 @@ func newLogger(output io.Writer) (*slog.Logger, error) {
 	return logging.New(output, format, level)
 }
 
-func logColorSetting() (bool, bool) {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("BENCHMARK_LOG_COLOR"))) {
+func logColorSetting(value string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "always", "true", "1":
 		return true, true
 	case "never", "false", "0":

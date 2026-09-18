@@ -95,7 +95,7 @@ func (p *Progress) Finish() error {
 
 	p.terminal.mu.Lock()
 	defer p.terminal.mu.Unlock()
-	if _, err := io.WriteString(p.terminal.writer, clearLine+p.String()+"\n"); err != nil {
+	if _, err := io.WriteString(p.terminal.writer, clearLine+p.String()+"\n"+showCursor); err != nil {
 		return err
 	}
 	p.terminal.progress = nil
