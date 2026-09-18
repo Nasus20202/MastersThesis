@@ -85,7 +85,9 @@ func formatCommandResult(result command.Result, execErr error) string {
 	if !strings.HasSuffix(result.Stderr, "\n") {
 		builder.WriteByte('\n')
 	}
-	if execErr != nil {
+	// A nonzero command exit already appears above. The sandbox wraps it as an
+	// execution error, but showing that wrapper suggests the tool itself failed.
+	if execErr != nil && result.ExitCode <= 0 {
 		fmt.Fprintf(&builder, "error: %s\n", execErr)
 	}
 	return builder.String()

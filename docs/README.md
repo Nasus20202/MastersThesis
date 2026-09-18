@@ -17,4 +17,4 @@ This directory contains the research design, benchmark definition, technology ch
 - [Kubernetes knowledge check](research/kubernetes-knowledge-check/README.md) — evaluated Gemma 4 E4B on Kubernetes troubleshooting probes without documentation context and with fixed excerpts from the pinned Kubernetes 1.37 documentation, preserving the prompts, criteria, raw responses and runtime metadata.
 - [Baseline model comparison pilot](research/baseline-model-comparison/README.md) — Gemma 4 E2B, Gemma 4 E4B, Qwen3.5 4B and Qwen3.5 9B on 10 baseline `image-pull-failure` attempts each, with results and raw evidence.
 - [Baseline incident evaluation](research/baseline-behaviour/README.md) — Gemma 4 E4B baseline on five development incidents, 10 attempts per incident, with merged raw evidence.
-- [Prompt selection](research/prompt-selection/README.md) — six pinned troubleshooting prompt approaches compared on the development scenarios, with three attempts per scenario.
+- [Prompt selection](research/prompt-selection/README.md) — six troubleshooting prompts and two follow-up combinations compared on the development scenarios, with attempt-level evidence.
