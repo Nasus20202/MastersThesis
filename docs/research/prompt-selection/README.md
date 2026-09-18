@@ -52,8 +52,7 @@ unchanged. Each combination was scheduled for three attempts per scenario
 (30 attempts in the comparison). These are new complete prompts, not isolated
 tests of a single sentence. Each combination's evidence is merged into one
 15-attempt directory. The attempt records retain their source run IDs, with
-source run metadata beside them. The later Bash response-format change was
-not part of these runs.
+the later Bash response-format change was not part of these runs.
 
 ## Results
 
@@ -164,7 +163,7 @@ the prompts reliably.
 The 30 attempts are in the
 [constraints + decision points run](raw/constraints-decision-points/run-2026-09-18-22-03-44-795Z/run.json)
 and [Bash-guided run](raw/constraints-decision-points-tool-guidance/run-2026-09-18-22-18-27-123Z/run.json).
-Each directory contains the attempt transcripts and source run metadata.
+Each directory contains the attempt transcripts and merged run metadata.
 
 ## Conclusions
 
