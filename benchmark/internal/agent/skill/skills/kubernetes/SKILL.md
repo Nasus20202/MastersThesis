@@ -1,6 +1,6 @@
 ---
 name: kubernetes
-description: Kubernetes concepts for interpreting resources, controllers, status, failure symptoms, and focused areas such as RBAC, scheduling, networking, storage, configuration, and lifecycle.
+description: Kubernetes domain semantics and focused references. Load when evidence involves RBAC/authorization, scheduling/resources, workloads/pods/images, Services/networking, configuration/storage, security/policies, lifecycle/observability, or API behavior; then use the matching focused reference when needed.
 ---
 
 # Kubernetes
@@ -11,7 +11,9 @@ Kubernetes is a declarative system built around desired state and reconciliation
 
 Keep resource ownership and abstraction boundaries in mind. Higher-level controllers manage lower-level resources, configuration is often distributed across related objects, and observed symptoms may originate in another part of the system.
 
-Load references selectively after inspection. When observed evidence points to a specific Kubernetes area, use the matching reference before changing that subsystem if it can clarify semantics, ownership, or constraints. In particular, authorization evidence such as `403`/`Forbidden`, ServiceAccounts, Roles, RoleBindings, or least-privilege requirements maps to `authorization.md`; scheduling failures map to `scheduling.md`; requests and limits to `resources.md`; image pull failures to `images.md`; Service, EndpointSlice, DNS, ingress, or network-policy issues to `networking.md`; ConfigMap or Secret behavior to `configuration.md`; and Pod/container lifecycle failures to `pods.md` or `workloads.md` as appropriate.
+After inspection identifies a specific Kubernetes subsystem, use the matching reference before a specialized repair when it can clarify semantics, ownership, or constraints. References are owned by this skill: call `load_reference` with `skill: kubernetes` and the exact filename listed below. Do not pass reference names to `load_skill`.
+
+Authorization evidence such as `403`/`Forbidden`, ServiceAccounts, Roles, RoleBindings, ClusterRoles, bindings, or least-privilege requirements maps to `authorization.md`; scheduling failures map to `scheduling.md`; requests and limits to `resources.md`; image pull failures to `images.md`; Service, EndpointSlice, DNS, ingress, or network-policy issues to `networking.md`; ConfigMap or Secret behavior to `configuration.md`; and Pod/container lifecycle failures to `pods.md` or `workloads.md` as appropriate.
 
 For command details use the `kubectl` skill; for a general diagnosis and repair process use the `troubleshooting` skill.
 
