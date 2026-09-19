@@ -24,6 +24,8 @@ The intended routing path is:
 4. if that skill exposes a reference matching the observed subsystem, load the focused reference before making a specialized change;
 5. repair and verify the final state.
 
+`load_skill` takes a skill name; `load_reference` takes an exact reference owned by a skill. Command knowledge and domain knowledge are deliberately separate: `kubectl` explains how to issue commands, while `kubernetes` owns resource semantics and focused references such as authorization, scheduling and networking.
+
 This preserves progressive disclosure while making the ownership of domain knowledge explicit.
 
 ## Development evidence
@@ -89,27 +91,34 @@ The old routing language only said that references could be loaded “when more 
 
 The RBAC attempts expose the routing problem directly:
 
-- **Attempt 1 — score 0.** It loaded `troubleshooting`, `kubectl` and `kubernetes`, saw `authorization.md` in the Kubernetes reference list, but never loaded it. It inspected the already-correct Role, deleted the failing Pod, then incorrectly patched the Role API group to `.`.
-- **Attempt 4 — score 1.** It loaded `kubernetes`, `troubleshooting`, `configuration.md` and `authorization.md`. It later observed HTTP 403, inspected the RoleBinding, found subject `wrong-reader`, and patched it to `config-reader`.
-- **Attempt 5 — score 1.** It loaded only `kubectl`; after finding the bad RoleBinding it requested a nonexistent `RoleBinding structure` reference from the `kubectl` skill. It recovered by reasoning from the object and patched the correct subject anyway.
+- **Attempt 1 — score 0.** It loaded `troubleshooting`, `kubectl` and `kubernetes`, but made no reference request and timed out.
+- **Attempt 2 — score 0.** It loaded the same three broad skills, made no reference request, and finished after almost the full 300-second budget.
+- **Attempt 3 — score 0.** It loaded `kubectl` and `kubernetes`, made no reference request, and timed out.
+- **Attempt 4 — score 1.** It loaded `kubernetes`, `troubleshooting`, `configuration.md` and `authorization.md`, then completed the required RBAC repair successfully according to deterministic grading.
+- **Attempt 5 — score 1.** It loaded only `kubectl`; after diagnosing the RoleBinding it requested a nonexistent `RoleBinding structure` reference from `kubectl`. The request failed because that skill has no references, although the model recovered and completed the repair from its own reasoning.
 
-Attempt 4 is only one observation, so it does not establish that loading `authorization.md` caused success. It does show that the reference contained directly relevant RBAC semantics and that the agent could use the progressive-disclosure path successfully. Attempts 1 and 5 show why the routing contract needed to make topic-to-skill and skill-to-reference ownership clearer.
+Attempt 4 is only one observation, so it does not establish that loading `authorization.md` caused success. It does show that the intended progressive-disclosure path can reach directly relevant RBAC semantics. Attempts 1–3 show that loading the broad Kubernetes skill was not sufficient to trigger reference use, and attempt 5 shows confusion between command knowledge and domain-reference ownership.
 
 ## Routing revision after the diagnostic
 
 The Skill package was revised from the raw evidence without adding scenario IDs, grader criteria, exact repairs, or automatic routing:
 
-- the system prompt now says to inspect first and use skills as on-demand knowledge rather than a checklist;
-- after observations identify a domain, the agent is told to load a matching skill voluntarily;
-- after a skill exposes references, the agent is told to load a focused reference when it matches the observed failure or the subsystem about to be changed;
-- the Kubernetes skill description now advertises its broader domain scope, including RBAC, scheduling, networking, storage, configuration and lifecycle;
-- the Kubernetes skill maps generic evidence such as `403`/`Forbidden`, ServiceAccounts, Roles and RoleBindings to `authorization.md`, with equivalent examples for scheduling, resources, images, networking, configuration and workload failures;
-- the `kubectl` skill now routes authorization findings to the Kubernetes skill and its `authorization.md` reference instead of implying that command knowledge owns RBAC semantics;
-- the troubleshooting skill now reminds the agent to consult a matching Kubernetes reference before a specialized repair when exact semantics or constraints matter.
+- the shared execution contract requires hands-on inspection, repair and verification;
+- the Skill prompt keeps loading voluntary but distinguishes skill names from reference names and command knowledge from domain knowledge;
+- the `kubernetes` manifest description now advertises the subsystems it covers, including RBAC/authorization, so that routing information is visible before the skill is loaded;
+- once loaded, the Kubernetes skill explicitly maps common evidence to focused references and explains that references are loaded with `load_reference`, not `load_skill`;
+- the `kubectl` manifest is explicitly limited to command syntax and routes Kubernetes semantics to the `kubernetes` skill;
+- the troubleshooting skill explicitly hands specialized Kubernetes semantics to the `kubernetes` skill and its references.
 
 Skill and reference loading remain model-selected. No keyword matcher or harness-side router chooses content for the model.
 
 These changes are a new development configuration. **No benchmark result is attributed to them yet.**
+
+## Routing acceptance criteria
+
+The next diagnostic should test routing behavior as well as task score. For an RBAC problem, the expected evidence path is: inspect with Bash, recognize authorization semantics, voluntarily load `kubernetes`, and load `authorization.md` when the focused reference is useful before changing RBAC state. A run should not invent a reference name, request a domain reference from `kubectl`, or stop after loading material without operating on the sandbox.
+
+References should still be selective: a successful task that does not need extra domain detail does not have to load one merely to satisfy a counter.
 
 ## Next test
 
@@ -149,9 +158,9 @@ Published and preprint evidence does not imply that skills must outperform promp
 1. Shunyu Yao et al. 2023. “ReAct: Synergizing Reasoning and Acting in Language Models.” _ICLR 2023_, arXiv:2210.03629v2. [OpenReview](https://openreview.net/forum?id=WE_vluYUL-X); [arXiv](https://arxiv.org/abs/2210.03629v2).
 2. Xiangyi Li et al. 2026. “SkillsBench: Benchmarking How Well Agent Skills Work Across Diverse Tasks.” arXiv:2602.12670v4, 14 June 2026. [arXiv](https://arxiv.org/abs/2602.12670v4).
 3. Yujian Liu et al. 2026. “How Well Do Agentic Skills Work in the Wild: Benchmarking LLM Skill Usage in Realistic Settings.” arXiv:2604.04323v1. [arXiv](https://arxiv.org/abs/2604.04323v1).
-4. Zhiyu Chen et al. 2026. “SkillJuror: Measuring How Agent Skill Organization Changes Runtime Behavior.” arXiv:2606.11543v1. [arXiv](https://arxiv.org/abs/2606.11543v1).
-5. Wei-Jung Huang. 2026. “Do LLM-Generated Skills Make Better AI Data Scientists? A Component Ablation Across Data-Science Workflows.” arXiv:2607.07504v1. [arXiv](https://arxiv.org/abs/2607.07504v1).
-6. Jinyi Han et al. 2026. “Skill-Use: Can LLMs Actually Use Skills in Agentic Harnesses?” arXiv:2608.04828v1. [arXiv](https://arxiv.org/abs/2608.04828v1).
-7. Barry Zhang, Keith Lazuka and Mahesh Murag. 2025. “Equipping Agents for the Real World with Agent Skills.” Anthropic Engineering, 16 October 2025. [Article](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills).
+4. Zhiyu Chen et al. 2026. “SkillJuror: Measuring How Agent Skill Organization Changes Runtime Behavior.” arXiv:2606.11543v1.
+5. Wei-Jung Huang. 2026. “Do LLM-Generated Skills Make Better AI Data Scientists? A Component Ablation Across Data-Science Workflows.” arXiv:2607.07504v1.
+6. Jinyi Han et al. 2026. “Skill-Use: Can LLMs Actually Use Skills in Agentic Harnesses?” arXiv:2608.04828v1.
+7. Barry Zhang, Keith Lazuka and Mahesh Murag. 2025. “Equipping Agents for the Real World with Agent Skills.” Anthropic Engineering, 16 October 2025.
 
 Literature checked 2026-09-19. The arXiv studies listed here are preprints.
