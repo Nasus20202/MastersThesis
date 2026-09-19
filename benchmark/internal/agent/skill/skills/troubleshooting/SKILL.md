@@ -1,6 +1,6 @@
 ---
 name: troubleshooting
-description: General diagnosis and repair workflow for structured troubleshooting.
+description: General inspect-diagnose-repair-verify workflow. Load when the troubleshooting process is useful; use the kubernetes skill for subsystem semantics and focused references, and kubectl for command syntax.
 ---
 
 # Troubleshooting
@@ -15,7 +15,7 @@ Capture the symptom, the affected resources, and the constraints that must survi
 
 Trace the symptom through the dependency chain and stop at the first layer whose evidence disagrees with its expected state. Prefer one observation that eliminates a cause over many unrelated reads. Repair the resource that owns the faulty state, not a generated object it creates.
 
-When the evidence identifies a Kubernetes subsystem, check whether the `kubernetes` skill exposes a matching focused reference. Load that reference before a specialized repair when exact semantics, ownership, or constraints matter; do not load unrelated references mechanically.
+When the evidence identifies a Kubernetes subsystem, load the `kubernetes` skill if it has not already been loaded. Check its focused references and load the exact matching reference before a specialized repair when semantics, ownership, or constraints matter. Do not route domain questions to the `kubectl` skill and do not load unrelated references mechanically.
 
 ## 3. Make the smallest durable change
 
