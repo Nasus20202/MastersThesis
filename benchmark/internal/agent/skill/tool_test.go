@@ -43,7 +43,8 @@ func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
 	} {
 		assert.Contains(t, prompt, entry)
 	}
-	assert.Contains(t, prompt, "load a listed reference only if more detail is needed")
+	assert.Contains(t, prompt, "For a troubleshooting task, call `load_skill` for `troubleshooting` before the first Bash call")
+	assert.Contains(t, prompt, "Load other skills and listed references only when their guidance is useful for the task")
 	assert.NotContains(t, prompt, ".md")
 	assert.NotContains(t, prompt, "Execute every fix")
 }

@@ -2,7 +2,7 @@
 
 ## Status
 
-Active development study for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18). All four remain **In progress**. The first approved 75-attempt run and its analysis are complete. The router-only follow-up is approved in [D-026](../../decision-log.md); its rerun is deferred.
+Active development study for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18). All four remain **In progress**. The first approved 75-attempt run and its analysis are complete. The router-only follow-up approved in [D-026](../../decision-log.md) is implemented; its rerun is deferred.
 
 ## Question
 
@@ -82,7 +82,7 @@ This run estimates the skill condition with optional skill routing as implemente
 
 **Approved change:** require loading the `troubleshooting` skill before the first Bash call on troubleshooting tasks. Keep skill content and all other benchmark settings fixed, as recorded in [D-026](../../decision-log.md).
 
-**Status:** Router change approved; implementation and benchmark rerun pending. The researcher requested that the rerun happen later.
+**Status:** Router change implemented in [`benchmark/internal/agent/skill/prompt.md`](../../../benchmark/internal/agent/skill/prompt.md); benchmark rerun pending at the researcher's request.
 
 **Planned run:** the same 3-condition × 5-scenario × 5-repetition matrix (75 attempts). Run ID: pending. Raw evidence: pending under `raw/<run-id>/`. Analysis: pending.
 
