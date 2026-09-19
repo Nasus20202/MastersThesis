@@ -2,78 +2,148 @@
 
 ## Research question
 
-Does the skill condition improve deterministic Kubernetes repair over baseline prompting and the selected troubleshooting prompt? All conditions use the same model, sandbox, Bash tool, task text, execution limits and scoring. The skill condition combines its router prompt, loaders, procedural skills and Kubernetes references.
+Does the Skill condition improve Kubernetes task execution over Baseline and the selected Prompt condition when all three use the same model, sandbox, Bash capability, task text, execution limits and deterministic scoring?
 
-## Design
+The intended advantage of Skill is progressive disclosure: the agent can inspect the environment, then voluntarily load procedural or domain knowledge only when it is useful. The working hypothesis is **Baseline < Prompt < Skill**, but the benchmark decides the ordering; results are not adjusted to fit that hypothesis.
 
-The skill prompt stays short and lists available skills. The agent can load a skill or one of its references when needed. The troubleshooting skill supplies a general inspect, diagnose, repair and verify procedure; the Kubernetes material explains domain behavior. All conditions have the same Bash capability.
+## Skill design
 
-Loading material on demand can reduce unused initial context. It adds a routing decision, and a missed, incorrect or irrelevant load can waste context or stop useful work. Loaded content remains in the conversation, so token use may increase. Routing and token counts are secondary measures; task success is primary.
+The Skill condition has three model tools in addition to normal model reasoning:
 
-The prompt condition retains its detailed troubleshooting guidance. The skill condition keeps its routing and progressive-disclosure design; its prompt does not contain the troubleshooting procedure or Kubernetes reference content.
+- `bash` executes commands in the benchmark sandbox;
+- `load_skill` loads one skill body selected by the agent;
+- `load_reference` loads one focused reference listed by a skill.
 
-## Evidence
+Loading is voluntary. The harness does not select a skill or reference from scenario IDs, keywords or grader knowledge. The router exposes only the available skill names and short descriptions. A loaded skill can then expose its references.
 
-| Study           | Task and model                                                                                                                                                                                   | Comparison, metric and result                                                                                                                                                         | Limitation                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| SkillsBench [2] | 87 terminal and container tasks across 8 domains; 18 model and harness configurations, including OpenHands with Claude Opus 4.7, GPT-5.4 Mini and Gemini 3.1 Flash Lite; 3 trials per condition. | No skill vs curated skills; task-macro pass rate **33.9% to 50.5% (+16.6 pp)**.                                                                                                       | No strong prompt-only comparison; task-skill curation and context size differ; 13/87 tasks regressed. Preprint. |
-| Liu et al. [3]  | 84 SkillsBench tasks, 3 repetitions; Claude Opus 4.6/Claude Code, Kimi K2.5/Terminus-2 and Qwen3.5-397B-A17B/Qwen-Code.                                                                          | For Claude, no skill **35.4%**, forced skill **55.4%**, agent selection **51.2%**, and skill distractors **43.5%** task pass rate.                                                    | Retrieval, selection and skill quality are coupled; no prompt-only comparator. Preprint.                        |
-| SkillJuror [4]  | 82 SkillsBench tasks; GPT-5.4 high with Codex/Harbor; 5 trials per condition.                                                                                                                    | No skill **29.0%**, flat skill **42.0%**, progressive disclosure **46.1%**. Progressive vs flat: **+4.1 pp** (17/410); task-level 95% CI spans zero. Tokens per pass: 0.22M vs 0.21M. | One model and harness; format effect is small and uncertain. Preprint.                                          |
-| Huang [5]       | 56 data-science tasks; 9 OpenAI, Google and Anthropic model configurations; 3 repetitions.                                                                                                       | Task-only prompt vs generated flat skills; majority-vote pass rate **68.3% vs 67.5%**; no condition significant (_p_ ≥ .396).                                                         | Generated data-science skills and different tasks and execution setup. Preprint.                                |
-| Skill-Use [6]   | 177 tasks, 79 skills, 9 domains; 8 LLMs and 2 harnesses.                                                                                                                                         | Studies trigger, procedure compliance and boundary behavior; highest combined score **0.613** (GPT-5.5/Claude Code).                                                                  | Does not compare task success with and without skills. Preprint.                                                |
-| ReAct [1]       | ALFWorld tasks; PaLM-540B.                                                                                                                                                                       | Action-only prompt vs interleaved reasoning and action; reported task success **45% vs 71%**.                                                                                         | Prompt intervention, not skills; different model and tasks; reports selected best runs. ICLR 2023.              |
+The intended routing path is:
 
-These studies do not estimate the gain expected on this Gemma 4 E4B Kubernetes benchmark. Skill gains vary by task and routing method; prompt changes can also improve tool use. Measure baseline, prompt and skill directly.
+1. inspect the sandbox;
+2. identify the relevant procedure or Kubernetes area from observed evidence;
+3. load a useful skill when additional knowledge is needed;
+4. if that skill exposes a reference matching the observed subsystem, load the focused reference before making a specialized change;
+5. repair and verify the final state.
 
-## Metrics
+This preserves progressive disclosure while making the ownership of domain knowledge explicit.
 
-Primary effectiveness metric: macro-average normalized score, averaging repetitions within each scenario and then scenarios equally. Key secondary metric: full-success rate. Report all repetition outcomes, failure modes, tokens, tool calls and agent duration. For the skill condition, also report skill and reference calls, loaded names and evident incorrect or unnecessary requests.
+## Development evidence
 
-## Leakage and generalization
+### Original comparison
 
-The five development scenarios existed while the skills were being created. The audit found no scenario IDs, scenario text or exact scenario repair recipes in the model-visible skill material. The references cover the same broad topics, and the troubleshooting procedure was informed by development weaknesses. Results on these five scenarios are development evidence, not a generalization test.
+The original comparison used 5 scenarios × 3 conditions × 5 repetitions = **75 attempts**. It is exploratory development evidence, not a final generalization result.
 
-Before authoring the expanded set, audit the current model-visible skill prompt and files, record their digest and freeze them. Create new scenarios after the freeze. Do not tune the frozen package from those results.
+Configuration: Gemma 4 E4B QAT Q4_0 (`google/gemma-4-E4B-it-qat-q4_0-gguf`, revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`, SHA-256 `676c35070db6dbe52f93e9c864ee0fba4eddea94b9c875d9cb10daff453fbaee`); llama.cpp `server-vulkan-b10964`, digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`; `--kv-unified-per-slot 32768`; server parallelism 2; reasoning on with a 4096-token budget; 25 turns, 50 tool calls, 60 seconds per tool call and 300 seconds per attempt; benchmark parallelism 4. Temperature and maximum output tokens were not overridden.
 
-## Development comparison
+| Condition | Macro score | Full success | Tokens (total) | Tool calls | Mean agent duration |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Baseline | **0.640** | 15/25 (60%) | 304,594 | 152 Bash | 147.5s |
+| Prompt | **0.740** | 18/25 (72%) | 562,073 | 217 Bash | 201.3s |
+| Skill | **0.000** | 0/25 (0%) | 75,024 | 46 `load_skill`, 1 `load_reference`, **0 Bash** | 27.2s |
 
-The original comparison used 5 scenarios × 3 conditions × 5 repetitions = **75 attempts**. It is exploratory; five repetitions give only coarse per-scenario rates. After this run, prefer broader scenario coverage to more repetitions of these five scenarios.
+| Scenario | Baseline scores | Prompt scores | Skill scores |
+| --- | --- | --- | --- |
+| `container-crash-loop` | 0, 0, 0, 0, 0 | 0, 1, 0, 0, 0 | 0, 0, 0, 0, 0 |
+| `image-pull-failure` | 1, 1, 1, 1, 1 | 1, 1, 1, 1, 1 | 0, 0, 0, 0, 0 |
+| `missing-rbac-binding` | 0, 0, 0.5, 0.5, 0 | 0, 1, 1, 0.5, 0 | 0, 0, 0, 0, 0 |
+| `service-selector-mismatch` | 1, 1, 1, 1, 1 | 1, 1, 1, 1, 1 | 0, 0, 0, 0, 0 |
+| `unschedulable-cpu-request` | 1, 1, 1, 1, 1 | 1, 1, 1, 1, 1 | 0, 0, 0, 0, 0 |
 
-Configuration: Gemma 4 E4B QAT Q4_0 (`google/gemma-4-E4B-it-qat-q4_0-gguf`, revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`, SHA-256 `676c35070db6dbe52f93e9c864ee0fba4eddea94b9c875d9cb10daff453fbaee`); llama.cpp `server-vulkan-b10964`, digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`; `--kv-unified-per-slot 32768`; server parallelism 2; reasoning on with a 4096-token budget; 25 turns, 50 tool calls, 60 seconds per tool call and 300 seconds per attempt; benchmark parallelism 4. Temperature and maximum output tokens were not set, so runtime defaults applied. Scenarios: `container-crash-loop`, `image-pull-failure`, `missing-rbac-binding`, `service-selector-mismatch` and `unschedulable-cpu-request`.
+The Skill result does **not** show that the skill knowledge was worse than prompting. The Skill agent made no Bash calls in any of its 25 attempts, so it never interacted with the environment it was graded on. It mostly loaded material, asked for information that was available in the sandbox, or stopped after diagnosis. The low token count and short duration are consequences of this early termination.
 
-| Condition    | Macro score | Full success | Tokens (prompt / completion / total) |                                  Tool calls | Agent duration (sum / mean) |
-| ------------ | ----------: | -----------: | -----------------------------------: | ------------------------------------------: | --------------------------: |
-| Baseline     |   **0.640** |  15/25 (60%) |           232,289 / 72,305 / 304,594 |                                    152 Bash |             3,686s / 147.5s |
-| Final prompt |   **0.740** |  18/25 (72%) |           465,210 / 96,863 / 562,073 |                                    217 Bash |             5,031s / 201.3s |
-| Skill        |   **0.000** |    0/25 (0%) |             51,860 / 23,164 / 75,024 | 46 `load_skill`, 1 `load_reference`; 0 Bash |                679s / 27.2s |
+The original Skill condition therefore exposed a harness/prompt contract failure before it could meaningfully test skill content.
 
-| Scenario                    | Baseline scores, repetitions 1–5 | Prompt scores, repetitions 1–5 | Skill scores, repetitions 1–5 |
-| --------------------------- | -------------------------------- | ------------------------------ | ----------------------------- |
-| `container-crash-loop`      | 0, 0, 0, 0, 0                    | 0, 1, 0, 0, 0                  | 0, 0, 0, 0, 0                 |
-| `image-pull-failure`        | 1, 1, 1, 1, 1                    | 1, 1, 1, 1, 1                  | 0, 0, 0, 0, 0                 |
-| `missing-rbac-binding`      | 0, 0, 0.5, 0.5, 0                | 0, 1, 1, 0.5, 0                | 0, 0, 0, 0, 0                 |
-| `service-selector-mismatch` | 1, 1, 1, 1, 1                    | 1, 1, 1, 1, 1                  | 0, 0, 0, 0, 0                 |
-| `unschedulable-cpu-request` | 1, 1, 1, 1, 1                    | 1, 1, 1, 1, 1                  | 0, 0, 0, 0, 0                 |
+### Corrected Skill diagnostic
 
-The final prompt exceeded baseline by 0.100 macro-score points and 12 percentage points in full success. The original skill run made no Bash calls in all 25 attempts; it requested cluster details or gave a diagnosis without inspecting the sandbox. Its lower token use and duration came from stopping early. Seven attempts recorded llama.cpp `context deadline exceeded` (two baseline and five prompt); two prompt attempts still passed grading.
+A separate diagnostic added an explicit instruction to inspect and repair the sandbox with Bash and reran Skill for 5 repetitions on the same 5 scenarios. This was **not** a replacement controlled three-condition comparison.
 
-## Corrected skill diagnostic and follow-up
+| Scenario | Diagnostic scores | Full success |
+| --- | --- | ---: |
+| `container-crash-loop` | 0, 0, 0, 0, 1 | 1/5 |
+| `image-pull-failure` | 1, 0, 1, 0, 1 | 3/5 |
+| `missing-rbac-binding` | 0, 0, 0, 1, 1 | 2/5 |
+| `service-selector-mismatch` | 1, 1, 1, 0, 1 | 4/5 |
+| `unschedulable-cpu-request` | 1, 0, 1, 1, 1 | 4/5 |
+| **All scenarios** |  | **14/25 (56%)** |
 
-After the first skill result, the skill prompt received a one-sentence instruction to inspect and repair the sandbox with Bash. The separate rerun used the same five scenarios and five repetitions; it is not a replacement three-condition comparison. [`results.json`](results.json) records both run summaries and the diagnostic's attempt outcomes. The benchmark's full attempt records remain under `benchmark/results/` on the run host.
+The diagnostic macro score was **0.560**. It used 605,975 tokens and 203 tool calls: 166 Bash, 34 `load_skill`, and only **3 `load_reference`** calls. Four attempts still made no Bash calls. Four attempts reached the 300-second limit.
 
-| Scenario                    | Diagnostic scores, repetitions 1–5 | Full success |
-| --------------------------- | ---------------------------------- | -----------: |
-| `container-crash-loop`      | 0, 0, 0, 0, 1                      |          1/5 |
-| `image-pull-failure`        | 1, 0, 1, 0, 1                      |          3/5 |
-| `missing-rbac-binding`      | 0, 0, 0, 1, 1                      |          2/5 |
-| `service-selector-mismatch` | 1, 1, 1, 0, 1                      |          4/5 |
-| `unschedulable-cpu-request` | 1, 0, 1, 1, 1                      |          4/5 |
+This run shows that restoring environment interaction removed the catastrophic 0/25 failure, but routing remained inconsistent. The Skill condition still trailed the original Baseline (0.640) and Prompt (0.740) results.
 
-The diagnostic scored **0.560** macro-normalized and **14/25 (56%)** full success. It used 605,975 tokens and 203 tool calls (166 Bash, 34 `load_skill`, 3 `load_reference`); mean agent duration was 168.3 seconds. Four attempts made no Bash calls: two loaded `troubleshooting` and asked for sandbox details; two made no tool calls. Four attempts reached the 300-second limit (three RBAC and one scheduling); one still passed grading. The RBAC attempt 5 requested `RoleBinding structure` from `kubectl`, which has no reference files.
+## Why Skill underperformed
 
-The remaining zero-Bash attempts show the one-sentence correction did not prevent early stops. The shared execution contract now added to both prompt and skill conditions was not present during either comparison. Its effect has not been measured.
+The raw traces point to three separate problems.
 
-The four benchmark workers could also run model-agent loops against two llama.cpp slots. The runs recorded seven inference request deadline errors and four agent timeouts. Queue wait was not measured, so these results do not establish queueing as the cause. The runner now limits the complete agent phase to `LLAMA_PARALLEL`; cluster setup, grading and cleanup remain outside the limit. No inference has been run with this change.
+### 1. The first run did not execute the task
+
+The original router described skills as optional knowledge but did not make the hands-on execution contract strong enough for Gemma 4 E4B. All 25 Skill attempts made zero Bash calls. That run primarily measured whether the model would infer the missing operational contract, not whether skills helped Kubernetes work.
+
+The branch now uses the shared execution contract for hands-on agents. That change was not present in either raw run and therefore still needs measurement.
+
+### 2. Skill selection worked better than reference selection
+
+In the corrected diagnostic the model frequently loaded `troubleshooting`, `kubectl`, or `kubernetes`, but it almost never progressed from a broad skill to a focused reference. Across 25 attempts it made 34 skill loads but only 3 reference requests.
+
+The old routing language only said that references could be loaded “when more detail is needed.” It did not tell the model to treat a diagnosed subsystem as a routing decision. The Kubernetes skill listed `authorization.md`, `scheduling.md`, `networking.md`, and other references, but Gemma often continued from its own knowledge instead of consulting the matching reference.
+
+### 3. Reference ownership was unclear
+
+The RBAC traces show both failure modes directly:
+
+| RBAC attempt | Routing behavior | Result |
+| --- | --- | --- |
+| 1 | Loaded `troubleshooting`, `kubectl` and `kubernetes`, saw `authorization.md` in the Kubernetes reference list, but never loaded it. It inspected the already-correct Role, deleted the failing Pod, then incorrectly patched the Role API group to `.`. | 0 |
+| 4 | Loaded `kubernetes`, `troubleshooting`, `configuration.md` and `authorization.md`. It later observed HTTP 403, inspected the RoleBinding, found subject `wrong-reader`, and patched it to `config-reader`. | 1 |
+| 5 | Loaded only `kubectl`; after finding the bad RoleBinding it requested a nonexistent `RoleBinding structure` reference from the `kubectl` skill. It recovered by reasoning from the object and patched the correct subject anyway. | 1 |
+
+Attempt 4 is only one observation, so it does not establish that loading `authorization.md` caused success. It does show that the reference contained directly relevant RBAC semantics and that the agent could use the progressive-disclosure path successfully. Attempts 1 and 5 show why the routing contract needed to make topic-to-skill and skill-to-reference ownership clearer.
+
+## Routing revision after the diagnostic
+
+The Skill package was revised from the raw evidence without adding scenario IDs, grader criteria, exact repairs, or automatic routing:
+
+- the system prompt now says to inspect first and use skills as on-demand knowledge rather than a checklist;
+- after observations identify a domain, the agent is told to load a matching skill voluntarily;
+- after a skill exposes references, the agent is told to load a focused reference when it matches the observed failure or the subsystem about to be changed;
+- the Kubernetes skill description now advertises its broader domain scope, including RBAC, scheduling, networking, storage, configuration and lifecycle;
+- the Kubernetes skill maps generic evidence such as `403`/`Forbidden`, ServiceAccounts, Roles and RoleBindings to `authorization.md`, with equivalent examples for scheduling, resources, images, networking, configuration and workload failures;
+- the troubleshooting skill now reminds the agent to consult a matching Kubernetes reference before a specialized repair when exact semantics or constraints matter.
+
+Skill and reference loading remain model-selected. No keyword matcher or harness-side router chooses content for the model.
+
+These changes are a new development configuration. **No benchmark result is attributed to them yet.**
+
+## Next test
+
+First run a focused RBAC smoke test to verify the routing behavior itself. The useful signal is not merely whether the task passes: inspect whether the model recognizes authorization evidence, loads `kubernetes`, then loads `authorization.md` before making an RBAC change.
+
+If routing behaves as intended, rerun the complete controlled comparison with Baseline, Prompt and Skill under the same current runner and runtime settings. Preserve every run, including failures. Compare macro score and full-success rate first; tool use, reference selection, tokens, duration and termination state are supporting evidence.
+
+The desired research hypothesis is Baseline < Prompt < Skill because Skill adds optional domain knowledge on top of the common execution capability. The experiment must still report the observed ordering if that hypothesis is not supported.
+
+The expanded benchmark is development/tuning data for later Prompt/Skill optimization. Once the best observed configurations are selected, freeze them before the final evaluation set; do not tune on final evaluation results.
+
+## Raw data
+
+The committed raw attempt records are the source of truth for the numbers and failure analysis above:
+
+- [original three-condition comparison](raw/run-2026-09-19-12-13-42-245Z/)
+- [corrected Skill diagnostic](raw/run-2026-09-19-17-51-41-483Z/)
+- [machine-readable summary](results.json)
+
+Raw records include complete model messages, tool calls and outputs, token usage, termination state and deterministic grading evidence. They are preserved unchanged; later routing revisions must create new runs rather than overwrite these results.
+
+## Literature context
+
+Published and preprint evidence does not imply that skills must outperform prompting on this benchmark. Reported gains depend on skill quality, routing and harness behavior.
+
+| Study | Relevant result | Limitation |
+| --- | --- | --- |
+| SkillsBench [2] | Curated skills improved task-macro pass rate from **33.9% to 50.5%** across its evaluated configurations. | Different tasks, models and harnesses; some tasks regressed. |
+| Liu et al. [3] | For Claude, no skill **35.4%**, forced skill **55.4%**, agent selection **51.2%**, distractors **43.5%**. | Selection quality and skill quality are coupled. |
+| SkillJuror [4] | Progressive disclosure **46.1%** vs flat skill **42.0%**. | One model/harness; task-level confidence interval spans zero. |
+| Huang [5] | Task-only **68.3%** vs generated flat skills **67.5%**; no significant condition difference. | Data-science tasks and generated skills. |
+| Skill-Use [6] | Separates trigger, procedure compliance and boundary behavior. | Does not estimate task-success gain from skills. |
+| ReAct [1] | Interleaved reasoning/action improved ALFWorld success over action-only prompting. | Prompt intervention, not skills. |
 
 ## Sources
 
