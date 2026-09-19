@@ -1,11 +1,11 @@
 ---
 name: kubectl
-description: "kubectl command syntax and usage: resource addressing, output formats, logs, waits, and declarative changes."
+description: kubectl command syntax and usage only: resource addressing, output formats, logs, waits, auth checks, and declarative changes. Load when command usage is unclear; use the kubernetes skill for domain semantics such as RBAC, scheduling, networking, resource ownership, and focused references.
 ---
 
 # kubectl
 
-Use this skill for kubectl command knowledge: how resources are addressed, how output is shaped, and what common subcommands do. Use the `kubernetes` skill for resource semantics and the `troubleshooting` skill for a general diagnosis workflow.
+Use this skill for kubectl command knowledge: how resources are addressed, how output is shaped, and what common subcommands do. Use the `kubernetes` skill for resource semantics and focused domain references, and the `troubleshooting` skill for a general diagnosis workflow.
 
 ## Context, scope, and addressing
 
