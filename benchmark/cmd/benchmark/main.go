@@ -48,7 +48,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	var configPaths stringList
 	flags.Var(&configPaths, "config", "load benchmark YAML configuration; may be repeated in overlay order")
 	var agentValues agentList
-	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, or prompt; may be repeated or comma-separated (default: all)")
+	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, prompt, or skill; may be repeated or comma-separated (default: all)")
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
 	if err := flags.Parse(args); err != nil {

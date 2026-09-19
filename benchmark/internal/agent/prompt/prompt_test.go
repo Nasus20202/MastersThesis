@@ -42,6 +42,7 @@ func TestRunUsesDetailedSystemPrompt(t *testing.T) {
 	require.Len(t, client.messages, 2)
 	assert.Equal(t, "system", client.messages[0].Role)
 	assert.Equal(t, systemPrompt, client.messages[0].Content)
+	assert.Contains(t, client.messages[0].Content, "Identify the requested outcome and limits")
 	assert.Equal(t, "user", client.messages[1].Role)
 	assert.Equal(t, "Restore the application.", client.messages[1].Content)
 }
@@ -66,4 +67,10 @@ func TestNewWithSystemPromptUsesConfiguredPrompt(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, client.messages, 2)
 	assert.Equal(t, "custom instructions", client.messages[0].Content)
+}
+
+func TestSystemPromptIncludesOperationalInstructions(t *testing.T) {
+	assert.Contains(t, systemPrompt, "Use Bash to discover relevant resource names and namespaces")
+	assert.Contains(t, systemPrompt, "Do not ask for details available from the sandbox")
+	assert.Contains(t, systemPrompt, "continue until the task is repaired and verified")
 }

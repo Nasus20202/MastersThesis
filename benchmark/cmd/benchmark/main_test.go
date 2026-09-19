@@ -65,8 +65,9 @@ func TestAgentList(t *testing.T) {
 	var agents agentList
 	require.NoError(t, agents.Set("baseline"))
 	require.NoError(t, agents.Set("prompt"))
+	require.NoError(t, agents.Set("skill"))
 
-	assert.Equal(t, "baseline,prompt", agents.String())
+	assert.Equal(t, "baseline,prompt,skill", agents.String())
 	assert.ErrorContains(t, agents.Set(" "), "agent must not be blank")
 }
 

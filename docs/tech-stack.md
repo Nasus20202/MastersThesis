@@ -20,7 +20,7 @@ The initial implementation should remain a sensible CLI tool with a small and un
 
 The model will be served locally through `llama.cpp` in Docker.
 
-The Vulkan backend is the initial execution target. The current reproducible implementation uses `ghcr.io/ggml-org/llama.cpp:server-vulkan-b10524` at digest `sha256:1f834a5e0248d83c4cc459591a53250499592742f3c33f8830054e9ccb1c4c5b`. Its runtime parameters are maintained in `benchmark/config.env`; they remain provisional for final evaluation.
+The Vulkan backend is the initial execution target. The current reproducible implementation uses `ghcr.io/ggml-org/llama.cpp:server-vulkan-b10964` at digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`.
 
 The current execution host has an AMD Ryzen 5 3600 CPU (6 cores, 12 threads), 32 GiB RAM and an AMD Radeon RX 5700 GPU with 8 GiB VRAM.
 
