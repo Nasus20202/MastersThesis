@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
@@ -41,7 +42,8 @@ func TestRunUsesDetailedSystemPrompt(t *testing.T) {
 	assert.Equal(t, "Restore the application.", result.Task)
 	require.Len(t, client.messages, 2)
 	assert.Equal(t, "system", client.messages[0].Role)
-	assert.Equal(t, systemPrompt, client.messages[0].Content)
+	assert.Equal(t, rootagent.WithExecutionContract(systemPrompt), client.messages[0].Content)
+	assert.Contains(t, client.messages[0].Content, "Identify the requested outcome and limits")
 	assert.Equal(t, "user", client.messages[1].Role)
 	assert.Equal(t, "Restore the application.", client.messages[1].Content)
 }
@@ -65,5 +67,14 @@ func TestNewWithSystemPromptUsesConfiguredPrompt(t *testing.T) {
 	_, err = agent.Run(context.Background(), "Restore the application.")
 	require.NoError(t, err)
 	require.Len(t, client.messages, 2)
-	assert.Equal(t, "custom instructions", client.messages[0].Content)
+	assert.Equal(t, rootagent.WithExecutionContract("custom instructions"), client.messages[0].Content)
+}
+
+func TestPromptIncludesSharedExecutionContract(t *testing.T) {
+	assert.Contains(t, rootagent.ExecutionContract, "Use Bash to inspect the sandbox")
+	assert.Contains(t, rootagent.ExecutionContract, "discover any needed resource names, namespaces, cluster state, events, logs")
+	assert.Contains(t, rootagent.ExecutionContract, "Diagnose the issue, apply the required repair, and verify the resulting state")
+	assert.Contains(t, rootagent.ExecutionContract, "Do not ask the user for information available from the sandbox")
+	assert.Contains(t, rootagent.ExecutionContract, "stop after explaining a plan or suggesting commands")
+	assert.Contains(t, rootagent.ExecutionContract, "Continue until the task is repaired and verified")
 }

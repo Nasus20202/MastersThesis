@@ -37,6 +37,11 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if len(agentNames) == 0 {
 		return errors.New("benchmark requires at least one agent")
 	}
+	llamaParallelism, err := commandagent.ConfiguredLlamaParallelism()
+	if err != nil {
+		return err
+	}
+	agentSlots := make(chan struct{}, llamaParallelism)
 	totalTasks := len(definitions) * repeat * len(agentNames)
 
 	startedAt := time.Now().UTC()
@@ -87,7 +92,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 					Agent:      string(agentName),
 					Attempt:    attempt,
 					Run: func(ctx context.Context) (orchestration.RunResult, error) {
-						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
+						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory, agentSlots).Run(ctx, definition)
 					},
 				})
 			}
@@ -148,11 +153,12 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory, agentSlots chan struct{}) orchestration.Runner {
 	return orchestration.Runner{
 		Executor:            commandExecutor,
 		SandboxImageBuilder: imageBuilder,
 		AgentFactory:        agentFactory,
+		AgentSlots:          agentSlots,
 		Condition:           string(agentName),
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{

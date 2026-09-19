@@ -49,7 +49,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		return err
 	}
 	runCase := func(ctx context.Context, definition scenario.Definition, repair scenario.Step) (orchestration.RunResult, error) {
-		return newOrchestrationRunner(commandExecutor, definition, imageBuilder, "", nil).RunWithRepair(ctx, definition, repair)
+		return newOrchestrationRunner(commandExecutor, definition, imageBuilder, "", nil, nil).RunWithRepair(ctx, definition, repair)
 	}
 	tasks := make([]executor.Task, 0, len(cases)*repeat)
 	for attempt := 1; attempt <= repeat; attempt++ {

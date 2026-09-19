@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -100,6 +101,37 @@ type fakeAgent struct {
 	events *[]string
 	task   string
 	err    error
+}
+
+type slotTrackingAgent struct {
+	active  atomic.Int32
+	maximum atomic.Int32
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (a *slotTrackingAgent) Run(ctx context.Context, task string) (common.Result, error) {
+	active := a.active.Add(1)
+	defer a.active.Add(-1)
+	for previous := a.maximum.Load(); active > previous && !a.maximum.CompareAndSwap(previous, active); previous = a.maximum.Load() {
+	}
+	a.started <- struct{}{}
+	select {
+	case <-a.release:
+		return common.Result{Task: task, Termination: common.TerminationCompleted}, nil
+	case <-ctx.Done():
+		return common.Result{}, ctx.Err()
+	}
+}
+
+type contextWaitingAgent struct {
+	started chan<- struct{}
+}
+
+func (a contextWaitingAgent) Run(ctx context.Context, task string) (common.Result, error) {
+	a.started <- struct{}{}
+	<-ctx.Done()
+	return common.Result{Task: task}, ctx.Err()
 }
 
 func (a *fakeAgent) Run(_ context.Context, task string) (common.Result, error) {

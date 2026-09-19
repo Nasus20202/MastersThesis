@@ -18,3 +18,4 @@ This directory contains the research design, benchmark definition, technology ch
 - [Baseline model comparison pilot](research/baseline-model-comparison/README.md) — Gemma 4 E2B, Gemma 4 E4B, Qwen3.5 4B and Qwen3.5 9B on 10 baseline `image-pull-failure` attempts each, with results and raw evidence.
 - [Baseline incident evaluation](research/baseline-behaviour/README.md) — Gemma 4 E4B baseline on five development incidents, 10 attempts per incident, with merged raw evidence.
 - [Prompt selection](research/prompt-selection/README.md) — six troubleshooting prompts and two follow-up combinations compared on the development scenarios, with attempt-level evidence.
+- [Skill methodology review](research/skill-methodology/README.md) — design, results for the 75-attempt development comparison and corrected skill diagnostic, and the machine-readable [results JSON](research/skill-methodology/results.json).
