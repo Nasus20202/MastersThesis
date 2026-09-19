@@ -25,6 +25,8 @@ Authorization checks can be made without performing the operation:
 kubectl auth can-i get pods -n "$namespace"
 ```
 
+If observations involve `Forbidden`/403 responses, ServiceAccounts, Roles, RoleBindings, or least-privilege constraints, use the `kubernetes` skill and its `authorization.md` reference for the authorization semantics before changing RBAC objects.
+
 ## Reading objects
 
 `get` lists or summarizes resources; `describe` presents a human-readable view including related conditions and events. YAML and JSON output expose the API object fields directly:
