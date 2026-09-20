@@ -23,18 +23,32 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		return err
 	}
 	startedAt := time.Now().UTC()
+	revision, workingTreeDirty := repositoryProvenance()
 	metadata := results.RunMetadata{
-		RunID:       runID(startedAt),
-		StartedAt:   startedAt,
-		Parallelism: parallelism,
-		RepeatCount: repeat,
-		Scenarios:   validationScenarioIDs(cases),
+		RunID:              runID(startedAt),
+		RunType:            "validation",
+		StartedAt:          startedAt,
+		RepositoryRevision: revision,
+		WorkingTreeDirty:   workingTreeDirty,
+		ExpectedAttempts:   len(cases) * repeat,
+		Parallelism:        parallelism,
+		RepeatCount:        repeat,
+		Scenarios:          validationScenarioIDs(cases),
 	}
 	store, err := results.New("results", metadata)
 	if err != nil {
 		return err
 	}
 	logger := slog.Default()
+	finalized := false
+	defer func() {
+		if finalized {
+			return
+		}
+		if err := store.Finalize(time.Now().UTC()); err != nil {
+			logger.Error("validation result finalization failed", "run_id", metadata.RunID, "error", err)
+		}
+	}()
 	logger.Info("validation runner started",
 		"run_id", metadata.RunID,
 		"cases", len(cases),
@@ -116,11 +130,12 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		)
 	}
 	_ = <-executeErrors
-	if writeErr != nil {
-		return writeErr
+	finalizeErr := store.Finalize(time.Now().UTC())
+	if finalizeErr == nil {
+		finalized = true
 	}
-	if err := store.Finalize(time.Now().UTC()); err != nil {
-		return err
+	if writeErr != nil || finalizeErr != nil {
+		return errors.Join(writeErr, finalizeErr)
 	}
 	return errors.Join(validationErrors...)
 }

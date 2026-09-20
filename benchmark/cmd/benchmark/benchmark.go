@@ -45,19 +45,33 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	totalTasks := len(definitions) * repeat * len(agentNames)
 
 	startedAt := time.Now().UTC()
+	revision, workingTreeDirty := repositoryProvenance()
 	metadata := results.RunMetadata{
-		RunID:       runID(startedAt),
-		StartedAt:   startedAt,
-		Agents:      agentNamesToStrings(agentNames),
-		Parallelism: parallelism,
-		RepeatCount: repeat,
-		Scenarios:   scenarioIDs(definitions),
+		RunID:              runID(startedAt),
+		RunType:            "benchmark",
+		StartedAt:          startedAt,
+		RepositoryRevision: revision,
+		WorkingTreeDirty:   workingTreeDirty,
+		ExpectedAttempts:   totalTasks,
+		Agents:             agentNamesToStrings(agentNames),
+		Parallelism:        parallelism,
+		RepeatCount:        repeat,
+		Scenarios:          scenarioIDs(definitions),
 	}
 	store, err := results.New("results", metadata)
 	if err != nil {
 		return err
 	}
 	logger := slog.Default()
+	finalized := false
+	defer func() {
+		if finalized {
+			return
+		}
+		if err := store.Finalize(time.Now().UTC()); err != nil {
+			logger.Error("benchmark result finalization failed", "run_id", metadata.RunID, "error", err)
+		}
+	}()
 	logger.Info("benchmark runner started",
 		"run_id", metadata.RunID,
 		"agents", metadata.Agents,
@@ -82,7 +96,6 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	}
 	tasks := make([]executor.Task, 0, totalTasks)
 	for _, agentName := range agentNames {
-		agentName := agentName
 		agentFactory := agentFactories[agentName]
 		for attempt := 1; attempt <= repeat; attempt++ {
 			for _, definition := range definitions {
@@ -139,11 +152,12 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		)
 	}
 	runErr := <-executeErrors
-	if writeErr != nil {
-		return writeErr
+	finalizeErr := store.Finalize(time.Now().UTC())
+	if finalizeErr == nil {
+		finalized = true
 	}
-	if err := store.Finalize(time.Now().UTC()); err != nil {
-		return err
+	if writeErr != nil || finalizeErr != nil {
+		return errors.Join(writeErr, finalizeErr)
 	}
 	return runErr
 }

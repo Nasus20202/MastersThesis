@@ -8,13 +8,79 @@ import (
 )
 
 type RunMetadata struct {
-	RunID       string     `json:"run_id"`
-	StartedAt   time.Time  `json:"started_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	Agents      []string   `json:"agents,omitempty"`
-	Parallelism int        `json:"parallelism"`
-	RepeatCount int        `json:"repeat_count"`
-	Scenarios   []string   `json:"scenarios"`
+	RunID              string      `json:"run_id"`
+	RunType            string      `json:"run_type,omitempty"`
+	State              RunState    `json:"state"`
+	StartedAt          time.Time   `json:"started_at"`
+	CompletedAt        *time.Time  `json:"completed_at,omitempty"`
+	RepositoryRevision string      `json:"repository_revision,omitempty"`
+	WorkingTreeDirty   bool        `json:"working_tree_dirty"`
+	ExpectedAttempts   int         `json:"expected_attempts"`
+	Summary            *RunSummary `json:"summary,omitempty"`
+	Agents             []string    `json:"agents,omitempty"`
+	Parallelism        int         `json:"parallelism"`
+	RepeatCount        int         `json:"repeat_count"`
+	Scenarios          []string    `json:"scenarios"`
+}
+
+type RunState string
+
+const (
+	RunStateRunning    RunState = "running"
+	RunStateCompleted  RunState = "completed"
+	RunStateIncomplete RunState = "incomplete"
+)
+
+type RunSummary struct {
+	ExpectedAttempts int                         `json:"expected_attempts"`
+	AttemptsRecorded int                         `json:"attempts_recorded"`
+	ErrorCount       int                         `json:"error_count"`
+	ByCondition      map[string]ConditionSummary `json:"by_condition,omitempty"`
+}
+
+type ConditionSummary struct {
+	ExpectedAttempts      int                        `json:"expected_attempts"`
+	AttemptCount          int                        `json:"attempt_count"`
+	FullSuccessCount      int                        `json:"full_success_count"`
+	FullSuccessRate       float64                    `json:"full_success_rate"`
+	MeanScore             float64                    `json:"mean_score"`
+	MacroAverageScore     *float64                   `json:"macro_average_score,omitempty"`
+	ErrorCount            int                        `json:"error_count"`
+	ValidationPassedCount int                        `json:"validation_passed_count,omitempty"`
+	ValidationPassRate    *float64                   `json:"validation_pass_rate,omitempty"`
+	TerminationCounts     map[string]int             `json:"termination_counts,omitempty"`
+	SkillLoadCounts       map[string]int             `json:"skill_load_counts,omitempty"`
+	ReferenceLoadCount    int                        `json:"reference_load_count,omitempty"`
+	Scenarios             map[string]ScenarioSummary `json:"scenarios,omitempty"`
+}
+
+type ScenarioSummary struct {
+	ExpectedAttempts int     `json:"expected_attempts"`
+	AttemptCount     int     `json:"attempt_count"`
+	FullSuccessCount int     `json:"full_success_count"`
+	FullSuccessRate  float64 `json:"full_success_rate"`
+	MeanScore        float64 `json:"mean_score"`
+}
+
+type StudyResults struct {
+	UpdatedAt time.Time  `json:"updated_at"`
+	Runs      []StudyRun `json:"runs"`
+}
+
+type StudyRun struct {
+	RunID              string      `json:"run_id"`
+	RunType            string      `json:"run_type,omitempty"`
+	State              RunState    `json:"state"`
+	StartedAt          time.Time   `json:"started_at"`
+	CompletedAt        *time.Time  `json:"completed_at,omitempty"`
+	RepositoryRevision string      `json:"repository_revision,omitempty"`
+	WorkingTreeDirty   bool        `json:"working_tree_dirty"`
+	ExpectedAttempts   int         `json:"expected_attempts"`
+	Agents             []string    `json:"agents,omitempty"`
+	Scenarios          []string    `json:"scenarios"`
+	RepeatCount        int         `json:"repeat_count"`
+	Summary            *RunSummary `json:"summary,omitempty"`
+	Path               string      `json:"path"`
 }
 
 type AttemptResult struct {
