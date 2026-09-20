@@ -51,17 +51,17 @@ func TestSelect(t *testing.T) {
 }
 
 func TestNewBaselineFactoryRequiresModel(t *testing.T) {
-	t.Setenv("LLAMA_MODEL_NAME", "")
+	t.Setenv(envLlamaModelName, "")
 
 	factory, err := NewBaselineFactory(benchmarkconfig.Config{})
 	assert.Nil(t, factory)
-	assert.EqualError(t, err, "LLAMA_MODEL_NAME is required")
+	assert.EqualError(t, err, envLlamaModelName+" is required")
 }
 
 func TestNewFactoryConstructsSupportedAgents(t *testing.T) {
-	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
-	t.Setenv("LLAMA_CLIENT_HOST", "127.0.0.1")
-	t.Setenv("LLAMA_PORT", "8080")
+	t.Setenv(envLlamaModelName, "gemma-test")
+	t.Setenv(envLlamaClientHost, "127.0.0.1")
+	t.Setenv(envLlamaPort, "8080")
 
 	for _, name := range []Name{Baseline, Prompt, Skill} {
 		t.Run(string(name), func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestNewFactoryConstructsSupportedAgents(t *testing.T) {
 }
 
 func TestNewFactoryRejectsUnsupportedAgent(t *testing.T) {
-	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
+	t.Setenv(envLlamaModelName, "gemma-test")
 
 	factory, err := NewFactory(Name("unknown"), benchmarkconfig.Config{})
 	assert.Nil(t, factory)
@@ -109,14 +109,14 @@ func TestConfiguredLoopConfig(t *testing.T) {
 
 func TestConfiguredLlamaParallelism(t *testing.T) {
 	t.Run("configured", func(t *testing.T) {
-		t.Setenv("LLAMA_PARALLEL", "2")
+		t.Setenv(envLlamaParallel, "2")
 		parallelism, err := ConfiguredLlamaParallelism()
 		require.NoError(t, err)
 		assert.Equal(t, 2, parallelism)
 	})
 
 	t.Run("compose default", func(t *testing.T) {
-		t.Setenv("LLAMA_PARALLEL", "")
+		t.Setenv(envLlamaParallel, "")
 		parallelism, err := ConfiguredLlamaParallelism()
 		require.NoError(t, err)
 		assert.Equal(t, 1, parallelism)
@@ -124,9 +124,9 @@ func TestConfiguredLlamaParallelism(t *testing.T) {
 
 	for _, value := range []string{"0", "-1", "many"} {
 		t.Run("invalid "+value, func(t *testing.T) {
-			t.Setenv("LLAMA_PARALLEL", value)
+			t.Setenv(envLlamaParallel, value)
 			_, err := ConfiguredLlamaParallelism()
-			assert.ErrorContains(t, err, "LLAMA_PARALLEL must be a positive integer")
+			assert.ErrorContains(t, err, envLlamaParallel+" must be a positive integer")
 		})
 	}
 }
@@ -175,20 +175,20 @@ func TestLoadPromptSystemPromptRejectsMissingAndBlankFiles(t *testing.T) {
 }
 
 func TestModelArtifactAndRuntimeSettings(t *testing.T) {
-	t.Setenv("LLAMA_MODEL_REPOSITORY", "google/gemma")
-	t.Setenv("LLAMA_MODEL_REVISION", "revision")
-	t.Setenv("LLAMA_MODEL_FILE", "gemma.gguf")
-	t.Setenv("LLAMA_MODEL_QUANTIZATION", "Q4_0")
-	t.Setenv("LLAMA_MODEL_SHA256", "hash")
-	t.Setenv("LLAMA_KV_UNIFIED_PER_SLOT", "32768")
-	t.Setenv("LLAMA_FLASH_ATTN", "auto")
-	t.Setenv("LLAMA_REASONING", "on")
+	t.Setenv(envLlamaModelRepository, "google/gemma")
+	t.Setenv(envLlamaModelRevision, "revision")
+	t.Setenv(envLlamaModelFile, "gemma.gguf")
+	t.Setenv(envLlamaModelQuant, "Q4_0")
+	t.Setenv(envLlamaModelSHA256, "hash")
+	t.Setenv(envLlamaKVUnified, "32768")
+	t.Setenv(envLlamaFlashAttention, "auto")
+	t.Setenv(envLlamaReasoning, "on")
 
 	assert.Equal(t, "google/gemma@revision/gemma.gguf", modelArtifact())
 	settings := runtimeSettings()
-	assert.Equal(t, "32768", settings["LLAMA_KV_UNIFIED_PER_SLOT"])
-	assert.Equal(t, "on", settings["LLAMA_REASONING"])
-	assert.Equal(t, "auto", settings["LLAMA_FLASH_ATTN"])
+	assert.Equal(t, "32768", settings[envLlamaKVUnified])
+	assert.Equal(t, "on", settings[envLlamaReasoning])
+	assert.Equal(t, "auto", settings[envLlamaFlashAttention])
 }
 
 type baselineTestExecutor struct{}

@@ -18,6 +18,8 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 )
 
+const envNoColor = "NO_COLOR"
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -154,5 +156,5 @@ func logColorSetting(value string) (bool, bool) {
 	case "never", "false", "0":
 		return false, true
 	}
-	return false, os.Getenv("NO_COLOR") != ""
+	return false, os.Getenv(envNoColor) != ""
 }

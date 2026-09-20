@@ -29,13 +29,13 @@ const (
 
 // ConfiguredLlamaParallelism returns the effective llama.cpp slot count.
 func ConfiguredLlamaParallelism() (int, error) {
-	value := strings.TrimSpace(os.Getenv("LLAMA_PARALLEL"))
+	value := strings.TrimSpace(os.Getenv(envLlamaParallel))
 	if value == "" {
 		value = "1"
 	}
 	parallelism, err := strconv.Atoi(value)
 	if err != nil || parallelism < 1 {
-		return 0, fmt.Errorf("LLAMA_PARALLEL must be a positive integer, got %q", value)
+		return 0, fmt.Errorf("%s must be a positive integer, got %q", envLlamaParallel, value)
 	}
 	return parallelism, nil
 }
@@ -167,16 +167,16 @@ func NewBaselineFactory(benchmarkConfig benchmarkconfig.Config) (rootagent.Facto
 }
 
 func newInferenceClient() (inference.Client, error) {
-	model := strings.TrimSpace(os.Getenv("LLAMA_MODEL_NAME"))
+	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
 	if model == "" {
-		return nil, fmt.Errorf("LLAMA_MODEL_NAME is required")
+		return nil, fmt.Errorf("%s is required", envLlamaModelName)
 	}
 
-	host := strings.TrimSpace(os.Getenv("LLAMA_CLIENT_HOST"))
+	host := strings.TrimSpace(os.Getenv(envLlamaClientHost))
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	port := strings.TrimSpace(os.Getenv("LLAMA_PORT"))
+	port := strings.TrimSpace(os.Getenv(envLlamaPort))
 	if port == "" {
 		port = "8080"
 	}
@@ -186,8 +186,8 @@ func newInferenceClient() (inference.Client, error) {
 		Metadata: inference.Metadata{
 			Model:           model,
 			Artifact:        modelArtifact(),
-			Quantization:    strings.TrimSpace(os.Getenv("LLAMA_MODEL_QUANTIZATION")),
-			SHA256:          strings.TrimSpace(os.Getenv("LLAMA_MODEL_SHA256")),
+			Quantization:    strings.TrimSpace(os.Getenv(envLlamaModelQuant)),
+			SHA256:          strings.TrimSpace(os.Getenv(envLlamaModelSHA256)),
 			RuntimeSettings: runtimeSettings(),
 		},
 	})
@@ -202,9 +202,9 @@ func newInferenceClient() (inference.Client, error) {
 }
 
 func modelArtifact() string {
-	repository := strings.TrimSpace(os.Getenv("LLAMA_MODEL_REPOSITORY"))
-	revision := strings.TrimSpace(os.Getenv("LLAMA_MODEL_REVISION"))
-	file := strings.TrimSpace(os.Getenv("LLAMA_MODEL_FILE"))
+	repository := strings.TrimSpace(os.Getenv(envLlamaModelRepository))
+	revision := strings.TrimSpace(os.Getenv(envLlamaModelRevision))
+	file := strings.TrimSpace(os.Getenv(envLlamaModelFile))
 	artifact := repository
 	if revision != "" {
 		artifact += "@" + revision
@@ -216,9 +216,8 @@ func modelArtifact() string {
 }
 
 func runtimeSettings() map[string]string {
-	const names = "LLAMA_KV_UNIFIED_PER_SLOT LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_MODELS_MAX LLAMA_REASONING LLAMA_REASONING_BUDGET LLAMA_HOST LLAMA_PORT LLAMA_CLIENT_HOST"
 	settings := make(map[string]string)
-	for _, name := range strings.Fields(names) {
+	for _, name := range llamaRuntimeEnvNames {
 		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
 			settings[name] = value
 		}
