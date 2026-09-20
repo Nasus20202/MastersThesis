@@ -2,7 +2,7 @@
 
 ## Status
 
-Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Six runs (200 attempts) are complete: the initial three-condition comparison and five skill-only runs. Run 6 tested focused patch, RBAC, and verification guidance against the same scenarios and scoring. The score improved over run 5, but crash-loop and CPU scheduling still produced repeated deadline failures. A further focused revision is required before the final all-condition run.
+Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Seven runs (225 attempts) are complete: the initial three-condition comparison and six skill-only runs. Run 7 tested a general rule for constructing and correcting strategic patches against the same scenarios and scoring. Its score was slightly below run 6; crash-loop and RBAC remained unreliable, while CPU repair improved. The current revision is retained for the final all-condition comparison, with the run 7 result treated as descriptive evidence rather than a demonstrated improvement.
 
 ## Research question
 
@@ -10,13 +10,13 @@ On five development Kubernetes incidents, how does the skill condition perform r
 
 ## Design
 
-The first run compared three agent conditions. Runs 2–4 repeated the skill condition after successive changes to skill routing and troubleshooting guidance. Each run used five attempts per scenario. Baseline and prompt conditions were not repeated after run 1.
+The first run compared three agent conditions. Runs 2–7 repeated the skill condition after successive changes to skill routing and troubleshooting guidance. Each run used five attempts per scenario. Baseline and prompt conditions were not repeated after run 1.
 
 | Setting             | Value                                                                                                                                          |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Conditions in run 1 | `baseline`, `prompt`, `skill`                                                                                                                  |
 | Scenarios           | `container-crash-loop`, `image-pull-failure`, `missing-rbac-binding`, `service-selector-mismatch`, `unschedulable-cpu-request`                 |
-| Replication         | Five attempts per condition and scenario; 75 attempts in run 1 and 25 attempts in each of runs 2–6                                             |
+| Replication         | Five attempts per condition and scenario; 75 attempts in run 1 and 25 attempts in each of runs 2–7                                             |
 | Model               | Gemma 4 E4B QAT Q4_0 (`google/gemma-4-E4B-it-qat-q4_0-gguf`), revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`                              |
 | Runtime             | llama.cpp Vulkan `server-vulkan-b10964`, digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`; two inference slots |
 | Attempt limits      | 25 turns, 50 tool calls, 60 seconds per tool call, 300 seconds total                                                                           |
@@ -221,13 +221,47 @@ Run `run-2026-09-20-14-08-47-451Z` ran from 2026-09-20 14:08:47 to 14:59:05 UTC.
 
 The score increased by 0.08 and full success by three attempts relative to run 5. The improvement was concentrated in RBAC and image-pull repair; crash-loop and CPU scheduling remained unreliable. Mean token use increased by about 6%, and deadline errors remained frequent. This is an unpaired descriptive comparison between successive skill revisions, not an estimate of a causal effect.
 
+### Run 7: strategic-patch construction rule
+
+Run `run-2026-09-20-15-05-50-145Z` ran from 2026-09-20 15:05:50 to 15:56:41 UTC. Command: `make benchmark REPEAT=5 AGENT=skill BENCHMARK_PARALLEL=4`. Source revision: `e5b274470172c1311711961048d7965ae410033f`. The run metadata records 25 attempts and a clean source tree. The command returned nonzero because ten model-agent attempts reached the deadline; all 25 records were retained.
+
+The tested change added a general instruction to construct one valid JSON patch, use one object per strategic-merge key, and use the error plus a fresh object query to correct a failed patch. It did not add scenario-specific repair recipes.
+
+| Measure                        | Run 6 focused guidance | Run 7 patch-construction guidance |
+| ------------------------------ | ---------------------: | --------------------------------: |
+| Macro-average normalized score |                  0.700 |                             0.680 |
+| Full success                   |            17/25 (68%) |                       16/25 (64%) |
+| Mean tokens per attempt        |                 70,056 |                            67,268 |
+| Mean agent duration            |                231.1 s |                           231.1 s |
+| Mean tool calls per attempt    |                  12.84 |                             13.56 |
+| Bash calls with nonzero status |         31/213 (14.6%) |                    53/232 (22.8%) |
+| Model-agent deadline errors    |                   8/25 |                             10/25 |
+
+| Scenario                    | Score | Full success | Deadline errors |
+| --------------------------- | ----: | -----------: | --------------: |
+| `container-crash-loop`      |  0.20 |          1/5 |             3/5 |
+| `image-pull-failure`        |  1.00 |          5/5 |             0/5 |
+| `missing-rbac-binding`      |  0.40 |          1/5 |             5/5 |
+| `service-selector-mismatch` |  1.00 |          5/5 |             0/5 |
+| `unschedulable-cpu-request` |  0.80 |          4/5 |             2/5 |
+
+#### Trace observations in run 7
+
+- **Initial routing:** All 25 attempts loaded `troubleshooting` and `kubernetes` before the first Bash call. `kubectl` was loaded before the first state-changing command in 20 attempts; six state-changing calls in three attempts occurred before that load.
+- **References:** The agent made 29 reference calls. All used listed Kubernetes filenames and the correct owning skill. Loads were `pods.md` (7), `workloads.md` (6), `images.md` (5), `networking.md` (4), `configuration.md` (3), `authorization.md` (3), and `resources.md` (1). The run did not show invalid reference arguments, but the distribution was not concentrated on the scenarios that remained difficult.
+- **Repair traces:** Image-pull and service-selector repair passed all five attempts. CPU repair passed four attempts, an improvement over run 6. Crash-loop repair passed one attempt, and RBAC passed one; these traces still contained repeated diagnosis, malformed or over-broad mutations, and deadline termination.
+- **Verification and termination:** Fifteen attempts produced a final response. Two unsuccessful attempts stated `Outcome: complete`; no response stated `Outcome: incomplete`. The grader recorded failed criteria, so structured grading remains the completion signal.
+- **Command errors:** Nonzero Bash results increased from 31/213 in run 6 to 53/232 in run 7. This is an observed run difference, not evidence that the added rule caused the increase.
+
+The run 7 macro score was 0.02 below run 6 and the full-success count was one lower. CPU performance improved, but crash-loop and RBAC performance declined and deadline errors increased. The data do not demonstrate a benefit from the added patch-construction rule. The current skill revision is retained for the final three-condition run so that the comparison uses the latest tested configuration.
+
 ## Interpretation and limitations
 
-Across runs 1–6, skill use changed from optional selection to required routing. Run 6 preserved the initial troubleshooting and Kubernetes loading sequence in every attempt that reached the agent and increased the macro score over run 5. The remaining deadline errors, malformed patches, and nonminimal reference loads show that routing compliance is not sufficient for reliable repair.
+Across runs 1–7, skill use changed from optional selection to required routing. Runs 6 and 7 preserved the initial troubleshooting and Kubernetes loading sequence in every attempt. Run 7 did not improve the aggregate score over run 6, and command errors and deadline errors remained frequent. Routing compliance is therefore not sufficient for reliable repair in this evaluation.
 
-Run 6 shows partial recovery of the run 5 RBAC failure and no recovery of the crash-loop and CPU scheduling failure modes. The next revision should reduce repeated or malformed patch attempts, constrain reference loading to the diagnosed subsystems, and make the verification loop terminate promptly after a repair or report incomplete evidence.
+Run 6 shows partial recovery of the run 5 RBAC failure; run 7 retained the image-pull and service-selector ceiling and improved CPU repair, but did not recover crash-loop or RBAC reliability. The final all-condition run will use the run 7 source revision. Its purpose is comparison across agent conditions, not another unpaired skill revision.
 
-This is a development evaluation on five scenarios that were available during prompt and skill development, so performance may be optimistic for these cases. The sample is small; runs 2–6 are unpaired skill-only repetitions after separate changes, and baseline and prompt conditions were not rerun. Runs 4–6 recorded nine, nine, and nine non-success errors respectively; run 4 included a context-limit error, run 5 included a cleanup failure, and run 6 included a clean-state setup failure. Results are descriptive; no inferential statistical analysis was conducted. The model and runtime represent one configuration. Tool-trace observations were reviewed qualitatively.
+This is a development evaluation on five scenarios that were available during prompt and skill development, so performance may be optimistic for these cases. The sample is small; runs 2–7 are unpaired skill-only repetitions after separate changes, and baseline and prompt conditions were not rerun. Runs 4–7 recorded nine, nine, nine, and ten non-success errors respectively; run 4 included a context-limit error, run 5 included a cleanup failure, run 6 included a clean-state setup failure, and run 7 had ten model-agent deadline errors. Results are descriptive; no inferential statistical analysis was conducted. The model and runtime represent one configuration. Tool-trace observations were reviewed qualitatively.
 
 ## Reproducibility and evidence
 
@@ -245,7 +279,9 @@ Raw attempt records and run metadata are preserved with each run:
 - [Run 5 configuration snapshot](raw/run-2026-09-20-13-03-09-026Z/configuration/skill/), containing the prompt, skills, and references at source revision 64afafa.
 - [Run 6 raw results](raw/run-2026-09-20-14-08-47-451Z/), including all 25 attempts, run metadata, and the results summary.
 - [Run 6 configuration snapshot](raw/run-2026-09-20-14-08-47-451Z/configuration/skill/), containing the prompt, skills, and references at source revision 758417e.
+- [Run 7 raw results](raw/run-2026-09-20-15-05-50-145Z/), including all 25 attempts, run metadata, and the results summary.
+- [Run 7 configuration snapshot](raw/run-2026-09-20-15-05-50-145Z/configuration/skill/), containing the prompt, skills, and references at source revision e5b2744.
 - [Skill source traceability](../../../benchmark/internal/agent/skill/SOURCES.md).
 - Project-wide skill-routing decision: [D-026](../../decision-log.md).
 
-Runs 2–6 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Earlier raw results remain associated with their original configurations; no frozen data or decision-log entry has changed.
+Runs 2–7 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Earlier raw results remain associated with their original configurations; no frozen data or decision-log entry has changed.
