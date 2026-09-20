@@ -78,6 +78,15 @@ kubectl apply -f change.yaml -n "$namespace"
 
 For built-in Kubernetes resources, `patch` defaults to strategic merge patch, which can merge list entries such as containers by name. `--type=merge` selects JSON merge patch, which replaces arrays; a partial container list can remove required fields such as the image. Keep the default strategic merge behavior when changing a named list entry, include its name as the merge key, and inspect the live object before changing it. Strategic merge patch is not supported for custom resources.
 
+When changing one field on a named container, use strategic merge patch so other container fields remain intact. For example, this updates one container image in a built-in Deployment:
+
+```bash
+kubectl patch deployment/my-app -n my-namespace --type=strategic \
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"my-container","image":"registry.example/my-app:v2"}]}}}}'
+```
+
+Use the live object and diagnosis to choose the container and field. A field set to `null` is removed; do so only when evidence shows that field should be absent. If a partial container patch reports that a required field such as `image` is missing, stop and inspect the merge semantics; do not retry the same patch with `--type=merge`.
+
 Do not use interactive commands such as `kubectl edit` in a noninteractive troubleshooting session. Use a noninteractive `patch` or `apply`, then inspect the result before making another change.
 
 An accepted command reports that the API request succeeded; asynchronous controllers may still need time to reconcile the resulting state.

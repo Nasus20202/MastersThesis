@@ -2,7 +2,7 @@
 
 ## Status
 
-Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Five runs (175 attempts) are complete: the initial three-condition comparison and four skill-only runs. Run 5 tested mandatory skill loading, domain-reference routing, and the revised kubectl guidance. Its analysis is recorded below; no further prompt revision or benchmark run has been selected.
+Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Five runs (175 attempts) are complete: the initial three-condition comparison and four skill-only runs. Run 6 is prepared to test focused patch, RBAC, and verification guidance from the run 5 failures, using the same skill-only 5x5 design.
 
 ## Research question
 
@@ -214,4 +214,4 @@ Raw attempt records and run metadata are preserved with each run:
 - [Skill source traceability](../../../benchmark/internal/agent/skill/SOURCES.md).
 - Project-wide skill-routing decision: [D-026](../../decision-log.md).
 
-Runs 2–5 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Run 5 results and its configuration are archived with the earlier evidence; no raw outcomes have been replaced. No further research or skill change is recorded as approved.
+Runs 2–5 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Run 6 will test the focused guidance changes against the same scenarios and scoring. Earlier raw results remain associated with their original configurations; no frozen data or decision-log entry has changed.

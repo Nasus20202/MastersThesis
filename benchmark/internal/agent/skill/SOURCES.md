@@ -27,7 +27,7 @@ Primary source areas used when reviewing the skill content:
 | Services and networking  | `content/en/docs/concepts/services-networking/`                                            |
 | Storage                  | `content/en/docs/concepts/storage/`                                                        |
 | ConfigMaps and Secrets   | `content/en/docs/concepts/configuration/`                                                  |
-| RBAC and authorization   | `content/en/docs/reference/access-authn-authz/`                                            |
+| RBAC and authorization   | `content/en/docs/reference/access-authn-authz/rbac.md`                                     |
 | Security and policy      | `content/en/docs/concepts/security/`, `content/en/docs/concepts/policy/`                   |
 | Autoscaling              | `content/en/docs/concepts/workloads/autoscaling/`                                          |
 | API extensions           | `content/en/docs/concepts/extend-kubernetes/`                                              |

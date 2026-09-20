@@ -40,7 +40,9 @@ Confirm that the change took effect, the requested outcome has recovered, and ev
 
 For controller-managed resources, verify that the current desired state has converged. Compare the requested replica count with the controller's updated and ready replica counts; all must match. A successful wait or some ready instances do not prove recovery when counts still differ.
 
-Report `Outcome: complete` only when fresh evidence passes every required check. If a check fails, reports a mismatch, or remains uncertain, continue diagnosis and repair when possible; otherwise report `Outcome: incomplete`, name the unmet or uncertain check, and do not describe the task as successful or recovered.
+For a Deployment, compare `.spec.replicas` with `.status.updatedReplicas`, `.status.readyReplicas`, and `.status.availableReplicas` when availability is part of the requested outcome. A `READY` summary alone does not prove rollout completion if fewer replicas are updated. Query the missing fields directly rather than inferring them.
+
+Before ending, make a fresh observation for each required check and include the relevant observed values in the final response. Do not finish with only a diagnosis or a plan. Report `Outcome: complete` only when the evidence passes every required check. If a check fails, reports a mismatch, or remains uncertain, continue diagnosis and repair when possible; if no further progress is possible, report `Outcome: incomplete`, name the unmet or uncertain check, and do not describe the task as successful or recovered.
 
 Use bounded waits where available. If a wait times out, inspect fresh state and continue from that evidence.
 

@@ -35,3 +35,5 @@ Load a reference with `load_reference` when more detail about a relevant area is
 - `extensions.md` — CRDs, operators, admission webhooks and API extensions.
 
 Match the observed subsystem to the listed reference by its coverage: container state, probes and lifecycle use `pods.md`; workload templates and rollouts use `workloads.md`; image names and pull failures use `images.md`; Services, endpoints and DNS use `networking.md`; ServiceAccounts, Roles, bindings and permissions use `authorization.md`; placement and scheduling events use `scheduling.md`; CPU or memory requests and limits use `resources.md`; ConfigMaps and Secrets use `configuration.md`. Load more than one when the evidence spans multiple areas. Use the exact filename shown above with `skill: "kubernetes"` in `load_reference`.
+
+When a Pod is owned by a workload controller and the repair may change its template or rollout, load both `pods.md` and `workloads.md`: the Pod provides failure evidence, while the controller template is the durable repair target.
