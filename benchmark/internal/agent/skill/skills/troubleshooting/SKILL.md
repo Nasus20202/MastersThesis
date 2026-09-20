@@ -1,30 +1,38 @@
 ---
 name: troubleshooting
-description: General diagnosis and repair workflow for structured troubleshooting.
+description: General diagnosis, repair, and verification workflow for structured troubleshooting.
 ---
 
 # Troubleshooting
 
-Diagnose from the task's evidence, change the resource that owns the faulty state, and verify recovery before reporting success.
+Diagnose from observed evidence, repair the source of the faulty state, and verify recovery before reporting success.
 
-## 1. Scope and diagnose
+## Diagnose
 
-Start with resource names and namespaces supplied by the task. If they are missing, discover them with the narrowest useful query and expand the search only when evidence requires it. Avoid repeating cluster-wide listings. Check current state, relevant events or logs, and the owning resource.
+Start from the resources and context provided by the task. If information is missing, discover it with focused queries and expand only when the evidence requires it.
 
-Load the relevant supporting guidance before relying on it:
+Inspect the current state, relevant events or logs, and resource ownership. Trace the symptom to the component or configuration responsible for producing the faulty state rather than treating only its visible effects. Before repair, identify the requested outcome and any constraints that must remain true.
 
-- Load the `kubectl` skill before forming a nontrivial mutation or wait command.
-- Load the `kubernetes` skill when diagnosis depends on controller ownership, reconciliation, or resource status.
-- For RBAC repairs, load the `authorization.md` reference before selecting subjects, verbs, resources, or scope.
+Load supporting guidance:
 
-Trace the symptom to the first resource whose observed state conflicts with the intended state. Prefer a focused observation over unrelated reads. Repair the owning resource rather than a generated Pod or other transient object.
+- For Kubernetes tasks, load the `kubernetes` skill before diagnosing resource behavior.
+- After identifying the affected subsystem or subsystems, load each relevant focused reference before choosing a repair. Load references when their subject applies to the observed problem.
+- Use `kubectl` when command syntax, resource addressing, output, or operation behavior needs guidance.
 
-## 2. Repair
+## Repair
 
-Make one minimal declarative change to the owning resource and preserve unrelated fields and task constraints. Avoid interactive `kubectl edit`. Do not delete or restart a controller-managed Pod as a substitute for repairing its owner. For RBAC, grant only the required verbs on the required resources and namespace; avoid broad listing or Secret permissions unless the task evidence requires them.
+Prefer the smallest change that addresses the diagnosed cause.
 
-## 3. Verify
+Modify the resource or configuration that owns the faulty state rather than transient output derived from it. Preserve unrelated configuration and existing constraints. Avoid speculative or unrelated changes.
 
-Use fresh observations to confirm both that the change took effect and that the requested outcome and original constraints hold. In this benchmark, tool calls have a 60-second limit; bound waits to 30 seconds and do not start an unbounded watch. If verification fails, use the new evidence to diagnose further instead of stacking speculative changes.
+Make one focused change at a time and verify its effect before making another.
 
-For a Deployment, compare desired replicas (`spec.replicas`) with both `status.updatedReplicas` and `status.readyReplicas`. Do not report full recovery until both status counts equal the desired count. A successful patch or ready old replicas alone does not establish that the rollout completed.
+## Verify
+
+Use fresh observations after the repair.
+
+Confirm both that the change took effect and that the requested outcome has recovered. Do not treat a successful command or accepted configuration change as proof of recovery.
+
+Use bounded waits where available. If a wait times out, inspect fresh state and continue from that evidence.
+
+If verification fails, use the new evidence to continue diagnosis, make a focused correction when supported, and verify again. Continue until the requested outcome is verified or no further progress is possible. Only when progress is no longer possible, report the blocker and unmet outcome; do not claim success.

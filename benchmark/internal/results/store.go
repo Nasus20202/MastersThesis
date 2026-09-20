@@ -8,14 +8,18 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
 type Store struct {
+	mu       sync.Mutex
 	runDir   string
 	metadata RunMetadata
+	summary  *summaryAccumulator
+	recorded map[string]struct{}
 }
 
 func New(root string, metadata RunMetadata) (*Store, error) {
@@ -38,12 +42,21 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 	}
 	metadata.RunType = runType(metadata)
 	metadata.State = RunStateRunning
+	metadata.CompletedAt = nil
 	runDir := filepath.Join(root, metadata.RunID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create result directory: %w", err)
 	}
-	store := &Store{runDir: runDir, metadata: metadata}
+	store := &Store{
+		runDir:   runDir,
+		metadata: metadata,
+		summary:  newSummaryAccumulator(metadata),
+		recorded: make(map[string]struct{}),
+	}
 	if err := store.writeRunMetadata(); err != nil {
+		return nil, err
+	}
+	if err := store.writeSummary(); err != nil {
 		return nil, err
 	}
 	return store, nil
@@ -92,10 +105,7 @@ func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orche
 	if runErr != nil {
 		artifact.Error = runErr.Error()
 	}
-	if err := writeJSON(path, artifact); err != nil {
-		return fmt.Errorf("write attempt result: %w", err)
-	}
-	return nil
+	return s.recordAttempt(path, artifact, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, nil)
 }
 
 func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, expectedScore float64, expectedFullSuccess bool, result orchestration.RunResult, validationErr error) error {
@@ -113,9 +123,13 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	if err := os.MkdirAll(caseDir, 0o755); err != nil {
 		return fmt.Errorf("create validation result directory: %w", err)
 	}
+	condition := result.Condition
+	if strings.TrimSpace(condition) == "" {
+		condition = "validation"
+	}
 	artifact := ValidationAttemptResult{
 		RunID:               s.metadata.RunID,
-		Condition:           result.Condition,
+		Condition:           condition,
 		ScenarioID:          scenarioID,
 		CaseID:              caseID,
 		Attempt:             attempt,
@@ -128,23 +142,44 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	if validationErr != nil {
 		artifact.Error = validationErr.Error()
 	}
-	if err := writeJSON(filepath.Join(caseDir, fmt.Sprintf("%03d.json", attempt)), artifact); err != nil {
-		return fmt.Errorf("write validation result: %w", err)
+	passed := artifact.Passed
+	path := filepath.Join(caseDir, fmt.Sprintf("%03d.json", attempt))
+	return s.recordAttempt(path, artifact, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, &passed)
+}
+
+func (s *Store) recordAttempt(path string, artifact any, condition, scenarioID string, fullSuccess bool, score float64, errorText string, validationPassed *bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.metadata.State != RunStateRunning {
+		return errors.New("cannot write attempt result after run finalization")
+	}
+	if _, exists := s.recorded[path]; exists {
+		return fmt.Errorf("attempt result already recorded: %s", path)
+	}
+	if err := writeJSON(path, artifact); err != nil {
+		return fmt.Errorf("write attempt result: %w", err)
+	}
+	s.recorded[path] = struct{}{}
+	s.summary.add(condition, scenarioID, fullSuccess, score, errorText, validationPassed)
+	if err := s.writeSummary(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (s *Store) Finalize(completedAt time.Time) error {
-	summary, err := summarizeRun(s.runDir, s.metadata)
-	if err != nil {
-		return err
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	completedAt = completedAt.UTC()
 	s.metadata.CompletedAt = &completedAt
-	s.metadata.Summary = &summary
-	if summary.ExpectedAttempts > 0 && summary.AttemptsRecorded >= summary.ExpectedAttempts {
+	if s.summary.attemptsRecorded >= s.summary.metadata.ExpectedAttempts {
 		s.metadata.State = RunStateCompleted
 	} else {
 		s.metadata.State = RunStateIncomplete
+	}
+	if err := s.writeSummary(); err != nil {
+		return err
 	}
 	return s.writeRunMetadata()
 }
@@ -153,8 +188,13 @@ func (s *Store) writeRunMetadata() error {
 	if err := writeJSON(filepath.Join(s.runDir, "run.json"), s.metadata); err != nil {
 		return fmt.Errorf("write run metadata: %w", err)
 	}
-	if err := refreshStudyResults(filepath.Dir(s.runDir)); err != nil {
-		return fmt.Errorf("update study results index: %w", err)
+	return nil
+}
+
+func (s *Store) writeSummary() error {
+	summary := s.summary.summary(s.metadata.State, s.metadata.CompletedAt)
+	if err := writeJSON(filepath.Join(s.runDir, "results.json"), summary); err != nil {
+		return fmt.Errorf("write run results: %w", err)
 	}
 	return nil
 }

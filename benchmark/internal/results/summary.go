@@ -1,17 +1,13 @@
 package results
 
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
-	"strings"
-	"time"
+import "time"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
-)
+type summaryAccumulator struct {
+	metadata         RunMetadata
+	attemptsRecorded int
+	errorCount       int
+	byCondition      map[string]*conditionAccumulator
+}
 
 type conditionAccumulator struct {
 	expectedAttempts       int
@@ -21,9 +17,6 @@ type conditionAccumulator struct {
 	errorCount             int
 	validationPassedCount  int
 	validationAttemptCount int
-	terminations           map[string]int
-	skillLoads             map[string]int
-	referenceLoadCount     int
 	scenarios              map[string]*scenarioAccumulator
 }
 
@@ -54,147 +47,88 @@ func runType(metadata RunMetadata) string {
 	return "validation"
 }
 
-func summarizeRun(runDir string, metadata RunMetadata) (RunSummary, error) {
+func newSummaryAccumulator(metadata RunMetadata) *summaryAccumulator {
 	metadata.ExpectedAttempts = expectedAttemptCount(metadata)
-	summary := RunSummary{
-		ExpectedAttempts: metadata.ExpectedAttempts,
-		ByCondition:      make(map[string]ConditionSummary),
+	accumulator := &summaryAccumulator{
+		metadata:    metadata,
+		byCondition: make(map[string]*conditionAccumulator),
 	}
-	accumulators := make(map[string]*conditionAccumulator)
-
-	if err := filepath.WalkDir(runDir, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() || entry.Name() == "run.json" || filepath.Ext(entry.Name()) != ".json" {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read attempt result %s: %w", path, err)
-		}
-		var header struct {
-			CaseID string `json:"case_id"`
-		}
-		if err := json.Unmarshal(data, &header); err != nil {
-			return fmt.Errorf("decode attempt result %s: %w", path, err)
-		}
-		if header.CaseID != "" {
-			var result ValidationAttemptResult
-			if err := json.Unmarshal(data, &result); err != nil {
-				return fmt.Errorf("decode validation result %s: %w", path, err)
-			}
-			condition := result.Condition
-			if condition == "" {
-				condition = "validation"
-			}
-			accumulator := conditionFor(accumulators, condition, metadata)
-			accumulator.add(result.ScenarioID, result.Grading.FullSuccess, result.Grading.Score, result.Error, "", nil)
-			accumulator.validationAttemptCount++
-			if result.Passed {
-				accumulator.validationPassedCount++
-			}
-			summary.AttemptsRecorded++
-			if result.Error != "" {
-				summary.ErrorCount++
-			}
-			return nil
-		}
-
-		var result AttemptResult
-		if err := json.Unmarshal(data, &result); err != nil {
-			return fmt.Errorf("decode attempt result %s: %w", path, err)
-		}
-		if result.ScenarioID == "" {
-			return nil
-		}
-		condition := result.Condition
-		if condition == "" {
-			condition = "unknown"
-		}
-		termination := ""
-		if result.Agent != nil {
-			termination = result.Agent.Termination
-		}
-		accumulator := conditionFor(accumulators, condition, metadata)
-		accumulator.add(result.ScenarioID, result.Grading.FullSuccess, result.Grading.Score, result.Error, termination, result.Agent)
-		summary.AttemptsRecorded++
-		if result.Error != "" {
-			summary.ErrorCount++
-		}
-		return nil
-	}); err != nil {
-		return RunSummary{}, fmt.Errorf("summarize run %s: %w", metadata.RunID, err)
-	}
-
-	for condition, accumulator := range accumulators {
-		conditionSummary := accumulator.summary(runType(metadata), metadata)
-		summary.ByCondition[condition] = conditionSummary
-	}
-	return summary, nil
-}
-
-func conditionFor(accumulators map[string]*conditionAccumulator, condition string, metadata RunMetadata) *conditionAccumulator {
-	if accumulator := accumulators[condition]; accumulator != nil {
-		return accumulator
-	}
-	expected := metadata.RepeatCount * len(metadata.Scenarios)
+	conditions := metadata.Agents
 	if runType(metadata) == "validation" {
-		expected = expectedAttemptCount(metadata)
+		conditions = []string{"validation"}
 	}
-	accumulator := &conditionAccumulator{
-		expectedAttempts: expected,
-		terminations:     make(map[string]int),
-		skillLoads:       make(map[string]int),
-		scenarios:        make(map[string]*scenarioAccumulator),
+	for _, condition := range conditions {
+		accumulator.condition(condition)
 	}
-	accumulators[condition] = accumulator
 	return accumulator
 }
 
-func (a *conditionAccumulator) add(scenarioID string, fullSuccess bool, score float64, errorText, termination string, agent *common.Result) {
-	a.attemptCount++
-	a.scoreTotal += score
-	if fullSuccess {
-		a.fullSuccessCount++
+func (a *summaryAccumulator) condition(name string) *conditionAccumulator {
+	if condition := a.byCondition[name]; condition != nil {
+		return condition
 	}
+	expected := a.metadata.RepeatCount * len(a.metadata.Scenarios)
+	if runType(a.metadata) == "validation" {
+		expected = a.metadata.ExpectedAttempts
+	}
+	condition := &conditionAccumulator{
+		expectedAttempts: expected,
+		scenarios:        make(map[string]*scenarioAccumulator, len(a.metadata.Scenarios)),
+	}
+	for _, scenarioID := range a.metadata.Scenarios {
+		condition.scenarios[scenarioID] = &scenarioAccumulator{}
+	}
+	a.byCondition[name] = condition
+	return condition
+}
+
+func (a *summaryAccumulator) add(conditionID, scenarioID string, fullSuccess bool, score float64, errorText string, validationPassed *bool) {
+	a.attemptsRecorded++
 	if errorText != "" {
 		a.errorCount++
 	}
-	if termination != "" {
-		a.terminations[termination]++
+	condition := a.condition(conditionID)
+	condition.attemptCount++
+	condition.scoreTotal += score
+	if fullSuccess {
+		condition.fullSuccessCount++
 	}
-	if agent != nil {
-		for _, toolCall := range agent.ToolCalls {
-			switch toolCall.Call.Name {
-			case "load_skill":
-				if toolCall.Error != "" {
-					continue
-				}
-				var arguments struct {
-					Name string `json:"name"`
-				}
-				if json.Unmarshal([]byte(toolCall.Call.Arguments), &arguments) != nil || strings.TrimSpace(arguments.Name) == "" {
-					continue
-				}
-				a.skillLoads[arguments.Name]++
-			case "load_reference":
-				if toolCall.Error == "" {
-					a.referenceLoadCount++
-				}
-			}
+	if errorText != "" {
+		condition.errorCount++
+	}
+	if validationPassed != nil {
+		condition.validationAttemptCount++
+		if *validationPassed {
+			condition.validationPassedCount++
 		}
 	}
-	scenario := a.scenarios[scenarioID]
+	scenario := condition.scenarios[scenarioID]
 	if scenario == nil {
 		scenario = &scenarioAccumulator{}
-		a.scenarios[scenarioID] = scenario
+		condition.scenarios[scenarioID] = scenario
 	}
 	scenario.attemptCount++
 	scenario.scoreTotal += score
 	if fullSuccess {
 		scenario.fullSuccessCount++
 	}
+}
+
+func (a *summaryAccumulator) summary(state RunState, completedAt *time.Time) RunSummary {
+	result := RunSummary{
+		RunID:            a.metadata.RunID,
+		State:            state,
+		UpdatedAt:        time.Now().UTC(),
+		CompletedAt:      completedAt,
+		ExpectedAttempts: a.metadata.ExpectedAttempts,
+		AttemptsRecorded: a.attemptsRecorded,
+		ErrorCount:       a.errorCount,
+		ByCondition:      make(map[string]ConditionSummary, len(a.byCondition)),
+	}
+	for name, accumulator := range a.byCondition {
+		result.ByCondition[name] = accumulator.summary(runType(a.metadata), a.metadata)
+	}
+	return result
 }
 
 func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) ConditionSummary {
@@ -204,9 +138,6 @@ func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) Condit
 		FullSuccessCount:      a.fullSuccessCount,
 		ErrorCount:            a.errorCount,
 		ValidationPassedCount: a.validationPassedCount,
-		TerminationCounts:     a.terminations,
-		SkillLoadCounts:       a.skillLoads,
-		ReferenceLoadCount:    a.referenceLoadCount,
 		Scenarios:             make(map[string]ScenarioSummary, len(a.scenarios)),
 	}
 	if a.attemptCount > 0 {
@@ -250,78 +181,4 @@ func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) Condit
 		}
 	}
 	return result
-}
-
-func refreshStudyResults(root string) error {
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return fmt.Errorf("read results directory: %w", err)
-	}
-	runs := make([]StudyRun, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		runDir := filepath.Join(root, entry.Name())
-		metadataPath := filepath.Join(runDir, "run.json")
-		data, err := os.ReadFile(metadataPath)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("read run metadata %s: %w", metadataPath, err)
-		}
-		var metadata RunMetadata
-		if err := json.Unmarshal(data, &metadata); err != nil {
-			return fmt.Errorf("decode run metadata %s: %w", metadataPath, err)
-		}
-		if metadata.RunType == "" {
-			metadata.RunType = runType(metadata)
-		}
-		if metadata.ExpectedAttempts == 0 {
-			metadata.ExpectedAttempts = expectedAttemptCount(metadata)
-		}
-		if metadata.State == "" {
-			if metadata.CompletedAt == nil {
-				metadata.State = RunStateRunning
-			} else {
-				metadata.State = RunStateCompleted
-			}
-		}
-		if metadata.Summary == nil {
-			summary, err := summarizeRun(runDir, metadata)
-			if err != nil {
-				return err
-			}
-			metadata.Summary = &summary
-		}
-		runs = append(runs, StudyRun{
-			RunID:              metadata.RunID,
-			RunType:            metadata.RunType,
-			State:              metadata.State,
-			StartedAt:          metadata.StartedAt,
-			CompletedAt:        metadata.CompletedAt,
-			RepositoryRevision: metadata.RepositoryRevision,
-			WorkingTreeDirty:   metadata.WorkingTreeDirty,
-			ExpectedAttempts:   metadata.ExpectedAttempts,
-			Agents:             metadata.Agents,
-			Scenarios:          metadata.Scenarios,
-			RepeatCount:        metadata.RepeatCount,
-			Summary:            metadata.Summary,
-			Path:               filepath.ToSlash(filepath.Join(entry.Name(), "run.json")),
-		})
-	}
-	slices.SortFunc(runs, func(a, b StudyRun) int {
-		if a.StartedAt.Before(b.StartedAt) {
-			return -1
-		}
-		if a.StartedAt.After(b.StartedAt) {
-			return 1
-		}
-		return strings.Compare(a.RunID, b.RunID)
-	})
-	return writeJSON(filepath.Join(root, "results.json"), StudyResults{
-		UpdatedAt: time.Now().UTC(),
-		Runs:      runs,
-	})
 }

@@ -39,7 +39,7 @@ func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
 		"- bash: Bash shell syntax",
 		"- kubectl: kubectl command syntax",
 		"- kubernetes: Kubernetes concepts",
-		"- troubleshooting: General diagnosis and repair workflow",
+		"- troubleshooting: General diagnosis, repair, and verification workflow",
 	} {
 		assert.Contains(t, prompt, entry)
 	}
