@@ -35,6 +35,11 @@ Primary source areas used when reviewing the skill content:
 
 The skill files are concise human-authored summaries, not copied documentation. Scenario definitions and grading criteria are not sources for skill content.
 
+Resource-addressing and patch behavior in the kubectl skill were also checked against the upstream `kubernetes/kubectl` repository at revision `1b00e2938f9d80b35b004d2f7392b2ebaa6e5e49` on 2026-09-20:
+
+- [Resource addressing examples](https://github.com/kubernetes/kubectl/blob/1b00e2938f9d80b35b004d2f7392b2ebaa6e5e49/pkg/cmd/get/get.go), `pkg/cmd/get/get.go`.
+- [Patch types and examples](https://github.com/kubernetes/kubectl/blob/1b00e2938f9d80b35b004d2f7392b2ebaa6e5e49/pkg/cmd/patch/patch.go), `pkg/cmd/patch/patch.go`.
+
 ## Bash
 
 The Bash skill summarizes stable shell behavior such as quoting, pipelines, exit status, redirection, files, and processes. Its primary external reference is the GNU Bash Reference Manual. Kubernetes benchmark incidents and expected repairs are not used as Bash-skill source material.

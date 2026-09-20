@@ -33,5 +33,3 @@ Load a reference with `load_reference` when more detail about a relevant area is
 - `lifecycle.md` — rollout, deletion, disruption and object lifecycle.
 - `autoscaling.md` — workload and cluster autoscaling.
 - `extensions.md` — CRDs, operators, admission webhooks and API extensions.
-
-Match the observed subsystem to the listed reference by its coverage: container state, probes and lifecycle use `pods.md`; workload templates and rollouts use `workloads.md`; image names and pull failures use `images.md`; Services, endpoints and DNS use `networking.md`; ServiceAccounts, Roles, bindings and permissions use `authorization.md`; placement and scheduling events use `scheduling.md`; CPU or memory requests and limits use `resources.md`; ConfigMaps and Secrets use `configuration.md`. Load more than one when the evidence spans multiple areas. Use the exact filename shown above with `skill: "kubernetes"` in `load_reference`.

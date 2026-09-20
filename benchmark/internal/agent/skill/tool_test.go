@@ -43,9 +43,10 @@ func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
 	} {
 		assert.Contains(t, prompt, entry)
 	}
-	assert.Contains(t, prompt, "For a troubleshooting task, call `load_skill` for `troubleshooting` before the first Bash call")
-	assert.Contains(t, prompt, "For a Kubernetes task, also call `load_skill` for `kubernetes` before the first Bash call")
+	assert.Contains(t, prompt, "required initial sequence is to call `load_skill` for `troubleshooting` and `kubernetes`")
+	assert.Contains(t, prompt, "Do not call Bash until both skills have loaded successfully")
 	assert.Contains(t, prompt, "call `load_reference` for each Kubernetes reference that covers them before choosing a repair")
+	assert.Contains(t, prompt, "Use `skill: \"kubernetes\"` and set `reference` to the exact filename")
 	assert.Contains(t, prompt, "Before the first Kubernetes mutation, call `load_skill` for `kubectl`")
 	assert.NotContains(t, prompt, "Load other skills and listed references only when their guidance is useful")
 	assert.NotContains(t, prompt, ".md")

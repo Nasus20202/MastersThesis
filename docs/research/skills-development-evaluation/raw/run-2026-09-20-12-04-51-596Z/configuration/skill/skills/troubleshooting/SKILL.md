@@ -16,9 +16,8 @@ Inspect the current state, relevant events or logs, and resource ownership. Trac
 Load domain guidance before acting:
 
 - For a Kubernetes task, load the `kubernetes` skill before the first Bash call.
-- After identifying the affected subsystem or subsystems, inspect the References list in the loaded skill and load every reference that covers them before choosing a repair. If more than one subsystem is involved, load the relevant reference for each; do not load unrelated references.
-- For Kubernetes references, call `load_reference` with `skill: "kubernetes"` and the exact listed filename as `reference`. The reference topic is not the skill name.
-- Before the first Kubernetes mutation, load `kubectl` for command and operation guidance. If unsure whether a command changes cluster state, load it first.
+- After identifying the affected subsystem or subsystems, load every Kubernetes reference that covers them before choosing a repair. If more than one subsystem is involved, load the relevant reference for each; do not load unrelated references.
+- Before the first Kubernetes mutation, load `kubectl` for command and operation guidance.
 
 Do not skip a required skill or reference because the problem seems familiar.
 
@@ -28,9 +27,9 @@ Prefer the smallest change that addresses the diagnosed cause.
 
 Modify the resource or configuration that owns the faulty state rather than transient output derived from it. Preserve unrelated configuration and existing constraints. Avoid speculative or unrelated changes.
 
-Make one focused change at a time and verify its effect before making another. Run the change, any wait, and the verification as separate tool calls so each result can guide the next step.
+Make one focused change at a time and verify its effect before making another.
 
-Use noninteractive commands and bounded operations. Do not invoke interactive editors such as `kubectl edit`. Avoid open-ended watch streams. Keep each wait shorter than the outer command tool's deadline; if that deadline is 60 seconds, use a wait of about 30 seconds or less.
+Use noninteractive commands and bounded operations. Avoid interactive editors and open-ended watch streams.
 
 ## Verify
 
@@ -38,9 +37,9 @@ Use fresh observations after the repair.
 
 Confirm that the change took effect, the requested outcome has recovered, and every stated constraint still holds. Include prohibited actions or access in the checks when the task names them.
 
-For controller-managed resources, verify that the current desired state has converged. Compare the requested replica count with the controller's updated and ready replica counts; all must match. A successful wait or some ready instances do not prove recovery when counts still differ.
+For controller-managed resources, verify that the current desired state has converged. Check that updated and ready instances match the requested state; ready instances from an older revision do not prove recovery.
 
-Report `Outcome: complete` only when fresh evidence passes every required check. If a check fails, reports a mismatch, or remains uncertain, continue diagnosis and repair when possible; otherwise report `Outcome: incomplete`, name the unmet or uncertain check, and do not describe the task as successful or recovered.
+Report success only when fresh evidence passes every required check. If any check fails or remains uncertain, continue diagnosis and repair when possible; otherwise report that the task remains incomplete and name the unmet or uncertain check.
 
 Use bounded waits where available. If a wait times out, inspect fresh state and continue from that evidence.
 

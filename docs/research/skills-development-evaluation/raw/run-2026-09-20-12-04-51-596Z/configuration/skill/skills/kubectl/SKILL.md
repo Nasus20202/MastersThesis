@@ -17,7 +17,7 @@ kubectl config view --minify --output='jsonpath={..namespace}{"\n"}'
 kubectl get namespace
 ```
 
-Resources can be addressed by type, type/name, labels, or field selectors, for example `pods`, `deployment/my-app`, and `pods -l 'app=my-app'`. The type/name form already includes the resource type: use `kubectl get service/app` or `kubectl get endpoints/app`, not `kubectl get endpoints service/app`. If the name is unknown, list the resource type in the namespace.
+Resources can be addressed by type, type/name, labels, or field selectors, for example `pods`, `deployment/my-app`, and `pods -l 'app=my-app'`.
 
 Authorization checks can be made without performing the operation:
 
@@ -58,11 +58,11 @@ kubectl get events -n "$namespace" --sort-by=.lastTimestamp
 kubectl get events -n "$namespace" --field-selector involvedObject.name="$name"
 ```
 
-Bound waits explicitly rather than using an indefinite watch. Set the wait timeout shorter than the outer command tool's deadline; for a 60-second tool deadline, use about 30 seconds or less:
+Bound waits explicitly rather than using an indefinite watch:
 
 ```bash
-kubectl wait --for=condition=Ready pod -l 'app=my-app' -n "$namespace" --timeout=30s
-kubectl rollout status deployment/my-app -n "$namespace" --timeout=30s
+kubectl wait --for=condition=Ready pod -l 'app=my-app' -n "$namespace" --timeout=90s
+kubectl rollout status deployment/my-app -n "$namespace" --timeout=90s
 ```
 
 `rollout history` lists controller revisions where the resource supports rollout history.
@@ -75,9 +75,5 @@ kubectl rollout status deployment/my-app -n "$namespace" --timeout=30s
 kubectl diff -f change.yaml -n "$namespace"
 kubectl apply -f change.yaml -n "$namespace"
 ```
-
-For built-in Kubernetes resources, `patch` defaults to strategic merge patch, which can merge list entries such as containers by name. `--type=merge` selects JSON merge patch, which replaces arrays; a partial container list can remove required fields such as the image. Keep the default strategic merge behavior when changing a named list entry, include its name as the merge key, and inspect the live object before changing it. Strategic merge patch is not supported for custom resources.
-
-Do not use interactive commands such as `kubectl edit` in a noninteractive troubleshooting session. Use a noninteractive `patch` or `apply`, then inspect the result before making another change.
 
 An accepted command reports that the API request succeeded; asynchronous controllers may still need time to reconcile the resulting state.
