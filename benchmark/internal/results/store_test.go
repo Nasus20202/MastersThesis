@@ -126,6 +126,7 @@ func TestStoreWritesValidationAttemptEvidence(t *testing.T) {
 		Grading:    orchestration.GradingResult{Score: 0.5, FullSuccess: false},
 	}
 	require.NoError(t, store.WriteValidationAttempt(1, "scenario", "partial", 0.5, false, result, nil))
+	require.NoError(t, store.WriteValidationAttempt(1, "scenario", "broken", 0, false, result, nil))
 
 	data, err := os.ReadFile(filepath.Join(store.runDir, "scenario", "partial", "001.json"))
 	require.NoError(t, err)

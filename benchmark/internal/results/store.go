@@ -206,7 +206,7 @@ func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orche
 	if runErr != nil {
 		artifact.Error = runErr.Error()
 	}
-	return s.recordAttempt(path, artifact, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, nil)
+	return s.recordAttempt(path, artifact, condition, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, nil)
 }
 
 func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, expectedScore float64, expectedFullSuccess bool, result orchestration.RunResult, validationErr error) error {
@@ -245,22 +245,22 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	}
 	passed := artifact.Passed
 	path := filepath.Join(caseDir, fmt.Sprintf("%03d.json", attempt))
-	return s.recordAttempt(path, artifact, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, &passed)
+	return s.recordAttempt(path, artifact, condition, caseID, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, &passed)
 }
 
-func (s *Store) recordAttempt(path string, artifact any, condition, scenarioID string, fullSuccess bool, score float64, errorText string, validationPassed *bool) error {
+func (s *Store) recordAttempt(path string, artifact any, condition, recordKey, scenarioID string, fullSuccess bool, score float64, errorText string, validationPassed *bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.metadata.State != RunStateRunning {
 		return errors.New("cannot write attempt result after run finalization")
 	}
-	if _, exists := s.recorded[attemptKey(scenarioID, condition, artifactAttempt(artifact))]; exists {
+	if _, exists := s.recorded[attemptKey(scenarioID, recordKey, artifactAttempt(artifact))]; exists {
 		return fmt.Errorf("attempt result already recorded: %s", path)
 	}
 	if err := writeJSON(path, artifact); err != nil {
 		return fmt.Errorf("write attempt result: %w", err)
 	}
-	s.recorded[attemptKey(scenarioID, condition, artifactAttempt(artifact))] = struct{}{}
+	s.recorded[attemptKey(scenarioID, recordKey, artifactAttempt(artifact))] = struct{}{}
 	s.summary.add(condition, scenarioID, fullSuccess, score, errorText, validationPassed)
 	if err := s.writeSummary(); err != nil {
 		return err
