@@ -2,7 +2,7 @@
 
 ## Status
 
-Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Five runs (175 attempts) are complete: the initial three-condition comparison and four skill-only runs. Run 6 is prepared to test focused patch, RBAC, and verification guidance from the run 5 failures, using the same skill-only 5x5 design.
+Development evaluation for tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15), [#16](https://github.com/Nasus20202/MastersThesis/issues/16), [#17](https://github.com/Nasus20202/MastersThesis/issues/17), and [#18](https://github.com/Nasus20202/MastersThesis/issues/18); all remain **In progress**. Six runs (200 attempts) are complete: the initial three-condition comparison and five skill-only runs. Run 6 tested focused patch, RBAC, and verification guidance against the same scenarios and scoring. The score improved over run 5, but crash-loop and CPU scheduling still produced repeated deadline failures. A further focused revision is required before the final all-condition run.
 
 ## Research question
 
@@ -16,13 +16,13 @@ The first run compared three agent conditions. Runs 2–4 repeated the skill con
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Conditions in run 1 | `baseline`, `prompt`, `skill`                                                                                                                  |
 | Scenarios           | `container-crash-loop`, `image-pull-failure`, `missing-rbac-binding`, `service-selector-mismatch`, `unschedulable-cpu-request`                 |
-| Replication         | Five attempts per condition and scenario; 75 attempts in run 1 and 25 attempts in each of runs 2–5                                             |
+| Replication         | Five attempts per condition and scenario; 75 attempts in run 1 and 25 attempts in each of runs 2–6                                             |
 | Model               | Gemma 4 E4B QAT Q4_0 (`google/gemma-4-E4B-it-qat-q4_0-gguf`), revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`                              |
 | Runtime             | llama.cpp Vulkan `server-vulkan-b10964`, digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`; two inference slots |
 | Attempt limits      | 25 turns, 50 tool calls, 60 seconds per tool call, 300 seconds total                                                                           |
 | Scoring             | Deterministic weighted normalized score; full-success status reported separately                                                               |
 
-Baseline used the common Bash sandbox. Prompt added the selected troubleshooting prompt. Skill added the routing prompt, load_skill and load_reference tools, troubleshooting instructions, and Kubernetes references. Prompt and skill shared the instruction to inspect the sandbox, repair the owning resource, and verify the result. Run 2 required troubleshooting before the first Bash call. Run 3 added Kubernetes-skill and relevant-reference guidance. Run 4 required Kubernetes-skill and reference routing, kubectl guidance before mutation, and checks for current desired state and incomplete outcomes. Run 5 required troubleshooting and Kubernetes skills before Bash, relevant references after diagnosis, kubectl before mutation, bounded waits, explicit replica convergence checks, and an incomplete outcome when verification remained unresolved.
+Baseline used the common Bash sandbox. Prompt added the selected troubleshooting prompt. Skill added the routing prompt, load_skill and load_reference tools, troubleshooting instructions, and Kubernetes references. Prompt and skill shared the instruction to inspect the sandbox, repair the owning resource, and verify the result. Run 2 required troubleshooting before the first Bash call. Run 3 added Kubernetes-skill and relevant-reference guidance. Run 4 required Kubernetes-skill and reference routing, kubectl guidance before mutation, and checks for current desired state and incomplete outcomes. Run 5 required troubleshooting and Kubernetes skills before Bash, relevant references after diagnosis, kubectl before mutation, bounded waits, explicit replica convergence checks, and an incomplete outcome when verification remained unresolved. Run 6 added guidance for strategic named-container patches, repair of an existing RBAC subject, controller ownership, and reporting observed verification values.
 
 The runner limited active agent loops to the two configured inference slots. Cluster setup, grading, and cleanup were outside this limit. Temperature and maximum output tokens were unset, so runtime defaults applied.
 
@@ -189,13 +189,45 @@ Run 4 had eight deadline errors and one context-limit error. Run 5 had nine dead
 
 Run 5 improved compliance with skill and reference routing and had fewer failed Bash calls than run 4. Its macro score fell by 0.10, its full-success count fell by three, and mean token use rose by about 26%. The comparison is descriptive: runs are unpaired, the skill instructions changed between runs, and both runs had model errors.
 
+### Run 6: focused repair and verification guidance
+
+Run `run-2026-09-20-14-08-47-451Z` ran from 2026-09-20 14:08:47 to 14:59:05 UTC. Command: `make benchmark REPEAT=5 AGENT=skill BENCHMARK_PARALLEL=4`. Source revision: `758417e9e64c7a442a31bcc76cfffe7d4910092c`. The run metadata records 25 attempts and a clean source tree. The command returned nonzero because eight model-agent attempts reached the deadline and one service-selector attempt failed during clean-state verification; all 25 records were retained.
+
+| Measure                        | Run 5 mandatory-routing condition | Run 6 focused-guidance condition |
+| ------------------------------ | --------------------------------: | -------------------------------: |
+| Macro-average normalized score |                             0.620 |                            0.700 |
+| Full success                   |                       14/25 (56%) |                      17/25 (68%) |
+| Mean tokens per attempt        |                            66,372 |                           70,056 |
+| Mean agent duration            |                           219.5 s |                          231.1 s |
+| Mean tool calls per attempt    |                             13.64 |                            12.84 |
+| Bash calls with nonzero status |                    31/235 (13.2%) |                   31/213 (14.6%) |
+| Model-agent deadline errors    |                              9/25 |                             8/25 |
+
+| Scenario                    | Score | Full success | Deadline errors |
+| --------------------------- | ----: | -----------: | --------------: |
+| `container-crash-loop`      |  0.40 |          2/5 |             4/5 |
+| `image-pull-failure`        |  1.00 |          5/5 |             0/5 |
+| `missing-rbac-binding`      |  0.90 |          4/5 |             2/5 |
+| `service-selector-mismatch` |  0.80 |          4/5 |             0/5 |
+| `unschedulable-cpu-request` |  0.40 |          2/5 |             2/5 |
+
+#### Trace observations in run 6
+
+- **Initial routing:** The 24 attempts that reached the agent loaded `troubleshooting` and `kubernetes` before their first Bash call. The remaining expected attempt failed in scenario setup. `kubectl` was loaded before the first mutating kubectl call in 19 of 22 attempts that issued one; three RBAC or CPU attempts mutated before loading it.
+- **References:** The agent made 35 reference calls, all with a listed Kubernetes filename and the correct owning skill. Counts were workloads.md (9), pods.md (8), networking.md (4), authorization.md (4), images.md (4), configuration.md (3), resources.md (2), and scheduling.md (1). The valid calls show that the router was used, but the extra configuration and repeated workload or Pod loads indicate that reference selection was not consistently minimal.
+- **Repair traces:** Image-pull succeeded in all five attempts using named-container Deployment patches. Four RBAC attempts passed; successful traces repaired the existing RoleBinding subject rather than creating a parallel binding. Service-selector repair passed in four attempts. Crash-loop traces still contained malformed JSON, duplicate container entries, or repeated patch attempts before a valid strategic patch. CPU traces included repeated status queries and scaling attempts; two of five passed.
+- **Verification and termination:** Eight attempts ended with a model deadline. One of those nevertheless passed grading after the repair; grading and agent termination remain separate fields. One completed response claimed `Outcome: complete` while the CPU scenario failed its deterministic checks. No response reported `Outcome: incomplete`; timed-out attempts generally had no final response. The benchmark records incomplete work through score, criterion results, termination, and error fields.
+- **Command errors:** There were 31 nonzero Bash calls among 213 calls from agent attempts. The absolute count matched run 5, while the denominator was smaller because run 6 had fewer calls and one setup failure. The rate therefore did not improve.
+
+The score increased by 0.08 and full success by three attempts relative to run 5. The improvement was concentrated in RBAC and image-pull repair; crash-loop and CPU scheduling remained unreliable. Mean token use increased by about 6%, and deadline errors remained frequent. This is an unpaired descriptive comparison between successive skill revisions, not an estimate of a causal effect.
+
 ## Interpretation and limitations
 
-Across runs 1–5, skill use changed from optional selection to required routing. Run 5 achieved the specified loading sequence in all 25 attempts and all 28 reference calls used valid Kubernetes filenames. This procedural improvement did not raise task scores: macro score and full-success rate were lower than run 4, while token use was higher. Since the runs were unpaired and had model errors, the difference cannot be attributed to the instruction changes alone.
+Across runs 1–6, skill use changed from optional selection to required routing. Run 6 preserved the initial troubleshooting and Kubernetes loading sequence in every attempt that reached the agent and increased the macro score over run 5. The remaining deadline errors, malformed patches, and nonminimal reference loads show that routing compliance is not sufficient for reliable repair.
 
-Run 5 shows that correct skill and reference loading did not ensure a correct repair. Crash-loop performance was 0/5 despite complete skill loading, and RBAC performance remained low. The two false completion claims also show that the final-answer instruction did not reliably prevent unsupported success reports. These traces point to patch selection, repair of the existing RBAC object, and completion reporting as the main areas for researcher review.
+Run 6 shows partial recovery of the run 5 RBAC failure and no recovery of the crash-loop and CPU scheduling failure modes. The next revision should reduce repeated or malformed patch attempts, constrain reference loading to the diagnosed subsystems, and make the verification loop terminate promptly after a repair or report incomplete evidence.
 
-This is a development evaluation on five scenarios that were available during prompt and skill development, so performance may be optimistic for these cases. The sample is small; runs 2–4 are unpaired skill-only repetitions after separate changes, and baseline and prompt conditions were not rerun. Runs 4 and 5 each recorded nine agent errors; run 4 included a context-limit error, while all nine run 5 errors were deadlines. Results are descriptive; no inferential statistical analysis was conducted. The model and runtime represent one configuration. Tool-trace observations were reviewed qualitatively.
+This is a development evaluation on five scenarios that were available during prompt and skill development, so performance may be optimistic for these cases. The sample is small; runs 2–6 are unpaired skill-only repetitions after separate changes, and baseline and prompt conditions were not rerun. Runs 4–6 recorded nine, nine, and nine non-success errors respectively; run 4 included a context-limit error, run 5 included a cleanup failure, and run 6 included a clean-state setup failure. Results are descriptive; no inferential statistical analysis was conducted. The model and runtime represent one configuration. Tool-trace observations were reviewed qualitatively.
 
 ## Reproducibility and evidence
 
@@ -211,7 +243,9 @@ Raw attempt records and run metadata are preserved with each run:
 - [Run 4 configuration snapshot](raw/run-2026-09-20-12-04-51-596Z/configuration/skill/), containing the prompt and skill/reference files at source revision `20b0e54`.
 - [Run 5 raw results](raw/run-2026-09-20-13-03-09-026Z/), including all 25 attempts, run metadata, and the results summary.
 - [Run 5 configuration snapshot](raw/run-2026-09-20-13-03-09-026Z/configuration/skill/), containing the prompt, skills, and references at source revision 64afafa.
+- [Run 6 raw results](raw/run-2026-09-20-14-08-47-451Z/), including all 25 attempts, run metadata, and the results summary.
+- [Run 6 configuration snapshot](raw/run-2026-09-20-14-08-47-451Z/configuration/skill/), containing the prompt, skills, and references at source revision 758417e.
 - [Skill source traceability](../../../benchmark/internal/agent/skill/SOURCES.md).
 - Project-wide skill-routing decision: [D-026](../../decision-log.md).
 
-Runs 2–5 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Run 6 will test the focused guidance changes against the same scenarios and scoring. Earlier raw results remain associated with their original configurations; no frozen data or decision-log entry has changed.
+Runs 2–6 changed the skill condition in successive iterations. The project-wide router change from run 2 is recorded in D-026. Earlier raw results remain associated with their original configurations; no frozen data or decision-log entry has changed.
