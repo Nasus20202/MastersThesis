@@ -83,11 +83,14 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 		return nil, err
 	}
 	var customPrompt string
+	var skillConfig benchmarkconfig.SkillAgentConfig
 	if name == Prompt {
 		customPrompt, err = loadPromptSystemPrompt(benchmarkConfig.Agents.Prompt.SystemPromptFile)
 		if err != nil {
 			return nil, err
 		}
+	} else if name == Skill {
+		skillConfig = benchmarkConfig.Agents.Skill
 	}
 	inferenceClient, err := newInferenceClient()
 	if err != nil {
@@ -107,7 +110,7 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 		}, nil
 	case Skill:
 		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
-			return skillagent.New(inferenceClient, shell, loopConfig)
+			return skillagent.NewWithConfig(inferenceClient, shell, loopConfig, skillConfig.SystemPromptFile, skillConfig.SkillsDir)
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)

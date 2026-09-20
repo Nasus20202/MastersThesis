@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"sort"
 	"strings"
 
@@ -33,26 +34,29 @@ type skillMetadata struct {
 	Description string `yaml:"description"`
 }
 
-func newSkillTool() common.Tool {
-	return skillTool{files: skillFiles}
+func newSkillTool(fileSystems ...fs.FS) common.Tool {
+	return skillTool{files: configuredFiles(fileSystems...)}
 }
 
-func newReferenceTool() common.Tool {
-	return referenceTool{files: skillFiles}
+func newReferenceTool(fileSystems ...fs.FS) common.Tool {
+	return referenceTool{files: configuredFiles(fileSystems...)}
 }
 
 func routingSystemPrompt() (string, error) {
-	basePrompt := systemPrompt
+	return routingSystemPromptFor(systemPrompt, skillFiles)
+}
+
+func routingSystemPromptFor(basePrompt string, files fs.FS) (string, error) {
 	if strings.TrimSpace(basePrompt) == "" {
 		return "", errors.New("skill system prompt is required")
 	}
-	paths, err := discoverSkillPaths(skillFiles)
+	paths, err := discoverSkillPaths(files)
 	if err != nil {
 		return "", err
 	}
 	entries := make([]string, 0, len(paths))
 	for _, name := range skillNames(paths) {
-		metadata, _, err := readSkillDocument(skillFiles, name)
+		metadata, _, err := readSkillDocument(files, name)
 		if err != nil {
 			return "", err
 		}
@@ -60,6 +64,13 @@ func routingSystemPrompt() (string, error) {
 		entries = append(entries, entry)
 	}
 	return fmt.Sprintf(routingPromptFormat, basePrompt, strings.Join(entries, "\n")), nil
+}
+
+func configuredFiles(fileSystems ...fs.FS) fs.FS {
+	if len(fileSystems) > 0 && fileSystems[0] != nil {
+		return fileSystems[0]
+	}
+	return skillFiles
 }
 
 func (skillTool) Definition() inference.Tool {
@@ -172,7 +183,8 @@ func readReference(files fs.FS, name, reference string) (string, error) {
 }
 
 func discoverSkillPaths(files fs.FS) (map[string]string, error) {
-	entries, err := fs.ReadDir(files, "skills")
+	root := skillRoot(files)
+	entries, err := fs.ReadDir(files, root)
 	if err != nil {
 		return nil, fmt.Errorf("read skills directory: %w", err)
 	}
@@ -181,7 +193,7 @@ func discoverSkillPaths(files fs.FS) (map[string]string, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		path := "skills/" + entry.Name() + "/SKILL.md"
+		path := path.Join(root, entry.Name(), "SKILL.md")
 		info, err := fs.Stat(files, path)
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("skill %q is missing SKILL.md", entry.Name())
@@ -207,7 +219,7 @@ func skillNames(paths map[string]string) []string {
 }
 
 func discoverReferences(files fs.FS, name string) (map[string]string, error) {
-	directory := "skills/" + name + "/references"
+	directory := path.Join(skillRoot(files), name, "references")
 	entries, err := fs.ReadDir(files, directory)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -223,6 +235,13 @@ func discoverReferences(files fs.FS, name string) (map[string]string, error) {
 		references[entry.Name()] = directory + "/" + entry.Name()
 	}
 	return references, nil
+}
+
+func skillRoot(files fs.FS) string {
+	if info, err := fs.Stat(files, "skills"); err == nil && info.IsDir() {
+		return "skills"
+	}
+	return "."
 }
 
 func referenceNames(references map[string]string) []string {

@@ -2,6 +2,8 @@ package skill
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -64,6 +66,25 @@ func TestRunUsesRoutingPromptAndSkillLoader(t *testing.T) {
 	assert.Equal(t, "bash", client.tools[0].Name)
 	assert.Equal(t, loadSkillToolName, client.tools[1].Name)
 	assert.Equal(t, loadReferenceToolName, client.tools[2].Name)
+}
+
+func TestNewWithConfigUsesConfiguredPromptAndSkillDirectory(t *testing.T) {
+	directory := t.TempDir()
+	skillsDirectory := filepath.Join(directory, "skills")
+	customSkillDirectory := filepath.Join(skillsDirectory, "custom")
+	require.NoError(t, os.MkdirAll(customSkillDirectory, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "prompt.md"), []byte("custom routing instructions"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(customSkillDirectory, "SKILL.md"), []byte("---\nname: custom\ndescription: Custom guidance\n---\n# Custom\n"), 0o600))
+
+	client := &skillTestClient{}
+	agent, err := NewWithConfig(client, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, filepath.Join(directory, "prompt.md"), skillsDirectory)
+	require.NoError(t, err)
+	_, err = agent.Run(context.Background(), "task")
+	require.NoError(t, err)
+	require.Len(t, client.requests, 1)
+	assert.Contains(t, client.requests[0][0].Content, "custom routing instructions")
+	assert.Contains(t, client.requests[0][0].Content, "- custom: Custom guidance")
+	assert.NotContains(t, client.requests[0][0].Content, "- kubernetes:")
 }
 
 func TestRunLoadsSkillThenReferenceAcrossTurns(t *testing.T) {
