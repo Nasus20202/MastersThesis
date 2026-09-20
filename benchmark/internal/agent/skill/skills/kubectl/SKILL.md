@@ -87,8 +87,6 @@ kubectl patch deployment/my-app -n my-namespace --type=strategic \
 
 Use the live object and diagnosis to choose the container and field. A field set to `null` is removed; do so only when evidence shows that field should be absent. If a partial container patch reports that a required field such as `image` is missing, stop and inspect the merge semantics; do not retry the same patch with `--type=merge`.
 
-Construct and inspect the patch as one valid JSON document before submitting it. A strategic-merge list should contain at most one object for each merge key such as `name`; do not add a second unnamed or duplicate container object. If a patch returns a syntax or validation error, use that error and a fresh live-object query to construct one corrected patch instead of issuing variants of the failed patch. Combine related field changes in the single named object when the diagnosis requires them.
-
 Do not use interactive commands such as `kubectl edit` in a noninteractive troubleshooting session. Use a noninteractive `patch` or `apply`, then inspect the result before making another change.
 
 An accepted command reports that the API request succeeded; asynchronous controllers may still need time to reconcile the resulting state.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,106 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 		return nil, err
 	}
 	return store, nil
+}
+
+// Resume reopens an existing incomplete run and rebuilds its in-memory summary
+// from the attempt artifacts already written to disk. Completed attempts are
+// retained and can be skipped by the runner; only missing task keys need to be
+// scheduled again.
+func Resume(root, runID string) (*Store, error) {
+	if strings.TrimSpace(runID) == "" {
+		return nil, errors.New("result run ID is required")
+	}
+	runDir := filepath.Join(root, runID)
+	metadataData, err := os.ReadFile(filepath.Join(runDir, "run.json"))
+	if err != nil {
+		return nil, fmt.Errorf("read run metadata: %w", err)
+	}
+	var metadata RunMetadata
+	if err := json.Unmarshal(metadataData, &metadata); err != nil {
+		return nil, fmt.Errorf("decode run metadata: %w", err)
+	}
+	if metadata.RunID != runID {
+		return nil, fmt.Errorf("run metadata ID %q does not match %q", metadata.RunID, runID)
+	}
+	if metadata.State == RunStateCompleted {
+		return nil, fmt.Errorf("run %q is already completed", runID)
+	}
+	if metadata.Parallelism < 1 || metadata.RepeatCount < 1 || len(metadata.Scenarios) == 0 {
+		return nil, errors.New("run metadata is incomplete or invalid")
+	}
+	metadata.Agents = slices.Clone(metadata.Agents)
+	metadata.Scenarios = slices.Clone(metadata.Scenarios)
+	metadata.RunType = runType(metadata)
+	metadata.State = RunStateRunning
+	metadata.CompletedAt = nil
+	store := &Store{
+		runDir:   runDir,
+		metadata: metadata,
+		summary:  newSummaryAccumulator(metadata),
+		recorded: make(map[string]struct{}),
+	}
+	attemptPaths, err := filepath.Glob(filepath.Join(runDir, "*", "*", "*.json"))
+	if err != nil {
+		return nil, fmt.Errorf("find run attempts: %w", err)
+	}
+	for _, path := range attemptPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read run attempt %q: %w", path, err)
+		}
+		if metadata.RunType == "validation" {
+			var artifact ValidationAttemptResult
+			if err := json.Unmarshal(data, &artifact); err != nil {
+				return nil, fmt.Errorf("decode run attempt %q: %w", path, err)
+			}
+			if artifact.RunID != metadata.RunID {
+				return nil, fmt.Errorf("run attempt %q belongs to %q", path, artifact.RunID)
+			}
+			store.recorded[attemptKey(artifact.ScenarioID, artifact.CaseID, artifact.Attempt)] = struct{}{}
+			passed := artifact.Passed
+			store.summary.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, &passed)
+			continue
+		}
+		var artifact AttemptResult
+		if err := json.Unmarshal(data, &artifact); err != nil {
+			return nil, fmt.Errorf("decode run attempt %q: %w", path, err)
+		}
+		if artifact.RunID != metadata.RunID {
+			return nil, fmt.Errorf("run attempt %q belongs to %q", path, artifact.RunID)
+		}
+		store.recorded[attemptKey(artifact.ScenarioID, artifact.Condition, artifact.Attempt)] = struct{}{}
+		store.summary.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
+	}
+	if err := store.writeRunMetadata(); err != nil {
+		return nil, err
+	}
+	if err := store.writeSummary(); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+// HasAttempt reports whether an attempt artifact is already persisted.
+func (s *Store) HasAttempt(attempt int, scenarioID, condition string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, exists := s.recorded[attemptKey(scenarioID, condition, attempt)]
+	return exists
+}
+
+// Metadata returns the immutable run configuration used to create this store.
+func (s *Store) Metadata() RunMetadata {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	metadata := s.metadata
+	metadata.Agents = slices.Clone(metadata.Agents)
+	metadata.Scenarios = slices.Clone(metadata.Scenarios)
+	return metadata
+}
+
+func attemptKey(scenarioID, condition string, attempt int) string {
+	return scenarioID + "\x00" + condition + "\x00" + strconv.Itoa(attempt)
 }
 
 func (s *Store) WriteAttempt(attempt int, agent string, result orchestration.RunResult) error {
@@ -153,18 +254,29 @@ func (s *Store) recordAttempt(path string, artifact any, condition, scenarioID s
 	if s.metadata.State != RunStateRunning {
 		return errors.New("cannot write attempt result after run finalization")
 	}
-	if _, exists := s.recorded[path]; exists {
+	if _, exists := s.recorded[attemptKey(scenarioID, condition, artifactAttempt(artifact))]; exists {
 		return fmt.Errorf("attempt result already recorded: %s", path)
 	}
 	if err := writeJSON(path, artifact); err != nil {
 		return fmt.Errorf("write attempt result: %w", err)
 	}
-	s.recorded[path] = struct{}{}
+	s.recorded[attemptKey(scenarioID, condition, artifactAttempt(artifact))] = struct{}{}
 	s.summary.add(condition, scenarioID, fullSuccess, score, errorText, validationPassed)
 	if err := s.writeSummary(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func artifactAttempt(artifact any) int {
+	switch value := artifact.(type) {
+	case AttemptResult:
+		return value.Attempt
+	case ValidationAttemptResult:
+		return value.Attempt
+	default:
+		return 0
+	}
 }
 
 func (s *Store) Finalize(completedAt time.Time) error {

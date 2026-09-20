@@ -119,3 +119,25 @@ func TestFormatCommandResultShowsActualExecutionError(t *testing.T) {
 	assert.Contains(t, content, "exit_code: -1")
 	assert.Contains(t, content, "error: sandbox unavailable")
 }
+
+func TestFormatCommandResultBoundsModelVisibleOutputButKeepsEvidenceRaw(t *testing.T) {
+	stdout := strings.Repeat("x", maxModelVisibleCommandOutputBytes*2)
+	content := formatCommandResult(command.Result{Stdout: stdout}, nil)
+
+	assert.LessOrEqual(t, len(content), maxModelVisibleCommandOutputBytes)
+	assert.Contains(t, content, truncatedCommandOutputMarker)
+	assert.Contains(t, content, "exit_code: 0")
+}
+
+func TestBashToolPreservesFullOutputInEvidence(t *testing.T) {
+	stdout := strings.Repeat("x", maxModelVisibleCommandOutputBytes*2)
+	shell := &bashTestShell{result: command.Result{Stdout: stdout}}
+	tool, err := NewBashTool(shell)
+	require.NoError(t, err)
+
+	result := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"command":"kubectl get -o yaml"}`})
+	details, ok := result.Details.(CommandEvidence)
+	require.True(t, ok)
+	assert.Equal(t, stdout, details.Stdout)
+	assert.LessOrEqual(t, len(result.Content), maxModelVisibleCommandOutputBytes)
+}

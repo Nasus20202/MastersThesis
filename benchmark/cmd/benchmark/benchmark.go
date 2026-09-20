@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +31,7 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
@@ -44,24 +46,35 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	agentSlots := make(chan struct{}, llamaParallelism)
 	totalTasks := len(definitions) * repeat * len(agentNames)
 
-	startedAt := time.Now().UTC()
-	revision, workingTreeDirty := repositoryProvenance()
-	metadata := results.RunMetadata{
-		RunID:              runID(startedAt),
-		RunType:            "benchmark",
-		StartedAt:          startedAt,
-		RepositoryRevision: revision,
-		WorkingTreeDirty:   workingTreeDirty,
-		ExpectedAttempts:   totalTasks,
-		Agents:             agentNamesToStrings(agentNames),
-		Parallelism:        parallelism,
-		RepeatCount:        repeat,
-		Scenarios:          scenarioIDs(definitions),
+	var store *results.Store
+	if resumeID != "" {
+		store, err = results.Resume("results", resumeID)
+		if err == nil {
+			if err := validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions)); err != nil {
+				return err
+			}
+		}
+	} else {
+		startedAt := time.Now().UTC()
+		revision, workingTreeDirty := repositoryProvenance()
+		metadata := results.RunMetadata{
+			RunID:              runID(startedAt),
+			RunType:            "benchmark",
+			StartedAt:          startedAt,
+			RepositoryRevision: revision,
+			WorkingTreeDirty:   workingTreeDirty,
+			ExpectedAttempts:   totalTasks,
+			Agents:             agentNamesToStrings(agentNames),
+			Parallelism:        parallelism,
+			RepeatCount:        repeat,
+			Scenarios:          scenarioIDs(definitions),
+		}
+		store, err = results.New("results", metadata)
 	}
-	store, err := results.New("results", metadata)
 	if err != nil {
 		return err
 	}
+	metadata := store.Metadata()
 	logger := slog.Default()
 	finalized := false
 	defer func() {
@@ -100,6 +113,9 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		for attempt := 1; attempt <= repeat; attempt++ {
 			for _, definition := range definitions {
 				definition := definition
+				if store.HasAttempt(attempt, definition.ID, string(agentName)) {
+					continue
+				}
 				tasks = append(tasks, executor.Task{
 					ScenarioID: definition.ID,
 					Agent:      string(agentName),
@@ -110,6 +126,13 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 				})
 			}
 		}
+	}
+	if len(tasks) == 0 {
+		finalizeErr := store.Finalize(time.Now().UTC())
+		if finalizeErr == nil {
+			finalized = true
+		}
+		return finalizeErr
 	}
 	progress, err := terminal.NewProgress(len(tasks), parallelism)
 	if err != nil {
@@ -160,6 +183,23 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		return errors.Join(writeErr, finalizeErr)
 	}
 	return runErr
+}
+
+func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string) error {
+	if metadata.RunType != "benchmark" {
+		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
+	}
+	wantAgents := agentNamesToStrings(agents)
+	if !slices.Equal(metadata.Agents, wantAgents) {
+		return fmt.Errorf("resume agents %v do not match run agents %v", wantAgents, metadata.Agents)
+	}
+	if metadata.RepeatCount != repeat {
+		return fmt.Errorf("resume repeat %d does not match run repeat %d", repeat, metadata.RepeatCount)
+	}
+	if !slices.Equal(metadata.Scenarios, scenarios) {
+		return fmt.Errorf("resume scenarios %v do not match run scenarios %v", scenarios, metadata.Scenarios)
+	}
+	return nil
 }
 
 func runID(startedAt time.Time) string {

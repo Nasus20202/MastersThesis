@@ -36,7 +36,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.SetOutput(logOutput)
 	flags.Usage = func() {
 		fmt.Fprintln(logOutput, "Usage:")
-		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--agent NAME[,NAME] ...] [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--agent NAME[,NAME] ...] [--parallel N] [--repeat N] [--resume RUN_ID]")
 		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --validate PATH [--parallel N] [--repeat N]")
 		fmt.Fprintln(logOutput, "\nOptions:")
 		flags.PrintDefaults()
@@ -51,6 +51,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, prompt, or skill; may be repeated or comma-separated (default: all)")
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
+	resumeID := flags.String("resume", "", "resume an incomplete scenario run by ID")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -84,12 +85,15 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	}
 
 	if len(validationPaths) > 0 {
+		if strings.TrimSpace(*resumeID) != "" {
+			return errors.New("resume is only supported with scenario runs")
+		}
 		if len(agentValues) > 0 && !explicitAllAgentSelection(agentValues) {
 			return errors.New("agent selection is only supported with scenario runs")
 		}
 		return runValidation(ctx, validationPaths, *parallel, *repeat, terminal)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal)
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal, strings.TrimSpace(*resumeID))
 }
 
 type stringList []string

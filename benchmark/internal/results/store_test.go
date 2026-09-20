@@ -162,6 +162,57 @@ func TestStoreWritesFailedValidationAttemptEvidence(t *testing.T) {
 	assert.Equal(t, failure, artifact.Failure)
 }
 
+func TestStoreResumesIncompleteRunAndRebuildsRecordedAttempts(t *testing.T) {
+	root := t.TempDir()
+	startedAt := time.Date(2026, time.September, 11, 10, 0, 0, 0, time.UTC)
+	store, err := New(root, RunMetadata{
+		RunID:       "run-resume",
+		StartedAt:   startedAt,
+		Agents:      []string{"skill"},
+		Parallelism: 1,
+		RepeatCount: 2,
+		Scenarios:   []string{"scenario"},
+	})
+	require.NoError(t, err)
+	result := orchestration.RunResult{
+		ScenarioID: "scenario",
+		Condition:  "skill",
+		Grading:    orchestration.GradingResult{Score: 0.5},
+	}
+	require.NoError(t, store.WriteAttempt(1, "skill", result))
+	require.NoError(t, store.Finalize(startedAt.Add(time.Minute)))
+
+	resumed, err := Resume(root, "run-resume")
+	require.NoError(t, err)
+	assert.True(t, resumed.HasAttempt(1, "scenario", "skill"))
+	assert.False(t, resumed.HasAttempt(2, "scenario", "skill"))
+	assert.Equal(t, RunStateRunning, resumed.Metadata().State)
+	require.NoError(t, resumed.WriteAttempt(2, "skill", result))
+	require.NoError(t, resumed.Finalize(startedAt.Add(2*time.Minute)))
+
+	data, err := os.ReadFile(filepath.Join(root, "run-resume", "results.json"))
+	require.NoError(t, err)
+	var summary RunSummary
+	require.NoError(t, json.Unmarshal(data, &summary))
+	assert.Equal(t, RunStateCompleted, summary.State)
+	assert.Equal(t, 2, summary.AttemptsRecorded)
+}
+
+func TestStoreResumeRejectsCompletedRun(t *testing.T) {
+	root := t.TempDir()
+	store, err := New(root, RunMetadata{
+		RunID:       "run-complete",
+		Parallelism: 1,
+		RepeatCount: 1,
+		Scenarios:   []string{"scenario"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "baseline", orchestration.RunResult{ScenarioID: "scenario"}))
+	require.NoError(t, store.Finalize(time.Now()))
+	_, err = Resume(root, "run-complete")
+	assert.ErrorContains(t, err, "already completed")
+}
+
 func TestStoreRejectsInvalidValidationAttempt(t *testing.T) {
 	store, err := New(t.TempDir(), RunMetadata{RunID: "run-1", Parallelism: 1, RepeatCount: 1, Scenarios: []string{"scenario"}})
 	require.NoError(t, err)
