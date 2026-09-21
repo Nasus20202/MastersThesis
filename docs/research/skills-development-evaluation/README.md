@@ -2,7 +2,7 @@
 
 ## Status
 
-This study evaluates the troubleshooting skill agent for the five Kubernetes development scenarios used by tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15)–[#18](https://github.com/Nasus20202/MastersThesis/issues/18). Runs 1–7 form the skill revision series. Run 6 remains the selected skill revision because it was the strongest revision that consistently routed domain skills and references. Run 8 is the final three-condition benchmark and completed all 75 attempts. An earlier three-condition run was interrupted at 57 of 75 attempts and is excluded from the comparison.
+This study evaluates the troubleshooting skill agent for the five Kubernetes development scenarios used by tickets [#15](https://github.com/Nasus20202/MastersThesis/issues/15)–[#18](https://github.com/Nasus20202/MastersThesis/issues/18). Runs 1–7 form the skill revision series. Run 6 remains the selected skill revision because it was the strongest revision that consistently routed domain skills and references. Run 8 is the final three-condition benchmark and completed all 75 attempts.
 
 Run 8 used the Run 6 skill files, a 600-second total agent limit, and an 8 KiB model-visible limit for each Bash result. Full command output remains in the raw attempt evidence.
 
