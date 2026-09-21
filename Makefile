@@ -9,6 +9,7 @@ REPEAT ?= 1
 CONFIG ?=
 BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 8
+RESUME ?=
 
 include $(LLAMA_CONFIG)
 
@@ -22,7 +23,7 @@ endif
 COMPOSE := docker compose $(COMPOSE_ENV_FILES) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_QUANTIZATION LLAMA_MODEL_SHA256 LLAMA_MODEL_DIR LLAMA_MODEL_NAME
-export LLAMA_CONTEXT_SIZE LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
+export LLAMA_KV_UNIFIED_PER_SLOT LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
 export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
 export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
 export LLAMA_REASONING LLAMA_REASONING_BUDGET
@@ -30,6 +31,10 @@ export LLAMA_REASONING LLAMA_REASONING_BUDGET
 BENCHMARK_CONFIG_ARGS := --config config.yaml
 ifneq ($(strip $(CONFIG)),)
 BENCHMARK_CONFIG_ARGS += --config $(abspath $(CONFIG))
+endif
+BENCHMARK_RESUME_ARGS :=
+ifneq ($(strip $(RESUME)),)
+BENCHMARK_RESUME_ARGS += --resume $(RESUME)
 endif
 
 .DEFAULT_GOAL := help
@@ -55,9 +60,10 @@ help:
 	@printf '  %-28s %s\n' \
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
 		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
-		'AGENT=NAME[,NAME]' 'Select all, baseline, or prompt benchmark agents (default: all).' \
+		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, or skill benchmark agents (default: all).' \
 		'CONFIG=PATH' 'Overlay a benchmark YAML config file.' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
+		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).'
 
@@ -95,7 +101,7 @@ build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
 
 benchmark:
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
 benchmark-validate:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)

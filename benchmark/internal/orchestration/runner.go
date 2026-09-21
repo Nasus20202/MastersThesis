@@ -25,6 +25,7 @@ type Runner struct {
 	SandboxFactory      sandboxintegration.Factory
 	SandboxImageBuilder sandboxintegration.ImageBuilder
 	AgentFactory        rootagent.Factory
+	AgentSlots          chan struct{} // Shared across benchmark workers; nil disables the limit.
 	Condition           string
 	Executor            command.Executor
 	CleanupTimeout      time.Duration
@@ -262,7 +263,7 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 	var agentErr error
 	if modelAgent != nil {
 		logger.Info("running model agent")
-		result, err := modelAgent.Run(ctx, definition.Task)
+		result, err := r.runModelAgent(ctx, modelAgent, definition.Task)
 		agentResult = &result
 		if err != nil {
 			agentErr = fmt.Errorf("run model agent: %w", err)
@@ -284,6 +285,21 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 		return result, agentResult, runErr
 	}
 	return result, agentResult, nil
+}
+
+func (r Runner) runModelAgent(ctx context.Context, modelAgent rootagent.Agent, task string) (common.Result, error) {
+	if r.AgentSlots != nil {
+		if err := ctx.Err(); err != nil {
+			return common.Result{}, err
+		}
+		select {
+		case r.AgentSlots <- struct{}{}:
+			defer func() { <-r.AgentSlots }()
+		case <-ctx.Done():
+			return common.Result{}, ctx.Err()
+		}
+	}
+	return modelAgent.Run(ctx, task)
 }
 
 func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPath string, logger *slog.Logger) error {

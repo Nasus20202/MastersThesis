@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoadLayersFilesAndResolvesPromptPath(t *testing.T) {
+func TestLoadLayersFilesAndResolvesAgentPaths(t *testing.T) {
 	directory := t.TempDir()
 	basePath := filepath.Join(directory, "base.yaml")
 	overlayPath := filepath.Join(directory, "overlay.yaml")
-	require.NoError(t, os.WriteFile(basePath, []byte("logging:\n  level: info\nagents:\n  loop:\n    max_turns: 25\n    max_tool_calls: 50\n    tool_timeout_seconds: 60\n    timeout_seconds: 300\n  prompt:\n    system_prompt_file: default.md\n"), 0o600))
-	require.NoError(t, os.WriteFile(overlayPath, []byte("logging:\n  format: json\nagents:\n  loop:\n    timeout_seconds: 120\n  prompt:\n    system_prompt_file: candidate.md\n"), 0o600))
+	require.NoError(t, os.WriteFile(basePath, []byte("logging:\n  level: info\nagents:\n  loop:\n    max_turns: 25\n    max_tool_calls: 50\n    tool_timeout_seconds: 60\n    timeout_seconds: 300\n  prompt:\n    system_prompt_file: default.md\n  skill:\n    system_prompt_file: default-skill.md\n    skills_dir: skills\n"), 0o600))
+	require.NoError(t, os.WriteFile(overlayPath, []byte("logging:\n  format: json\nagents:\n  loop:\n    timeout_seconds: 120\n  prompt:\n    system_prompt_file: candidate.md\n  skill:\n    system_prompt_file: candidate-skill.md\n    skills_dir: candidate-skills\n"), 0o600))
 
 	config, err := Load(basePath, overlayPath)
 	require.NoError(t, err)
@@ -25,6 +25,8 @@ func TestLoadLayersFilesAndResolvesPromptPath(t *testing.T) {
 	assert.Equal(t, float64(60), *config.Agents.Loop.ToolTimeoutSeconds)
 	assert.Equal(t, float64(120), *config.Agents.Loop.TimeoutSeconds)
 	assert.Equal(t, filepath.Join(directory, "candidate.md"), config.Agents.Prompt.SystemPromptFile)
+	assert.Equal(t, filepath.Join(directory, "candidate-skill.md"), config.Agents.Skill.SystemPromptFile)
+	assert.Equal(t, filepath.Join(directory, "candidate-skills"), config.Agents.Skill.SkillsDir)
 }
 
 func TestLoadUsesDefaultsWithoutFiles(t *testing.T) {

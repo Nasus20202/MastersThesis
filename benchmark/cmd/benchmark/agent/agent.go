@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	promptagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/prompt"
+	skillagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/skill"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/llama"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -22,11 +24,25 @@ const (
 	All      Name = "all"
 	Baseline Name = "baseline"
 	Prompt   Name = "prompt"
+	Skill    Name = "skill"
 )
+
+// ConfiguredLlamaParallelism returns the effective llama.cpp slot count.
+func ConfiguredLlamaParallelism() (int, error) {
+	value := strings.TrimSpace(os.Getenv(envLlamaParallel))
+	if value == "" {
+		value = "1"
+	}
+	parallelism, err := strconv.Atoi(value)
+	if err != nil || parallelism < 1 {
+		return 0, fmt.Errorf("%s must be a positive integer, got %q", envLlamaParallel, value)
+	}
+	return parallelism, nil
+}
 
 func Select(values ...string) ([]Name, error) {
 	if len(values) == 0 {
-		return []Name{Baseline, Prompt}, nil
+		return []Name{Baseline, Prompt, Skill}, nil
 	}
 
 	selected := make([]Name, 0, len(values))
@@ -45,8 +61,8 @@ func Select(values ...string) ([]Name, error) {
 				allSelected = true
 				continue
 			}
-			if normalized != Baseline && normalized != Prompt {
-				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, or prompt", item)
+			if normalized != Baseline && normalized != Prompt && normalized != Skill {
+				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, prompt, or skill", item)
 			}
 			if _, exists := seen[normalized]; exists {
 				return nil, fmt.Errorf("agent %q was selected more than once", normalized)
@@ -56,7 +72,7 @@ func Select(values ...string) ([]Name, error) {
 		}
 	}
 	if allSelected {
-		return []Name{Baseline, Prompt}, nil
+		return []Name{Baseline, Prompt, Skill}, nil
 	}
 	return selected, nil
 }
@@ -67,11 +83,14 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 		return nil, err
 	}
 	var customPrompt string
+	var skillConfig benchmarkconfig.SkillAgentConfig
 	if name == Prompt {
 		customPrompt, err = loadPromptSystemPrompt(benchmarkConfig.Agents.Prompt.SystemPromptFile)
 		if err != nil {
 			return nil, err
 		}
+	} else if name == Skill {
+		skillConfig = benchmarkConfig.Agents.Skill
 	}
 	inferenceClient, err := newInferenceClient()
 	if err != nil {
@@ -88,6 +107,10 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 				return promptagent.NewWithSystemPrompt(inferenceClient, shell, loopConfig, customPrompt)
 			}
 			return promptagent.New(inferenceClient, shell, loopConfig)
+		}, nil
+	case Skill:
+		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return skillagent.NewWithConfig(inferenceClient, shell, loopConfig, skillConfig.SystemPromptFile, skillConfig.SkillsDir)
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)
@@ -144,16 +167,16 @@ func NewBaselineFactory(benchmarkConfig benchmarkconfig.Config) (rootagent.Facto
 }
 
 func newInferenceClient() (inference.Client, error) {
-	model := strings.TrimSpace(os.Getenv("LLAMA_MODEL_NAME"))
+	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
 	if model == "" {
-		return nil, fmt.Errorf("LLAMA_MODEL_NAME is required")
+		return nil, fmt.Errorf("%s is required", envLlamaModelName)
 	}
 
-	host := strings.TrimSpace(os.Getenv("LLAMA_CLIENT_HOST"))
+	host := strings.TrimSpace(os.Getenv(envLlamaClientHost))
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	port := strings.TrimSpace(os.Getenv("LLAMA_PORT"))
+	port := strings.TrimSpace(os.Getenv(envLlamaPort))
 	if port == "" {
 		port = "8080"
 	}
@@ -163,8 +186,8 @@ func newInferenceClient() (inference.Client, error) {
 		Metadata: inference.Metadata{
 			Model:           model,
 			Artifact:        modelArtifact(),
-			Quantization:    strings.TrimSpace(os.Getenv("LLAMA_MODEL_QUANTIZATION")),
-			SHA256:          strings.TrimSpace(os.Getenv("LLAMA_MODEL_SHA256")),
+			Quantization:    strings.TrimSpace(os.Getenv(envLlamaModelQuant)),
+			SHA256:          strings.TrimSpace(os.Getenv(envLlamaModelSHA256)),
 			RuntimeSettings: runtimeSettings(),
 		},
 	})
@@ -179,9 +202,9 @@ func newInferenceClient() (inference.Client, error) {
 }
 
 func modelArtifact() string {
-	repository := strings.TrimSpace(os.Getenv("LLAMA_MODEL_REPOSITORY"))
-	revision := strings.TrimSpace(os.Getenv("LLAMA_MODEL_REVISION"))
-	file := strings.TrimSpace(os.Getenv("LLAMA_MODEL_FILE"))
+	repository := strings.TrimSpace(os.Getenv(envLlamaModelRepository))
+	revision := strings.TrimSpace(os.Getenv(envLlamaModelRevision))
+	file := strings.TrimSpace(os.Getenv(envLlamaModelFile))
 	artifact := repository
 	if revision != "" {
 		artifact += "@" + revision
@@ -193,9 +216,8 @@ func modelArtifact() string {
 }
 
 func runtimeSettings() map[string]string {
-	const names = "LLAMA_CONTEXT_SIZE LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_MODELS_MAX LLAMA_REASONING LLAMA_REASONING_BUDGET LLAMA_HOST LLAMA_PORT LLAMA_CLIENT_HOST"
 	settings := make(map[string]string)
-	for _, name := range strings.Fields(names) {
+	for _, name := range llamaRuntimeEnvNames {
 		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
 			settings[name] = value
 		}

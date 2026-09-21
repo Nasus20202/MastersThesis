@@ -25,6 +25,7 @@ type LoggingConfig struct {
 type AgentsConfig struct {
 	Loop   LoopConfig        `yaml:"loop,omitempty"`
 	Prompt PromptAgentConfig `yaml:"prompt,omitempty"`
+	Skill  SkillAgentConfig  `yaml:"skill,omitempty"`
 }
 
 type LoopConfig struct {
@@ -38,8 +39,13 @@ type PromptAgentConfig struct {
 	SystemPromptFile string `yaml:"system_prompt_file,omitempty"`
 }
 
+type SkillAgentConfig struct {
+	SystemPromptFile string `yaml:"system_prompt_file,omitempty"`
+	SkillsDir        string `yaml:"skills_dir,omitempty"`
+}
+
 // Load reads benchmark-specific YAML configuration files in order. Later
-// files override earlier files. Prompt file paths in a config file are
+// files override earlier files. Agent file paths in a config file are
 // resolved relative to that file.
 func Load(paths ...string) (Config, error) {
 	values := make(map[string]interface{})
@@ -80,7 +86,7 @@ func read(path string) (map[string]interface{}, error) {
 	} else if !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("invalid benchmark config %q: %s", path, yaml.FormatError(err, false, true))
 	}
-	resolvePromptPath(values, path)
+	resolveAgentPaths(values, path)
 	return values, nil
 }
 
@@ -96,18 +102,29 @@ func merge(destination, source map[string]interface{}) {
 	}
 }
 
-func resolvePromptPath(values map[string]interface{}, configPath string) {
+func resolveAgentPaths(values map[string]interface{}, configPath string) {
 	agents, ok := values["agents"].(map[string]interface{})
 	if !ok {
 		return
 	}
-	prompt, ok := agents["prompt"].(map[string]interface{})
-	if !ok {
-		return
+	for agentName, fields := range map[string][]string{
+		"prompt": {"system_prompt_file"},
+		"skill":  {"system_prompt_file", "skills_dir"},
+	} {
+		agent, ok := agents[agentName].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, field := range fields {
+			resolveAgentPath(agent, field, configPath)
+		}
 	}
-	path, ok := prompt["system_prompt_file"].(string)
+}
+
+func resolveAgentPath(agent map[string]interface{}, field, configPath string) {
+	path, ok := agent[field].(string)
 	if !ok || path == "" || filepath.IsAbs(path) {
 		return
 	}
-	prompt["system_prompt_file"] = filepath.Join(filepath.Dir(configPath), path)
+	agent[field] = filepath.Join(filepath.Dir(configPath), path)
 }

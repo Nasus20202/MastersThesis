@@ -27,8 +27,10 @@ Run `make` from the repository root to list available commands. Before committin
 - Update documentation when an approved research or technical decision changes the content it describes.
 - Record every research and technical decision, including changes and reversals, in [docs/decision-log.md](docs/decision-log.md) with a date, status, rationale or reason and a reference to the affected document.
 - Keep [docs/decision-log.md](docs/decision-log.md) as the single source of truth for open decisions. Do not repeat the same open-decision list in other documentation files; link to the decision log instead.
-- All records in [docs/decision-log.md](docs/decision-log.md) must be human-reviewed and approved before being added.
+- All records in [docs/decision-log.md](docs/decision-log.md) must be human-reviewed and approved before being added. Do not modify the file without explicit approval from the human researcher.
+- Only decisions not yet merged into the default branch can and should be modified. Once a decision is merged, it is frozen and cannot be changed without explicit approval.
 - Keep subject-specific details in their owning documentation file and avoid copying full sections between files.
+- Don't save non human-readable or non-research-focused content in documentation files. If it is not clear why something exists, it is not ready to be documented.
 - Write research documents around the question, method, results, and limitations. Include commands and hashes only when they help reproduce or interpret an experiment; keep links to the raw evidence.
 - Update [docs/README.md](docs/README.md) when documentation files are added, removed or renamed.
 - Documentation changes remain human-gated: do not change research decisions, frozen data, sources, conditions or metrics without explicit approval.

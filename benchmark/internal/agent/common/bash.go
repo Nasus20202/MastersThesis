@@ -13,6 +13,13 @@ import (
 
 const bashToolName = "bash"
 
+// maxModelVisibleCommandOutputBytes bounds one shell result placed in the
+// model conversation. The complete stdout and stderr remain in
+// CommandEvidence for reproducibility and later inspection.
+const maxModelVisibleCommandOutputBytes = 8 * 1024
+
+const truncatedCommandOutputMarker = "\n[command output truncated; full stdout/stderr is preserved in evidence]\n"
+
 type bashTool struct{ shell Shell }
 
 func NewBashTool(shell Shell) (Tool, error) {
@@ -90,5 +97,15 @@ func formatCommandResult(result command.Result, execErr error) string {
 	if execErr != nil && result.ExitCode <= 0 {
 		fmt.Fprintf(&builder, "error: %s\n", execErr)
 	}
-	return builder.String()
+	return limitModelVisibleOutput(builder.String())
+}
+
+func limitModelVisibleOutput(content string) string {
+	if len(content) <= maxModelVisibleCommandOutputBytes {
+		return content
+	}
+	available := maxModelVisibleCommandOutputBytes - len(truncatedCommandOutputMarker)
+	head := available / 2
+	tail := available - head
+	return content[:head] + truncatedCommandOutputMarker + content[len(content)-tail:]
 }

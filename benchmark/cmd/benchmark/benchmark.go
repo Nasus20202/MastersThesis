@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +31,7 @@ const (
 	sandboxBuildContext   = "sandbox"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
@@ -37,22 +39,52 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if len(agentNames) == 0 {
 		return errors.New("benchmark requires at least one agent")
 	}
-	totalTasks := len(definitions) * repeat * len(agentNames)
-
-	startedAt := time.Now().UTC()
-	metadata := results.RunMetadata{
-		RunID:       runID(startedAt),
-		StartedAt:   startedAt,
-		Agents:      agentNamesToStrings(agentNames),
-		Parallelism: parallelism,
-		RepeatCount: repeat,
-		Scenarios:   scenarioIDs(definitions),
-	}
-	store, err := results.New("results", metadata)
+	llamaParallelism, err := commandagent.ConfiguredLlamaParallelism()
 	if err != nil {
 		return err
 	}
+	agentSlots := make(chan struct{}, llamaParallelism)
+	totalTasks := len(definitions) * repeat * len(agentNames)
+
+	var store *results.Store
+	if resumeID != "" {
+		store, err = results.Resume("results", resumeID)
+		if err == nil {
+			if err := validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions)); err != nil {
+				return err
+			}
+		}
+	} else {
+		startedAt := time.Now().UTC()
+		revision, workingTreeDirty := repositoryProvenance()
+		metadata := results.RunMetadata{
+			RunID:              runID(startedAt),
+			RunType:            "benchmark",
+			StartedAt:          startedAt,
+			RepositoryRevision: revision,
+			WorkingTreeDirty:   workingTreeDirty,
+			ExpectedAttempts:   totalTasks,
+			Agents:             agentNamesToStrings(agentNames),
+			Parallelism:        parallelism,
+			RepeatCount:        repeat,
+			Scenarios:          scenarioIDs(definitions),
+		}
+		store, err = results.New("results", metadata)
+	}
+	if err != nil {
+		return err
+	}
+	metadata := store.Metadata()
 	logger := slog.Default()
+	finalized := false
+	defer func() {
+		if finalized {
+			return
+		}
+		if err := store.Finalize(time.Now().UTC()); err != nil {
+			logger.Error("benchmark result finalization failed", "run_id", metadata.RunID, "error", err)
+		}
+	}()
 	logger.Info("benchmark runner started",
 		"run_id", metadata.RunID,
 		"agents", metadata.Agents,
@@ -77,21 +109,30 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	}
 	tasks := make([]executor.Task, 0, totalTasks)
 	for _, agentName := range agentNames {
-		agentName := agentName
 		agentFactory := agentFactories[agentName]
 		for attempt := 1; attempt <= repeat; attempt++ {
 			for _, definition := range definitions {
 				definition := definition
+				if store.HasAttempt(attempt, definition.ID, string(agentName)) {
+					continue
+				}
 				tasks = append(tasks, executor.Task{
 					ScenarioID: definition.ID,
 					Agent:      string(agentName),
 					Attempt:    attempt,
 					Run: func(ctx context.Context) (orchestration.RunResult, error) {
-						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory).Run(ctx, definition)
+						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory, agentSlots).Run(ctx, definition)
 					},
 				})
 			}
 		}
+	}
+	if len(tasks) == 0 {
+		finalizeErr := store.Finalize(time.Now().UTC())
+		if finalizeErr == nil {
+			finalized = true
+		}
+		return finalizeErr
 	}
 	progress, err := terminal.NewProgress(len(tasks), parallelism)
 	if err != nil {
@@ -134,13 +175,31 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		)
 	}
 	runErr := <-executeErrors
-	if writeErr != nil {
-		return writeErr
+	finalizeErr := store.Finalize(time.Now().UTC())
+	if finalizeErr == nil {
+		finalized = true
 	}
-	if err := store.Finalize(time.Now().UTC()); err != nil {
-		return err
+	if writeErr != nil || finalizeErr != nil {
+		return errors.Join(writeErr, finalizeErr)
 	}
 	return runErr
+}
+
+func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string) error {
+	if metadata.RunType != "benchmark" {
+		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
+	}
+	wantAgents := agentNamesToStrings(agents)
+	if !slices.Equal(metadata.Agents, wantAgents) {
+		return fmt.Errorf("resume agents %v do not match run agents %v", wantAgents, metadata.Agents)
+	}
+	if metadata.RepeatCount != repeat {
+		return fmt.Errorf("resume repeat %d does not match run repeat %d", repeat, metadata.RepeatCount)
+	}
+	if !slices.Equal(metadata.Scenarios, scenarios) {
+		return fmt.Errorf("resume scenarios %v do not match run scenarios %v", scenarios, metadata.Scenarios)
+	}
+	return nil
 }
 
 func runID(startedAt time.Time) string {
@@ -148,11 +207,12 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory) orchestration.Runner {
+func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory, agentSlots chan struct{}) orchestration.Runner {
 	return orchestration.Runner{
 		Executor:            commandExecutor,
 		SandboxImageBuilder: imageBuilder,
 		AgentFactory:        agentFactory,
+		AgentSlots:          agentSlots,
 		Condition:           string(agentName),
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(commandExecutor, kind.Config{

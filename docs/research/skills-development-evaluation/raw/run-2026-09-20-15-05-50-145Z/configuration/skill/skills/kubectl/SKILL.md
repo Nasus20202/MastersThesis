@@ -1,0 +1,94 @@
+---
+name: kubectl
+description: "kubectl command syntax and usage: resource addressing, output formats, logs, waits, and declarative changes."
+---
+
+# kubectl
+
+Use this skill for kubectl command knowledge: how resources are addressed, how output is shaped, and what common subcommands do. Use the `kubernetes` skill for resource semantics and the `troubleshooting` skill for a general diagnosis workflow.
+
+## Context, scope, and addressing
+
+Every namespaced command is evaluated against a context, a cluster, and a namespace. The current context and its default namespace are defaults; pass `-n "$namespace"` when an explicit namespace matters and use `--all-namespaces` only for deliberate discovery:
+
+```bash
+kubectl config current-context
+kubectl config view --minify --output='jsonpath={..namespace}{"\n"}'
+kubectl get namespace
+```
+
+Resources can be addressed by type, type/name, labels, or field selectors, for example `pods`, `deployment/my-app`, and `pods -l 'app=my-app'`. The type/name form already includes the resource type: use `kubectl get service/app` or `kubectl get endpoints/app`, not `kubectl get endpoints service/app`. If the name is unknown, list the resource type in the namespace.
+
+Authorization checks can be made without performing the operation:
+
+```bash
+kubectl auth can-i get pods -n "$namespace"
+```
+
+## Reading objects
+
+`get` lists or summarizes resources; `describe` presents a human-readable view including related conditions and events. YAML and JSON output expose the API object fields directly:
+
+```bash
+kubectl get pods -n "$namespace" -o wide
+kubectl get deployment/my-app -n "$namespace" -o yaml
+kubectl describe deployment/my-app -n "$namespace"
+```
+
+Use `-o jsonpath=...`, `-o custom-columns=...`, or `-o go-template=...` when only specific fields are needed. Prefer structured output when exact values matter.
+
+## Logs and exec
+
+`logs` reads container output. `--previous` reads the previous terminated container instance when one exists; `-c` selects a container; `--tail` bounds output. `exec --` runs a command in a running container:
+
+```bash
+kubectl logs "$pod" -n "$namespace" -c "$container" --tail=200
+kubectl logs "$pod" -n "$namespace" -c "$container" --previous --tail=200
+kubectl exec "$pod" -n "$namespace" -c "$container" -- command args
+```
+
+For multi-container overview output, `--all-containers --prefix` keeps lines attributable to their container.
+
+## Events and waits
+
+Events are namespace-scoped resources and can be sorted or filtered using supported selectors:
+
+```bash
+kubectl get events -n "$namespace" --sort-by=.lastTimestamp
+kubectl get events -n "$namespace" --field-selector involvedObject.name="$name"
+```
+
+Bound waits explicitly rather than using an indefinite watch. Set the wait timeout shorter than the outer command tool's deadline; for a 60-second tool deadline, use about 30 seconds or less:
+
+```bash
+kubectl wait --for=condition=Ready pod -l 'app=my-app' -n "$namespace" --timeout=30s
+kubectl rollout status deployment/my-app -n "$namespace" --timeout=30s
+```
+
+`rollout history` lists controller revisions where the resource supports rollout history.
+
+## Changing state
+
+`diff` previews declarative changes and `apply` submits them for reconciliation. `patch` changes selected fields, `set` provides targeted helpers for supported resource fields, and `delete` removes an object according to Kubernetes deletion and ownership semantics:
+
+```bash
+kubectl diff -f change.yaml -n "$namespace"
+kubectl apply -f change.yaml -n "$namespace"
+```
+
+For built-in Kubernetes resources, `patch` defaults to strategic merge patch, which can merge list entries such as containers by name. `--type=merge` selects JSON merge patch, which replaces arrays; a partial container list can remove required fields such as the image. Keep the default strategic merge behavior when changing a named list entry, include its name as the merge key, and inspect the live object before changing it. Strategic merge patch is not supported for custom resources.
+
+When changing one field on a named container, use strategic merge patch so other container fields remain intact. For example, this updates one container image in a built-in Deployment:
+
+```bash
+kubectl patch deployment/my-app -n my-namespace --type=strategic \
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"my-container","image":"registry.example/my-app:v2"}]}}}}'
+```
+
+Use the live object and diagnosis to choose the container and field. A field set to `null` is removed; do so only when evidence shows that field should be absent. If a partial container patch reports that a required field such as `image` is missing, stop and inspect the merge semantics; do not retry the same patch with `--type=merge`.
+
+Construct and inspect the patch as one valid JSON document before submitting it. A strategic-merge list should contain at most one object for each merge key such as `name`; do not add a second unnamed or duplicate container object. If a patch returns a syntax or validation error, use that error and a fresh live-object query to construct one corrected patch instead of issuing variants of the failed patch. Combine related field changes in the single named object when the diagnosis requires them.
+
+Do not use interactive commands such as `kubectl edit` in a noninteractive troubleshooting session. Use a noninteractive `patch` or `apply`, then inspect the result before making another change.
+
+An accepted command reports that the API request succeeded; asynchronous controllers may still need time to reconcile the resulting state.
