@@ -1,0 +1,86 @@
+id: networkpolicy-egress-dns
+title: Default-deny egress blocks DNS and a dependency
+task: The application in the egress namespace cannot reach its dependency, and service name resolution from the application fails. Restore the application's required outbound access without allowing all egress.
+
+cluster:
+  kind:
+    config: ../../../kind/cluster-calico.yaml
+
+prepare:
+  - program: helm
+    args:
+      - upgrade
+      - --install
+      - calico-crds
+      - oci://quay-registry-cache:5000/calico/charts/crd.projectcalico.org.v1
+      - --plain-http
+      - --namespace
+      - tigera-operator
+      - --create-namespace
+      - --version
+      # renovate: datasource=helm depName=crd.projectcalico.org.v1 registryUrl=https://docs.tigera.io/calico/charts
+      - v3.32.2
+      - --wait
+      - --timeout
+      - 300s
+  - program: kubectl
+    args:
+      - wait
+      - --for=condition=Established
+      - crd/installations.operator.tigera.io
+      - --timeout=60s
+  - program: helm
+    args:
+      - upgrade
+      - --install
+      - calico
+      - oci://quay-registry-cache:5000/calico/charts/tigera-operator
+      - --plain-http
+      - --namespace
+      - tigera-operator
+      - --create-namespace
+      - --values
+      - ../../../kind/addons/calico-values.yaml
+      - --version
+      # renovate: datasource=helm depName=tigera-operator registryUrl=https://docs.tigera.io/calico/charts
+      - v3.32.2
+      - --wait
+      - --timeout
+      - 300s
+  - program: sh
+    args: [scripts/wait-calico.sh]
+  - program: kubectl
+    args: [create, -f, manifests/app.yaml]
+
+verify_clean:
+  - program: kubectl
+    args: [rollout, status, deployment/dep, -n, egress, --timeout=90s]
+  - program: kubectl
+    args: [rollout, status, deployment/other, -n, egress, --timeout=90s]
+  - program: sh
+    args: [scripts/verify-clean.sh]
+
+inject_fault:
+  - program: kubectl
+    args: [apply, -f, manifests/networkpolicy-deny-egress.yaml]
+
+verify_fault:
+  - program: sh
+    args: [scripts/verify-fault.sh]
+
+grading:
+  - id: dependency-reachable
+    weight: 2
+    check:
+      program: sh
+      args: [scripts/check-dependency.sh]
+  - id: dns-resolution
+    weight: 2
+    check:
+      program: sh
+      args: [scripts/check-dns.sh]
+  - id: egress-isolation
+    weight: 1
+    check:
+      program: sh
+      args: [scripts/check-egress-isolation.sh]
