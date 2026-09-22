@@ -15,7 +15,7 @@ import (
 type Item struct {
 	Label string
 	Value float64
-	Full  bool
+	Style lipgloss.Style
 }
 
 // Bars renders a vertical bar chart of values in the range 0..1.
@@ -27,7 +27,7 @@ func Bars(width, height int, items []Item) string {
 	for _, item := range items {
 		data = append(data, barchart.BarData{
 			Label:  item.Label,
-			Values: []barchart.BarValue{{Value: item.Value, Style: Outcome(item.Full, item.Value)}},
+			Values: []barchart.BarValue{{Value: item.Value, Style: item.Style}},
 		})
 	}
 	chart := barchart.New(max(10, width), max(3, height), barchart.WithDataSet(data), barchart.WithMaxValue(1))
@@ -50,7 +50,7 @@ func Histogram(width, height int, labels []string, counts []int) string {
 		if index < len(labels) {
 			label = labels[index]
 		}
-		items = append(items, Item{Label: label, Value: float64(count) / float64(maximum), Full: index == len(counts)-1})
+		items = append(items, Item{Label: label, Value: float64(count) / float64(maximum), Style: AccentStyle})
 	}
 	return Bars(width, height, items)
 }

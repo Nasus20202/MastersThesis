@@ -111,7 +111,7 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 	if snapshot, ok := s.snapshot[runID]; ok {
 		runType = snapshot.Metadata.RunType
 	}
-	attempt, err := results.LoadAttempt(s.resultsRoot, runID, ref, runType)
+	attempt, err := results.LoadAttempt(ref, runType)
 	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err}
 	return attempt, err
 }

@@ -41,6 +41,27 @@ func TestListRunsReadsMetadataAndSummaryNewestFirst(t *testing.T) {
 	assert.Equal(t, RunStateCompleted, runs[0].Summary.State)
 }
 
+func TestListRunsDerivesSummaryWhenResultsMissing(t *testing.T) {
+	root := t.TempDir()
+	store, err := New(root, RunMetadata{
+		RunID: "run-interrupted", StartedAt: time.Now().UTC(),
+		Agents: []string{"skill"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"scenario"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "skill", orchestration.RunResult{
+		ScenarioID: "scenario", Condition: "skill",
+		Grading: orchestration.GradingResult{Score: 0.5},
+	}))
+	require.NoError(t, os.Remove(filepath.Join(root, "run-interrupted", "results.json")))
+
+	runs, err := ListRuns(root)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	require.NotNil(t, runs[0].Summary)
+	assert.Equal(t, 1, runs[0].Summary.AttemptsRecorded)
+	assert.Equal(t, 0.5, runs[0].Summary.ByCondition["skill"].MeanScore)
+}
+
 func TestLoadRunIndexesAttemptsAndLoadsPayloads(t *testing.T) {
 	root := t.TempDir()
 	store, err := New(root, RunMetadata{
@@ -62,7 +83,7 @@ func TestLoadRunIndexesAttemptsAndLoadsPayloads(t *testing.T) {
 	require.Len(t, snapshot.Attempts, 2)
 	assert.Equal(t, AttemptRef{ScenarioID: "scenario", Group: "baseline", Attempt: 1, Path: filepath.Join(root, "run-1", "scenario", "baseline", "001.json")}, snapshot.Attempts[0])
 
-	attempt, err := LoadAttempt(root, "run-1", snapshot.Attempts[1], snapshot.Metadata.RunType)
+	attempt, err := LoadAttempt(snapshot.Attempts[1], snapshot.Metadata.RunType)
 	require.NoError(t, err)
 	require.NotNil(t, attempt.Benchmark)
 	assert.Nil(t, attempt.Validation)
@@ -89,7 +110,7 @@ func TestLoadRunLoadsValidationAttempts(t *testing.T) {
 	require.Len(t, snapshot.Attempts, 1)
 	assert.Equal(t, "repaired", snapshot.Attempts[0].Group)
 
-	attempt, err := LoadAttempt(root, "run-validation", snapshot.Attempts[0], snapshot.Metadata.RunType)
+	attempt, err := LoadAttempt(snapshot.Attempts[0], snapshot.Metadata.RunType)
 	require.NoError(t, err)
 	require.NotNil(t, attempt.Validation)
 	assert.Nil(t, attempt.Benchmark)
@@ -117,20 +138,4 @@ func TestLoadRunDerivesSummaryWhenResultsMissing(t *testing.T) {
 	assert.Equal(t, RunStateRunning, snapshot.Summary.State)
 	condition := snapshot.Summary.ByCondition["skill"]
 	assert.Equal(t, 0.5, condition.MeanScore)
-}
-
-func TestFingerprintChangesWhenAttemptIsAdded(t *testing.T) {
-	root := t.TempDir()
-	store, err := New(root, RunMetadata{
-		RunID: "run-1", StartedAt: time.Now().UTC(),
-		Agents: []string{"skill"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"scenario"},
-	})
-	require.NoError(t, err)
-
-	before, err := Fingerprint(root, "run-1")
-	require.NoError(t, err)
-	require.NoError(t, store.WriteAttempt(1, "skill", orchestration.RunResult{ScenarioID: "scenario", Condition: "skill"}))
-	after, err := Fingerprint(root, "run-1")
-	require.NoError(t, err)
-	assert.NotEqual(t, before, after)
 }

@@ -7,7 +7,6 @@ package results
 import (
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"os"
 	"path/filepath"
 	"slices"
@@ -53,7 +52,9 @@ type Attempt struct {
 }
 
 // ListRuns reads every run directory directly under root and returns them
-// newest first. Directories without run metadata are ignored.
+// newest first. Directories without run metadata are ignored. A missing
+// summary, as in an interrupted run, is rebuilt from the persisted attempts so
+// the run still contributes to cross-run rollups.
 func ListRuns(root string) ([]RunRef, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -75,6 +76,16 @@ func ListRuns(root string) ([]RunRef, error) {
 		summary, err := readSummary(runDir)
 		if err != nil {
 			return nil, err
+		}
+		if summary == nil {
+			attempts, err := listAttempts(runDir)
+			if err != nil {
+				return nil, err
+			}
+			summary, err = deriveSummary(metadata, attempts)
+			if err != nil {
+				return nil, err
+			}
 		}
 		runs = append(runs, RunRef{RunID: metadata.RunID, Metadata: metadata, Summary: summary})
 	}
@@ -123,7 +134,7 @@ func LoadRun(root, runID string) (RunSnapshot, error) {
 }
 
 // LoadAttempt decodes the attempt referenced by ref using the run's type.
-func LoadAttempt(root, runID string, ref AttemptRef, runType string) (Attempt, error) {
+func LoadAttempt(ref AttemptRef, runType string) (Attempt, error) {
 	data, err := os.ReadFile(ref.Path)
 	if err != nil {
 		return Attempt{}, fmt.Errorf("read attempt %q: %w", ref.Path, err)
@@ -176,35 +187,6 @@ func (a Attempt) Error() string {
 		return a.Benchmark.Error
 	}
 	return ""
-}
-
-// Fingerprint summarizes file sizes and modification times under a run so
-// callers can detect changes without reloading everything.
-func Fingerprint(root, runID string) (string, error) {
-	runDir := filepath.Join(root, runID)
-	hash := fnv.New64a()
-	err := filepath.WalkDir(runDir, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(runDir, path)
-		if err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(hash, "%s\x00%d\x00%d\n", rel, info.Size(), info.ModTime().UnixNano())
-		return nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("fingerprint run %q: %w", runID, err)
-	}
-	return strconv.FormatUint(hash.Sum64(), 16), nil
 }
 
 func readRunMetadata(runDir string) (RunMetadata, error) {
