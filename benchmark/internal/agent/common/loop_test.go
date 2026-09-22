@@ -358,6 +358,29 @@ func TestLoopExecutesToolCallsAndAppendsEvidence(t *testing.T) {
 	assert.Equal(t, result.Messages[:3], client.requests[1].messages)
 }
 
+func TestLoopPreservesAndResendsAssistantReasoning(t *testing.T) {
+	client := &loopClient{results: []inference.Result{
+		{Message: inference.Message{
+			Role:             "assistant",
+			ReasoningContent: "check pods first",
+			ToolCalls: []inference.ToolCall{{
+				ID: "call-1", Type: "function", Name: "inspect", Arguments: `{}`,
+			}},
+		}},
+		{Message: inference.Message{Role: "assistant", Content: "finished"}},
+	}}
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
+	loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 2, MaxToolCalls: 1})
+	require.NoError(t, err)
+
+	result, err := loop.Run(context.Background(), "Inspect the workload.")
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 4)
+	assert.Equal(t, "check pods first", result.Messages[1].ReasoningContent)
+	require.Len(t, client.requests, 2)
+	assert.Equal(t, "check pods first", client.requests[1].messages[1].ReasoningContent)
+}
+
 func TestLoopHandlesUnsupportedCallsAndToolErrors(t *testing.T) {
 	client := &loopClient{results: []inference.Result{
 		{Message: inference.Message{Role: "assistant", ToolCalls: []inference.ToolCall{

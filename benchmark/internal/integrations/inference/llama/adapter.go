@@ -51,11 +51,12 @@ func toLlamaMessages(messages []inference.Message) []Message {
 	converted := make([]Message, len(messages))
 	for index, message := range messages {
 		converted[index] = Message{
-			Role:       message.Role,
-			Content:    message.Content,
-			Name:       message.Name,
-			ToolCallID: message.ToolCallID,
-			ToolCalls:  toLlamaToolCalls(message.ToolCalls),
+			Role:             message.Role,
+			Content:          message.Content,
+			ReasoningContent: message.ReasoningContent,
+			Name:             message.Name,
+			ToolCallID:       message.ToolCallID,
+			ToolCalls:        toLlamaToolCalls(message.ToolCalls),
 		}
 	}
 	return converted
@@ -86,11 +87,12 @@ func toLlamaTools(tools []inference.Tool) []Tool {
 
 func fromLlamaMessage(message Message) inference.Message {
 	return inference.Message{
-		Role:       message.Role,
-		Content:    message.Content,
-		Name:       message.Name,
-		ToolCallID: message.ToolCallID,
-		ToolCalls:  fromLlamaToolCalls(message.ToolCalls),
+		Role:             message.Role,
+		Content:          message.Content,
+		ReasoningContent: message.ReasoningContent,
+		Name:             message.Name,
+		ToolCallID:       message.ToolCallID,
+		ToolCalls:        fromLlamaToolCalls(message.ToolCalls),
 	}
 }
 

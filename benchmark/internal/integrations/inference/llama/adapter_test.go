@@ -54,6 +54,38 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 	assert.Equal(t, 5, response.Timings.PredictedN)
 }
 
+func TestAdapterPreservesReasoningContent(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			var payload struct {
+				ChatRequest
+			}
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			require.Len(t, payload.Messages, 2)
+			assert.Equal(t, "prior thought", payload.Messages[1].ReasoningContent)
+			return testResponse(http.StatusOK, `{
+                "id": "chatcmpl-reasoning",
+                "choices": [{
+                    "message": {"role": "assistant", "content": "done", "reasoning_content": "current thought"},
+                    "finish_reason": "stop"
+                }]
+            }`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	response, err := adapter.Chat(context.Background(), []inference.Message{
+		{Role: "user", Content: "Inspect"},
+		{Role: "assistant", Content: "working", ReasoningContent: "prior thought"},
+	}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "current thought", response.Message.ReasoningContent)
+}
+
 func TestNewAdapterRejectsNilClient(t *testing.T) {
 	adapter, err := NewAdapter(nil)
 	assert.Error(t, err)
