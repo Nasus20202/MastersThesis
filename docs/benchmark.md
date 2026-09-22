@@ -49,6 +49,8 @@ Every scenario follows the same core lifecycle:
 7. preserve the raw result and supporting evidence,
 8. delete the disposable cluster.
 
+All setup, fault-handling and grading commands run evaluator-side in a pinned setup container, not in the model sandbox, and are not part of the model-visible transcript.
+
 `inject_fault` and `verify_fault` are independently optional. Troubleshooting scenarios may use both to create and confirm a reproducible failure, while a scenario may also verify an already-prepared failure without injecting it or inject a state change without a dedicated pre-model verification step. Constructive tasks can omit both and start directly from the verified environment.
 
 A scenario is suitable for evaluation only when its starting state, optional fault setup and grading are repeatable.
@@ -70,7 +72,9 @@ The exact tools, prompts, skills, retrieved context, model artifacts and access 
 
 ## Agent execution limits
 
-The common model/tool loop uses per-attempt limits of 25 model turns, 50 tool calls, 60 seconds per tool call and 300 seconds total agent runtime. The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 300-second deadline stops the entire attempt.
+The common model/tool loop uses per-attempt limits of 25 model turns, 50 tool calls, 60 seconds per tool call and 600 seconds total agent runtime. The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 600-second deadline stops the entire attempt.
+
+Model-visible Bash output is capped at 8 KiB so a single command cannot fill the context; the complete output remains in raw evidence.
 
 The selected limits are preserved in each raw run result so later conditions can be compared under the same execution budget.
 

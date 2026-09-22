@@ -6,6 +6,7 @@ This directory contains the research design, benchmark definition, technology ch
 
 - [Research design](research-design.md) — research goal, questions, scope and comparison principles.
 - [Benchmark](benchmark.md) — scenario structure, lifecycle, condition capabilities, visibility and verification.
+- [Scenario catalogue](scenarios.md) — development scenarios with difficulty, setup, expected repair and grading (evaluator-only).
 - [Technology stack](tech-stack.md) — runner, model execution, Kubernetes environment and sandbox.
 - [Decision log](decision-log.md) — canonical record of approved, provisional, open and superseded decisions.
 - [Sources](sources.md) — technical documentation, papers and related work.

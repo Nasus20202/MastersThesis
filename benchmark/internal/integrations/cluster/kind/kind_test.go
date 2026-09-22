@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -61,7 +62,7 @@ func TestClusterCreateGeneratesInternalKubeconfig(t *testing.T) {
 	executor := &fakeExecutor{results: []command.Result{{}, {Stdout: "apiVersion: v1\n"}}}
 	cluster, err := New(executor, Config{Name: "benchmark-internal"})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = os.Remove(cluster.InternalKubeconfigPath()) })
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(cluster.InternalKubeconfigPath())) })
 
 	assert.NoError(t, cluster.Create(context.Background()))
 
@@ -90,7 +91,7 @@ func TestClusterUsesConfigFile(t *testing.T) {
 	executor := &fakeExecutor{results: []command.Result{{}, {Stdout: "apiVersion: v1\n"}}}
 	cluster, err := New(executor, Config{Name: "benchmark", ConfigPath: "/tmp/kind.yaml"})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = os.Remove(cluster.InternalKubeconfigPath()) })
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(cluster.InternalKubeconfigPath())) })
 
 	assert.NoError(t, cluster.Create(context.Background()))
 

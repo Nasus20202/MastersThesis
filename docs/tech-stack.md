@@ -52,6 +52,14 @@ Kubernetes incidents will run in local `kind` clusters.
 
 The selected Kubernetes version and cluster configuration will be recorded before evaluation.
 
+## Local image cache and registry
+
+Disposable `kind` clusters do not share an image store, so the benchmark runs local registries as pull-through caches, avoiding a fresh upstream pull of the same pinned images on every attempt. The caches run as containers on the `kind` Docker network and persist their data.
+
+Registry mirrors are part of the cluster profile: the profiles under `benchmark/kind/` declare `containerdConfigPatches` mirrors for `docker.io`, `quay.io` and `ghcr.io` that point at the matching cache with the upstream as a fallback endpoint. The runner no longer writes registry configuration into the nodes at runtime. The `default` and `calico` profiles mirror the shared caches; the specialized `registry` profile additionally mirrors the in-cluster registry that the image scenarios deploy in `prepare`.
+
+The shared caches are local benchmark infrastructure declared in the benchmark Docker Compose stack. They are not part of any model-visible condition.
+
 ## Execution sandbox
 
 Model commands will run in a disposable Docker sandbox.
@@ -59,6 +67,10 @@ Model commands will run in a disposable Docker sandbox.
 Bash will be exposed to the model as the primary raw execution interface. The sandbox will provide the command-line tools required by the relevant benchmark condition, including `kubectl` for Kubernetes interaction.
 
 The sandbox boundary should prevent access to the host environment. The selected filesystem, network, privilege and resource policies will be recorded before evaluation.
+
+## Evaluator setup environment
+
+Scenario setup, fault handling and grading run in a pinned `benchmark-setup` container instead of on the host. It reuses the sandbox Docker integration with different flags: it joins the shared `kind` network, mounts the repository read-only and the internal kubeconfig directory read-write, and runs unhardened with outbound network access. It pins `kubectl`, `helm` and `skopeo`, and the registry-seeding scripts use `skopeo` rather than a Docker daemon. This is trusted evaluator tooling, not the model boundary.
 
 ## Adaptation-specific components
 
@@ -80,6 +92,7 @@ Before final evaluation, record:
 - Docker version and image digests,
 - kind version,
 - Kubernetes version and node image,
+- local registry image digest,
 - llama.cpp image and revision,
 - model repository, revision and file hash,
 - quantization and runtime parameters,

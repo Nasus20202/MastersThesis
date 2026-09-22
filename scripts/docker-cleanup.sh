@@ -4,6 +4,7 @@ set -euo pipefail
 
 CLUSTER_PATTERN='^benchmark-.+-[a-f0-9]+$'
 SANDBOX_PATTERN='^benchmark-.+-[a-f0-9]+-sandbox$'
+SETUP_PATTERN='^benchmark-.+-[a-f0-9]+-setup$'
 NETWORK_PATTERN='^benchmark-.+-[a-f0-9]+-sandbox-network$'
 
 while IFS= read -r CLUSTER; do
@@ -13,7 +14,7 @@ while IFS= read -r CLUSTER; do
 done < <(kind get clusters)
 
 while IFS= read -r CONTAINER; do
-  if [[ "$CONTAINER" =~ $SANDBOX_PATTERN ]]; then
+  if [[ "$CONTAINER" =~ $SANDBOX_PATTERN || "$CONTAINER" =~ $SETUP_PATTERN ]]; then
     docker rm --force "$CONTAINER"
   fi
 done < <(docker ps -a --format '{{.Names}}')

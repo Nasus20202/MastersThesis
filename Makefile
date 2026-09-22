@@ -4,11 +4,12 @@ BENCHMARK_DIR := benchmark
 LLAMA_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
+CORPUS ?= scenarios/
 AGENT ?= all
 REPEAT ?= 1
 CONFIG ?=
 BENCHMARK_PARALLEL ?= 4
-VALIDATION_PARALLEL ?= 8
+VALIDATION_PARALLEL ?= 4
 RESUME ?=
 
 include $(LLAMA_CONFIG)
@@ -39,7 +40,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs docker-cleanup build benchmark benchmark-validate
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build benchmark benchmark-validate check-corpus
 
 help:
 	@printf '%s\n' 'Available commands:'
@@ -52,10 +53,13 @@ help:
 		'make llama-start' 'Start the llama.cpp model router.' \
 		'make llama-stop' 'Stop the llama.cpp model router.' \
 		'make llama-logs' 'Follow llama.cpp model router logs.' \
-		'make docker-cleanup' 'Remove benchmark Kind clusters and sandbox containers.' \
+		'make registry-start' 'Start the pull-through image registry used by benchmark clusters.' \
+		'make registry-stop' 'Stop the pull-through image registry.' \
+		'make docker-cleanup' 'Remove benchmark Kind clusters, sandbox and setup containers.' \
 		'make build' 'Build the benchmark executable.' \
 		'make benchmark' 'Run the default benchmark scenario.' \
-		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.'
+		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.' \
+		'make check-corpus' 'Load every scenario and its validation cases.'
 	@printf '%s\n' 'Benchmark parameters:'
 	@printf '  %-28s %s\n' \
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
@@ -80,19 +84,28 @@ lint:
 	$(MAKE) prettier-check
 	$(MAKE) renovate-check
 
-check: test lint
+check: test lint check-corpus
 
 download-models:
 	./scripts/download-models.sh
 
-llama-start:
-	$(COMPOSE) up --detach
+llama-start: kind-network
+	$(COMPOSE) up --detach llama-server
 
 llama-stop:
-	$(COMPOSE) down
+	$(COMPOSE) stop llama-server
 
 llama-logs:
 	$(COMPOSE) logs --follow llama-server
+
+kind-network:
+	@docker network create kind >/dev/null 2>&1 || true
+
+registry-start: kind-network
+	$(COMPOSE) up --detach docker-registry-cache quay-registry-cache ghcr-registry-cache
+
+registry-stop:
+	$(COMPOSE) stop docker-registry-cache quay-registry-cache ghcr-registry-cache
 
 docker-cleanup:
 	./scripts/docker-cleanup.sh
@@ -100,11 +113,14 @@ docker-cleanup:
 build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
 
-benchmark:
+benchmark: registry-start llama-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
-benchmark-validate:
+benchmark-validate: registry-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
+
+check-corpus:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --check-corpus $(CORPUS)
 
 benchmark-go-test:
 	cd $(BENCHMARK_DIR) && $(GO) test ./... -cover

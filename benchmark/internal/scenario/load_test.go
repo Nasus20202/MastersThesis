@@ -33,13 +33,14 @@ func TestLoadResolvesKindConfigPath(t *testing.T) {
 	assert.Equal(t, want, definition.Cluster.Kind.ConfigPath())
 }
 
-func TestLoadInputsRecursivelyDiscoversSortedScenarios(t *testing.T) {
+func TestLoadInputsDiscoversScenarioFilesInDirectories(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "nested"), 0o700))
-	writeScenario(t, filepath.Join(root, "nested", "b.yml"), "second-scenario")
-	writeScenario(t, filepath.Join(root, "a.yaml"), "first-scenario")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "first"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "nested", "second"), 0o700))
+	writeScenario(t, filepath.Join(root, "first", "scenario.yaml"), "first-scenario")
+	writeScenario(t, filepath.Join(root, "nested", "second", "scenario.yml"), "second-scenario")
+	require.NoError(t, os.WriteFile(filepath.Join(root, "first", "manifests.yaml"), []byte("kind: Deployment"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "notes.yaml"), []byte("title: unrelated"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "ignored.txt"), []byte(validScenarioYAML), 0o600))
 
 	definitions, err := LoadInputs([]string{root})
 	require.NoError(t, err)
@@ -56,15 +57,13 @@ func TestLoadInputsExplicitInvalidFileIsError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestLoadInputsSkipsInvalidDiscoveredFile(t *testing.T) {
+func TestLoadInputsReportsInvalidDiscoveredFile(t *testing.T) {
 	root := t.TempDir()
-	writeScenario(t, filepath.Join(root, "valid.yaml"), "valid-scenario")
-	require.NoError(t, os.WriteFile(filepath.Join(root, "invalid.yaml"), []byte("id: invalid"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "broken"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "broken", "scenario.yaml"), []byte("id: invalid"), 0o600))
 
-	definitions, err := LoadInputs([]string{root})
-	require.NoError(t, err)
-	require.Len(t, definitions, 1)
-	assert.Equal(t, "valid-scenario", definitions[0].ID)
+	_, err := LoadInputs([]string{root})
+	assert.Error(t, err)
 }
 
 func TestLoadInputsRejectsDuplicateScenarioIDs(t *testing.T) {

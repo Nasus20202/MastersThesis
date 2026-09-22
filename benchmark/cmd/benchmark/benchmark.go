@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -26,9 +27,10 @@ import (
 )
 
 const (
-	sandboxImage          = "benchmark-sandbox:ubuntu-26.04"
-	sandboxDockerfilePath = "sandbox/Dockerfile.ubuntu-26.04"
-	sandboxBuildContext   = "sandbox"
+	sandboxNameSuffix  = "-sandbox"
+	setupNameSuffix    = "-setup"
+	networkSuffix      = "-network"
+	controlPlaneSuffix = "-control-plane"
 )
 
 func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string) error {
@@ -95,7 +97,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	)
 
 	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
-	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
+	deps, err := newRunnerDeps(commandExecutor, benchmarkConfig.Containers)
 	if err != nil {
 		return err
 	}
@@ -121,7 +123,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 					Agent:      string(agentName),
 					Attempt:    attempt,
 					Run: func(ctx context.Context) (orchestration.RunResult, error) {
-						return newOrchestrationRunner(commandExecutor, definition, imageBuilder, agentName, agentFactory, agentSlots).Run(ctx, definition)
+						return newOrchestrationRunner(deps, definition, agentName, agentFactory, agentSlots).Run(ctx, definition)
 					},
 				})
 			}
@@ -207,40 +209,92 @@ func runID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-func newOrchestrationRunner(commandExecutor command.Executor, definition scenario.Definition, imageBuilder sandboxintegration.ImageBuilder, agentName commandagent.Name, agentFactory rootagent.Factory, agentSlots chan struct{}) orchestration.Runner {
+type runnerDeps struct {
+	executor            command.Executor
+	sandboxImageBuilder sandboxintegration.ImageBuilder
+	setupImageBuilder   sandboxintegration.ImageBuilder
+	sandboxFactory      sandboxintegration.Factory
+	setupFactory        sandboxintegration.Factory
+}
+
+func newRunnerDeps(executor command.Executor, containers benchmarkconfig.ContainersConfig) (runnerDeps, error) {
+	sandboxImageBuilder, err := docker.NewImageBuilder(executor, docker.ImageConfig{
+		Image:          containers.Sandbox.Image,
+		DockerfilePath: containers.Sandbox.DockerfilePath,
+		BuildContext:   containers.Sandbox.BuildContext,
+	})
+	if err != nil {
+		return runnerDeps{}, err
+	}
+	setupImageBuilder, err := docker.NewImageBuilder(executor, docker.ImageConfig{
+		Image:          containers.Setup.Image,
+		DockerfilePath: containers.Setup.DockerfilePath,
+		BuildContext:   containers.Setup.BuildContext,
+	})
+	if err != nil {
+		return runnerDeps{}, err
+	}
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return runnerDeps{}, fmt.Errorf("resolve repository root: %w", err)
+	}
+	return runnerDeps{
+		executor:            executor,
+		sandboxImageBuilder: sandboxImageBuilder,
+		setupImageBuilder:   setupImageBuilder,
+		sandboxFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
+			return docker.New(executor, docker.Config{
+				Name:           name + sandboxNameSuffix,
+				Image:          containers.Sandbox.Image,
+				DockerfilePath: containers.Sandbox.DockerfilePath,
+				BuildContext:   containers.Sandbox.BuildContext,
+				KubeconfigPath: kubeconfigPath,
+				Network:        name + sandboxNameSuffix + networkSuffix,
+				NetworkTarget:  name + controlPlaneSuffix,
+				Layout:         docker.DefaultImageLayout(),
+				Security: docker.SecurityConfig{
+					ReadOnlyRoot:     true,
+					DropCapabilities: true,
+					NoNewPrivileges:  true,
+				},
+			})
+		},
+		setupFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
+			kubeconfigDir := filepath.Dir(kubeconfigPath)
+			return docker.New(executor, docker.Config{
+				Name:           name + setupNameSuffix,
+				Image:          containers.Setup.Image,
+				DockerfilePath: containers.Setup.DockerfilePath,
+				BuildContext:   containers.Setup.BuildContext,
+				Network:        containers.Setup.Network,
+				Layout:         docker.ImageLayout{User: "root", Workdir: "/workspace"},
+				Env:            map[string]string{"KUBECONFIG": kubeconfigPath},
+				Mounts: []docker.Mount{
+					{Source: repoRoot, Target: repoRoot, ReadOnly: true},
+					{Source: kubeconfigDir, Target: kubeconfigDir},
+				},
+			})
+		},
+	}, nil
+}
+
+func newOrchestrationRunner(deps runnerDeps, definition scenario.Definition, agentName commandagent.Name, agentFactory rootagent.Factory, agentSlots chan struct{}) orchestration.Runner {
 	return orchestration.Runner{
-		Executor:            commandExecutor,
-		SandboxImageBuilder: imageBuilder,
+		Executor:            deps.executor,
+		SandboxImageBuilder: deps.sandboxImageBuilder,
+		SetupImageBuilder:   deps.setupImageBuilder,
+		SandboxFactory:      deps.sandboxFactory,
+		SetupFactory:        deps.setupFactory,
 		AgentFactory:        agentFactory,
 		AgentSlots:          agentSlots,
 		Condition:           string(agentName),
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
-			return kind.New(commandExecutor, kind.Config{
+			return kind.New(deps.executor, kind.Config{
 				Name:       name,
 				ConfigPath: definition.Cluster.Kind.ConfigPath(),
 			})
 		},
-		SandboxFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
-			return docker.New(commandExecutor, docker.Config{
-				Name:           name + "-sandbox",
-				Image:          sandboxImage,
-				DockerfilePath: sandboxDockerfilePath,
-				BuildContext:   sandboxBuildContext,
-				KubeconfigPath: kubeconfigPath,
-				Network:        name + "-sandbox-network",
-				NetworkTarget:  name + "-control-plane",
-				Layout:         docker.DefaultImageLayout(),
-			})
-		},
 	}
-}
-
-func newSandboxImageBuilder(commandExecutor command.Executor) (*docker.ImageBuilder, error) {
-	return docker.NewImageBuilder(commandExecutor, docker.ImageConfig{
-		Image:          sandboxImage,
-		DockerfilePath: sandboxDockerfilePath,
-		BuildContext:   sandboxBuildContext,
-	})
 }
 
 func scenarioIDs(definitions []scenario.Definition) []string {

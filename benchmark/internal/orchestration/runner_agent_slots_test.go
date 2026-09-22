@@ -45,7 +45,7 @@ func TestAgentSlotsLimitAgentPhaseAndLeaveSetupAndGradingParallel(t *testing.T) 
 	defer cancel()
 	for range workers {
 		go func() {
-			_, _, err := runner.runPhases(ctx, definition, nil, modelAgent, "", slog.Default())
+			_, _, err := runner.runPhases(ctx, definition, nil, modelAgent, "", executor, slog.Default())
 			done <- err
 		}()
 	}

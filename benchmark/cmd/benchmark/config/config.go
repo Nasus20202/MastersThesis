@@ -12,8 +12,21 @@ import (
 )
 
 type Config struct {
-	Logging LoggingConfig `yaml:"logging,omitempty"`
-	Agents  AgentsConfig  `yaml:"agents,omitempty"`
+	Logging    LoggingConfig    `yaml:"logging,omitempty"`
+	Agents     AgentsConfig     `yaml:"agents,omitempty"`
+	Containers ContainersConfig `yaml:"containers,omitempty"`
+}
+
+type ContainersConfig struct {
+	Sandbox ContainerConfig `yaml:"sandbox,omitempty"`
+	Setup   ContainerConfig `yaml:"setup,omitempty"`
+}
+
+type ContainerConfig struct {
+	Image          string `yaml:"image,omitempty"`
+	DockerfilePath string `yaml:"dockerfile,omitempty"`
+	BuildContext   string `yaml:"context,omitempty"`
+	Network        string `yaml:"network,omitempty"`
 }
 
 type LoggingConfig struct {
@@ -87,6 +100,7 @@ func read(path string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("invalid benchmark config %q: %s", path, yaml.FormatError(err, false, true))
 	}
 	resolveAgentPaths(values, path)
+	resolveContainerPaths(values, path)
 	return values, nil
 }
 
@@ -127,4 +141,20 @@ func resolveAgentPath(agent map[string]interface{}, field, configPath string) {
 		return
 	}
 	agent[field] = filepath.Join(filepath.Dir(configPath), path)
+}
+
+func resolveContainerPaths(values map[string]interface{}, configPath string) {
+	containers, ok := values["containers"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	for _, name := range []string{"sandbox", "setup"} {
+		container, ok := containers[name].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"dockerfile", "context"} {
+			resolveAgentPath(container, field, configPath)
+		}
+	}
 }

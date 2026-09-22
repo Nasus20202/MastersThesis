@@ -58,11 +58,11 @@ func TestLoadReadsValidationManifest(t *testing.T) {
 	assert.Equal(t, float64(0), *definition.Scenarios[0].Cases[0].ExpectedScore)
 }
 
-func TestLoadInputsRecursivelyDiscoversYAMLFiles(t *testing.T) {
+func TestLoadInputsDiscoversValidationFilesInDirectories(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "nested")
 	require.NoError(t, os.MkdirAll(nested, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(nested, "checks.yml"), []byte(validValidationYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(nested, "validation.yml"), []byte(validValidationYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "scenario.yaml"), []byte("id: unrelated"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "notes.yml"), []byte("notes: unrelated"), 0o600))
 
@@ -70,6 +70,14 @@ func TestLoadInputsRecursivelyDiscoversYAMLFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, definitions, 1)
 	assert.Equal(t, filepath.Join(nested, "../image-pull-failure/scenario.yaml"), definitions[0].Scenarios[0].ScenarioPath())
+}
+
+func TestLoadInputsReportsInvalidDiscoveredFile(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "validation.yaml"), []byte("scenarios: [invalid"), 0o600))
+
+	_, err := LoadInputs([]string{root})
+	assert.Error(t, err)
 }
 
 func TestLoadInputsExplicitInvalidFileIsError(t *testing.T) {
