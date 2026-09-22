@@ -148,7 +148,7 @@ type Result struct {
 
 // RunAgent guards a condition's Run preconditions (initialized receiver,
 // non-blank task), calls run, and stamps condition/task onto the result.
-// Shared by the baseline, prompt, and skill agents.
+// Shared by the benchmark conditions, e.g. baseline, prompt, and skill.
 func RunAgent(initialized bool, name, condition, task string, run func() (Result, error)) (Result, error) {
 	if !initialized {
 		return Result{}, fmt.Errorf("%s agent is not initialized", name)
