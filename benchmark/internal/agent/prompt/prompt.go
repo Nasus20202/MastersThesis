@@ -1,3 +1,5 @@
+// Package prompt implements the prompt condition: a bash-only tool loop
+// guided by a system prompt.
 package prompt
 
 import (

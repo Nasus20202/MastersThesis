@@ -1,3 +1,5 @@
+// Package command defines the process-execution contract (Spec, Result,
+// Executor) shared by the local and sandbox executors.
 package command
 
 import (

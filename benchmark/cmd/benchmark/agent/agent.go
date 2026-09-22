@@ -1,3 +1,5 @@
+// Package agent resolves the CLI's agent-name selection into the inference
+// client and agent factories used to run a benchmark.
 package agent
 
 import (

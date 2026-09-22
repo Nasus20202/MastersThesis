@@ -1,3 +1,4 @@
+// Package kind implements the cluster contract on top of the kind CLI.
 package kind
 
 import (

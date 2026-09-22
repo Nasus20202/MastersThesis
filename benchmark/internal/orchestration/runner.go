@@ -1,3 +1,5 @@
+// Package orchestration drives one scenario run end-to-end: cluster and
+// sandbox lifecycle, the model agent, and grading.
 package orchestration
 
 import (
@@ -198,9 +200,8 @@ func (r Runner) agentCondition() string {
 	return "baseline"
 }
 
-// wrapFactory calls a component factory, logs and wraps a returned error
-// under errLabel, and turns a nil result into an error, so every factory
-// wrapper below only has to name its logger prefix and error label.
+// wrapFactory logs and wraps a factory's error under errLabel and turns a
+// nil result into an error, so callers below only need to name their labels.
 func wrapFactory[T any](logger *slog.Logger, logLabel, errLabel string, call func() (T, error)) (T, error) {
 	value, err := call()
 	if err != nil {
@@ -246,10 +247,8 @@ func (r Runner) newSetup(name, kubeconfigPath string, logger *slog.Logger) (sand
 	})
 }
 
-// startSandboxLike builds sandbox (if no imageBuilder was supplied, meaning no
-// image was pre-built for it) and starts it, logging under label ("setup" or
-// "sandbox"). Shared by startSetup and startSandbox, which only differ in
-// which sandbox/image-builder pair they operate on.
+// startSandboxLike builds sandbox's image if no imageBuilder pre-built one,
+// then starts it, logging under label. Shared by startSetup and startSandbox.
 func startSandboxLike(ctx context.Context, sandbox sandboxintegration.Sandbox, imageBuilder sandboxintegration.ImageBuilder, label string, logger *slog.Logger) error {
 	if imageBuilder == nil {
 		if err := sandbox.Build(ctx); err != nil {

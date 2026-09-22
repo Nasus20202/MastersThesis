@@ -1,3 +1,5 @@
+// Package scenario defines the scenario YAML schema and loads/validates
+// scenario definitions from disk.
 package scenario
 
 import (

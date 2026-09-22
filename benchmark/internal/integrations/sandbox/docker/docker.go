@@ -1,3 +1,4 @@
+// Package docker implements the sandbox contract on top of the docker CLI.
 package docker
 
 import (

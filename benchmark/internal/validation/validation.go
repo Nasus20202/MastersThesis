@@ -1,3 +1,5 @@
+// Package validation defines the validation-case YAML schema and checks a
+// scenario run's grading against the expected outcome.
 package validation
 
 import (

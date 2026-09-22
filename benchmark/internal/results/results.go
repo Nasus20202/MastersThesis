@@ -1,3 +1,5 @@
+// Package results persists benchmark run and attempt outcomes to disk and
+// produces the run summary.
 package results
 
 import (

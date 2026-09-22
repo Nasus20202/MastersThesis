@@ -1,3 +1,5 @@
+// Package baseline implements the baseline condition: a bash-only tool loop
+// with no system prompt.
 package baseline
 
 import (

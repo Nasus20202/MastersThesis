@@ -1,8 +1,5 @@
-// Package yamlfile contains the file-loading, discovery, and validation
-// plumbing shared by the scenario and validation packages: reading a single
-// strict-YAML document from disk, walking a directory for files with a given
-// base name, and building a validator.Validate with the common "notblank"
-// and kebab-case ID checks registered.
+// Package yamlfile provides the shared YAML file-loading, discovery, and
+// validator plumbing used by the scenario and validation packages.
 package yamlfile
 
 import (
@@ -30,10 +27,9 @@ type Validatable interface {
 	Validate() error
 }
 
-// Load reads path, decodes it as a single strict YAML document into T, and
-// validates it. It returns the decoded value together with the absolute
-// directory containing the file, so callers can resolve paths relative to it.
-// kind names the file type ("scenario", "validation", ...) for error messages.
+// Load reads path, decodes it as one strict YAML document into T, validates
+// it, and returns the value with the file's absolute directory so callers can
+// resolve relative paths. kind names the file type for error messages.
 func Load[T Validatable](path string, kind string) (T, string, error) {
 	var zero T
 	absolutePath, err := filepath.Abs(path)

@@ -1,3 +1,5 @@
+// Package skill implements the skill condition: a tool loop that can
+// discover and load Kubernetes troubleshooting skills.
 package skill
 
 import (

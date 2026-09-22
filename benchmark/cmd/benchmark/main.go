@@ -1,3 +1,5 @@
+// Package main is the benchmark CLI: it parses flags and configuration, then
+// runs or validates scenario-based agent benchmark attempts.
 package main
 
 import (
