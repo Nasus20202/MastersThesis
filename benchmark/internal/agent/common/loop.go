@@ -146,6 +146,22 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
+// RunAgent guards a condition's Run preconditions (initialized receiver,
+// non-blank task), calls run, and stamps condition/task onto the result.
+// Shared by the benchmark conditions, e.g. baseline, prompt, and skill.
+func RunAgent(initialized bool, name, condition, task string, run func() (Result, error)) (Result, error) {
+	if !initialized {
+		return Result{}, fmt.Errorf("%s agent is not initialized", name)
+	}
+	if strings.TrimSpace(task) == "" {
+		return Result{}, errors.New("agent task is required")
+	}
+	result, err := run()
+	result.Condition = condition
+	result.Task = task
+	return result, err
+}
+
 func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
 	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
 }

@@ -23,7 +23,7 @@ func (e LocalExecutor) Run(ctx context.Context, spec Spec) (Result, error) {
 
 	process := exec.CommandContext(ctx, spec.Program, spec.Args...)
 	process.Dir = spec.Dir
-	if e.Environment != nil || len(spec.Env) > 0 {
+	if e.Environment != nil {
 		process.Env = e.Environment
 	}
 	if len(spec.Env) > 0 {

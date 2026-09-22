@@ -1,3 +1,5 @@
+// Package config defines and loads the benchmark CLI's YAML configuration:
+// logging, agent, and container settings.
 package config
 
 import (

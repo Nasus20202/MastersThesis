@@ -1,39 +1,21 @@
 package validation
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
-	"regexp"
-	"slices"
-	"strings"
 
-	"github.com/go-playground/validator/v10"
-	"github.com/goccy/go-yaml"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/yamlfile"
 )
 
-var (
-	validationIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	definitionValidator = newValidator()
-)
+var definitionValidator = yamlfile.NewValidator("validationid")
 
 func Load(path string) (Definition, error) {
-	absolutePath, err := filepath.Abs(path)
+	definition, dir, err := yamlfile.Load[Definition](path, "validation")
 	if err != nil {
-		return Definition{}, fmt.Errorf("resolve validation %q: %w", path, err)
+		return Definition{}, err
 	}
-	data, err := os.ReadFile(absolutePath)
-	if err != nil {
-		return Definition{}, fmt.Errorf("read validation %q: %w", path, err)
-	}
-	definition, err := Parse(data)
-	if err != nil {
-		return Definition{}, fmt.Errorf("load validation %q: %w", path, err)
-	}
-	definition.sourceDir = filepath.Dir(absolutePath)
+	definition.sourceDir = dir
 	for scenarioIndex := range definition.Scenarios {
 		definition.Scenarios[scenarioIndex].sourceDir = definition.sourceDir
 		definition.Scenarios[scenarioIndex].RepairDirs()
@@ -42,60 +24,20 @@ func Load(path string) (Definition, error) {
 }
 
 func Parse(data []byte) (Definition, error) {
-	decoder := yaml.NewDecoder(bytes.NewReader(data), yaml.DisallowUnknownField())
-
-	var definition Definition
-	if err := decoder.Decode(&definition); err != nil {
-		return Definition{}, formatYAMLError(err)
-	}
-
-	var extraDocument any
-	if err := decoder.Decode(&extraDocument); err == nil {
-		return Definition{}, errors.New("validation YAML must contain exactly one document")
-	} else if !errors.Is(err, io.EOF) {
-		return Definition{}, formatYAMLError(err)
-	}
-
-	if err := definition.Validate(); err != nil {
-		return Definition{}, err
-	}
-	return definition, nil
+	return yamlfile.Parse[Definition](data, "validation")
 }
 
 // LoadInputs loads validation files from paths or directories. Directories are
 // scanned for validation.yaml or validation.yml files; a discovered file that
 // fails to load is returned as an error. Explicit file paths may use any name.
 func LoadInputs(inputs []string) ([]Definition, error) {
-	if len(inputs) == 0 {
-		return nil, errors.New("at least one validation path is required")
-	}
-
 	definitions := make([]Definition, 0, len(inputs))
-	for _, input := range inputs {
-		info, err := os.Stat(input)
-		if err != nil {
-			return nil, fmt.Errorf("inspect validation path %q: %w", input, err)
-		}
-		if !info.IsDir() {
-			definition, err := Load(input)
-			if err != nil {
-				return nil, err
-			}
-			definitions = append(definitions, definition)
-			continue
-		}
-
-		paths, err := Discover(input)
-		if err != nil {
-			return nil, err
-		}
-		for _, path := range paths {
-			definition, err := Load(path)
-			if err != nil {
-				return nil, err
-			}
-			definitions = append(definitions, definition)
-		}
+	err := yamlfile.LoadInputs(inputs, "validation", Discover, Load, func(definition Definition, _ string) error {
+		definitions = append(definitions, definition)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if len(definitions) == 0 {
@@ -107,32 +49,12 @@ func LoadInputs(inputs []string) ([]Definition, error) {
 // Discover returns the validation definition files under root, sorted by path.
 // A validation definition is a file named validation.yaml or validation.yml.
 func Discover(root string) ([]string, error) {
-	paths := make([]string, 0)
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return fmt.Errorf("scan validation directory %q: %w", root, err)
-		}
-		if entry.IsDir() || !isValidationFile(entry.Name()) {
-			return nil
-		}
-		paths = append(paths, path)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	slices.Sort(paths)
-	return paths, nil
-}
-
-func isValidationFile(name string) bool {
-	extension := filepath.Ext(name)
-	return strings.TrimSuffix(name, extension) == "validation" && (extension == ".yaml" || extension == ".yml")
+	return yamlfile.Discover(root, "validation")
 }
 
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
-		return formatValidationError(err)
+		return yamlfile.FormatValidationError("validation", err)
 	}
 	for scenarioIndex, item := range d.Scenarios {
 		seenIDs := make(map[string]struct{}, len(item.Cases))
@@ -157,36 +79,4 @@ func (s Scenario) ScenarioPath() string {
 		return filepath.Clean(s.ScenarioFile)
 	}
 	return filepath.Join(s.sourceDir, s.ScenarioFile)
-}
-
-func newValidator() *validator.Validate {
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	if err := validate.RegisterValidation("notblank", func(field validator.FieldLevel) bool {
-		return strings.TrimSpace(field.Field().String()) != ""
-	}); err != nil {
-		panic(fmt.Sprintf("register validation notblank validator: %v", err))
-	}
-	if err := validate.RegisterValidation("validationid", func(field validator.FieldLevel) bool {
-		return validationIDPattern.MatchString(field.Field().String())
-	}); err != nil {
-		panic(fmt.Sprintf("register validation ID validator: %v", err))
-	}
-	return validate
-}
-
-func formatValidationError(err error) error {
-	var validationErrors validator.ValidationErrors
-	if !errors.As(err, &validationErrors) {
-		return err
-	}
-
-	messages := make([]string, 0, len(validationErrors))
-	for _, validationError := range validationErrors {
-		messages = append(messages, fmt.Sprintf("%s failed %s validation", validationError.Namespace(), validationError.Tag()))
-	}
-	return fmt.Errorf("invalid validation: %s", strings.Join(messages, "; "))
-}
-
-func formatYAMLError(err error) error {
-	return fmt.Errorf("invalid validation YAML: %s", yaml.FormatError(err, false, true))
 }

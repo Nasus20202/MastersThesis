@@ -130,7 +130,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			"full_success", outcome.Result.Grading.FullSuccess,
 		)
 	}
-	_ = <-executeErrors
+	runErr := <-executeErrors
 	finalizeErr := store.Finalize(time.Now().UTC())
 	if finalizeErr == nil {
 		finalized = true
@@ -138,7 +138,11 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	if writeErr != nil || finalizeErr != nil {
 		return errors.Join(writeErr, finalizeErr)
 	}
-	return errors.Join(validationErrors...)
+	// runErr is nil unless the executor hit a dispatch/config error or
+	// context cancellation; per-case failures are already in
+	// validationErrors above, so this only adds the errors that would
+	// otherwise be silently dropped, matching runBenchmark's behavior.
+	return errors.Join(errors.Join(validationErrors...), runErr)
 }
 
 func validationScenarioIDs(cases []validation.ValidationCase) []string {

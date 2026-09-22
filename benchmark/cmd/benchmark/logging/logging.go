@@ -1,3 +1,5 @@
+// Package logging builds the benchmark CLI's slog.Logger, including its
+// colorized pretty-text handler.
 package logging
 
 import (

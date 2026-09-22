@@ -1,3 +1,5 @@
+// Package executor runs benchmark and validation tasks concurrently and
+// streams their outcomes.
 package executor
 
 import (

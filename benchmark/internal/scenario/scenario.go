@@ -1,15 +1,14 @@
+// Package scenario defines the scenario YAML schema and loads/validates
+// scenario definitions from disk.
 package scenario
 
 import (
-	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
-	"github.com/go-playground/validator/v10"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/yamlfile"
 )
 
 type Command struct {
@@ -77,12 +76,11 @@ func (d *Definition) setDir(dir string) {
 	}
 }
 
-var scenarioIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-var definitionValidator = mustNewValidator()
+var definitionValidator = yamlfile.NewValidator("scenarioid")
 
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
-		return formatValidationError(err)
+		return yamlfile.FormatValidationError("scenario", err)
 	}
 	seenIDs := make(map[string]struct{}, len(d.Grading))
 	for _, criterion := range d.Grading {
@@ -92,32 +90,4 @@ func (d Definition) Validate() error {
 		seenIDs[criterion.ID] = struct{}{}
 	}
 	return nil
-}
-
-func mustNewValidator() *validator.Validate {
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	if err := validate.RegisterValidation("notblank", func(field validator.FieldLevel) bool {
-		return strings.TrimSpace(field.Field().String()) != ""
-	}); err != nil {
-		panic(fmt.Sprintf("register scenario validator: %v", err))
-	}
-	if err := validate.RegisterValidation("scenarioid", func(field validator.FieldLevel) bool {
-		return scenarioIDPattern.MatchString(field.Field().String())
-	}); err != nil {
-		panic(fmt.Sprintf("register scenario validator: %v", err))
-	}
-	return validate
-}
-
-func formatValidationError(err error) error {
-	var validationErrors validator.ValidationErrors
-	if !errors.As(err, &validationErrors) {
-		return err
-	}
-
-	messages := make([]string, 0, len(validationErrors))
-	for _, validationError := range validationErrors {
-		messages = append(messages, fmt.Sprintf("%s failed %s validation", validationError.Namespace(), validationError.Tag()))
-	}
-	return fmt.Errorf("invalid scenario: %s", strings.Join(messages, "; "))
 }

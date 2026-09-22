@@ -1,3 +1,5 @@
+// Package agent defines the model-driven Agent and Factory interfaces
+// implemented by the benchmark conditions, e.g. baseline, prompt, and skill.
 package agent
 
 import (

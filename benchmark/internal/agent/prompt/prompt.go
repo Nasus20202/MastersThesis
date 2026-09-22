@@ -1,3 +1,5 @@
+// Package prompt implements the prompt condition: a bash-only tool loop
+// guided by a system prompt.
 package prompt
 
 import (
@@ -39,16 +41,10 @@ func NewWithSystemPrompt(client inference.Client, shell common.Shell, config com
 }
 
 func (a *Agent) Run(ctx context.Context, task string) (common.Result, error) {
-	if a == nil || a.loop == nil {
-		return common.Result{}, errors.New("prompt agent is not initialized")
-	}
-	if strings.TrimSpace(task) == "" {
-		return common.Result{}, errors.New("agent task is required")
-	}
-	result, err := a.loop.RunWithSystemPrompt(ctx, task, a.systemPrompt)
-	result.Condition = "prompt"
-	result.Task = task
-	return result, err
+	initialized := a != nil && a.loop != nil
+	return common.RunAgent(initialized, "prompt", "prompt", task, func() (common.Result, error) {
+		return a.loop.RunWithSystemPrompt(ctx, task, a.systemPrompt)
+	})
 }
 
 var _ rootagent.Agent = (*Agent)(nil)

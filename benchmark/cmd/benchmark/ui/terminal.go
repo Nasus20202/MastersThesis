@@ -1,3 +1,5 @@
+// Package ui renders the benchmark CLI's interactive terminal output and
+// progress bar.
 package ui
 
 import (
