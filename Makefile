@@ -11,6 +11,8 @@ CONFIG ?=
 BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 4
 RESUME ?=
+BROWSER_RESULTS ?= results
+BROWSER_SCENARIOS ?= scenarios
 
 include $(LLAMA_CONFIG)
 
@@ -40,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build benchmark benchmark-validate check-corpus
+.PHONY: help test format lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus
 
 help:
 	@printf '%s\n' 'Available commands:'
@@ -56,7 +58,8 @@ help:
 		'make registry-start' 'Start the pull-through image registry used by benchmark clusters.' \
 		'make registry-stop' 'Stop the pull-through image registry.' \
 		'make docker-cleanup' 'Remove benchmark Kind clusters, sandbox and setup containers.' \
-		'make build' 'Build the benchmark executable.' \
+		'make build' 'Build the benchmark and browser executables.' \
+		'make browser' 'Browse benchmark run history in a terminal UI.' \
 		'make benchmark' 'Run the default benchmark scenario.' \
 		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.' \
 		'make check-corpus' 'Load every scenario and its validation cases.'
@@ -69,7 +72,9 @@ help:
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
-		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).'
+		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).' \
+		'BROWSER_RESULTS=PATH' 'Results directory for the browser (default: results).' \
+		'BROWSER_SCENARIOS=PATH' 'Scenario corpus for browser task titles (default: scenarios).'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -112,6 +117,10 @@ docker-cleanup:
 
 build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
+	cd $(BENCHMARK_DIR) && $(GO) build -o browser ./cmd/browser
+
+browser:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
 
 benchmark: registry-start llama-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)

@@ -140,6 +140,27 @@ example `001.json`. Grading criteria preserve command output, stderr, exit
 status and duration. Failed lifecycle commands also record their phase,
 command details and captured output in the attempt's `failure` object.
 
+## Results browser
+
+`cmd/browser` is a read-only terminal UI over the runs under `results/`. It
+loads `results/<run-id>/` together with the scenario corpus for task titles and
+watches the results tree, so a running benchmark appears as it writes.
+
+```sh
+make browser
+# or
+cd benchmark
+go run ./cmd/browser --results results --scenarios scenarios
+```
+
+`--results` and `--scenarios` default to `results` and `scenarios`; `--no-watch`
+disables live updates. The Makefile passes `BROWSER_RESULTS` and
+`BROWSER_SCENARIOS` when set.
+
+The browser has three tabs — **Runs**, **Agents** and **Tasks** — each
+aggregated over the whole history. On terminals at least 112 columns wide the
+selected list is shown beside a dashboard; narrower terminals show one pane.
+
 ## Development
 
 Run Go commands from the benchmark module directory:
