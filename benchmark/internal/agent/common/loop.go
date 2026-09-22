@@ -126,6 +126,7 @@ type TokenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+	CachedTokens     int `json:"cached_tokens,omitempty"`
 }
 
 // Result is the complete model-loop evidence produced by Run.
@@ -224,6 +225,7 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 			result.TokenUsage.PromptTokens += response.Usage.PromptTokens
 			result.TokenUsage.CompletionTokens += response.Usage.CompletionTokens
 			result.TokenUsage.TotalTokens += response.Usage.TotalTokens
+			result.TokenUsage.CachedTokens += response.Usage.CachedTokens
 		}
 		if chatErr != nil {
 			logger.ErrorContext(runCtx, "inference response failed",

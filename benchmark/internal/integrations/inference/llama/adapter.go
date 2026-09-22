@@ -113,11 +113,15 @@ func fromLlamaUsage(usage *Usage) *inference.Usage {
 	if usage == nil {
 		return nil
 	}
-	return &inference.Usage{
+	converted := &inference.Usage{
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
 		TotalTokens:      usage.TotalTokens,
 	}
+	if usage.PromptTokensDetails != nil {
+		converted.CachedTokens = usage.PromptTokensDetails.CachedTokens
+	}
+	return converted
 }
 
 func fromLlamaTimings(timings *Timings) *inference.Timings {

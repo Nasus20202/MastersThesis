@@ -32,7 +32,7 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
                     "message": {"role": "assistant", "content": "done", "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "bash", "arguments": "{\"command\":\"true\"}"}}]},
                     "finish_reason": "tool_calls"
                 }],
-                "usage": {"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16},
+                "usage": {"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16, "prompt_tokens_details": {"cached_tokens": 7}},
                 "timings": {"prompt_n": 11, "prompt_ms": 1.5, "predicted_n": 5, "predicted_ms": 2.5}
             }`)
 		})},
@@ -51,6 +51,7 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 	assert.Equal(t, "done", response.Message.Content)
 	assert.Equal(t, "bash", response.Message.ToolCalls[0].Name)
 	assert.Equal(t, 16, response.Usage.TotalTokens)
+	assert.Equal(t, 7, response.Usage.CachedTokens)
 	assert.Equal(t, 5, response.Timings.PredictedN)
 }
 

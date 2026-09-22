@@ -251,14 +251,14 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 				}},
 			},
 			FinishReason: "tool_calls",
-			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14},
+			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14, CachedTokens: 6},
 			Timings:      &inference.Timings{PromptPerSecond: 20.5, PredictedPerSecond: 30.5},
 		},
 		{
 			ID:           "response-2",
 			Message:      inference.Message{Role: "assistant", Content: "The workload is healthy."},
 			FinishReason: "stop",
-			Usage:        &inference.Usage{PromptTokens: 20, CompletionTokens: 8, TotalTokens: 28},
+			Usage:        &inference.Usage{PromptTokens: 20, CompletionTokens: 8, TotalTokens: 28, CachedTokens: 9},
 		},
 	}}
 	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
@@ -267,7 +267,7 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 
 	result, err := loop.Run(context.Background(), "Inspect the workload.")
 	require.NoError(t, err)
-	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42}, result.TokenUsage)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42, CachedTokens: 15}, result.TokenUsage)
 
 	records := make([]map[string]any, 0)
 	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
