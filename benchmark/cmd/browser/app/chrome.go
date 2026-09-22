@@ -71,7 +71,7 @@ func (m *Model) renderHelp() string {
 		components.MetricCard("partial", "0–99%", ui.Warning),
 		components.MetricCard("failed / error", "0%", ui.Danger),
 		components.MetricCard("running", "live", ui.Running),
-	})
+	}, m.width)
 	header := ui.JoinSides(ui.Title.Render("◆ Keys"), m.closeLabel(), m.width)
 	return header + "\n\n" + groups + "\n\n" +
 		components.Section(m.width, "Legend") + "\n\n" + legend + "\n\n" +

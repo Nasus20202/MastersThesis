@@ -76,6 +76,8 @@ The common model/tool loop uses per-attempt limits of 25 model turns, 50 tool ca
 
 Model-visible Bash output is capped at 8 KiB so a single command cannot fill the context; the complete output remains in raw evidence.
 
+The loop retains the model's reasoning content between tool calls and re-sends it with the next request, so the model keeps its reasoning context and the inference prompt cache can reuse the shared prefix. Reasoning is recorded in the raw attempt evidence.
+
 The selected limits are preserved in each raw run result so later conditions can be compared under the same execution budget.
 
 ## Model visibility
@@ -84,6 +86,7 @@ The model may see:
 
 - the operational task,
 - the capabilities available in its condition,
+- its own reasoning retained from earlier tool-call turns in the same attempt,
 - command output and other observations produced during execution.
 
 The model must not see:

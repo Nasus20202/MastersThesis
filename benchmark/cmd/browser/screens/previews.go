@@ -28,7 +28,7 @@ func (v *View) runsPreview(route *Route, width int) string {
 			components.Section(width, "Selected run"),
 			v.runPreview(run, width),
 			"",
-			components.CardRow(v.vitals(metrics)),
+			components.CardRow(v.vitals(metrics), width),
 			"",
 			v.dashboardView(metrics, width),
 		)
@@ -80,7 +80,7 @@ func (v *View) agentPreview(route *Route, width int) string {
 		ui.Ranked(ranks, width, 0),
 		"",
 		components.Section(width, "Selected agent"),
-		components.CardRow(v.vitals(metrics)),
+		components.CardRow(v.vitals(metrics), width),
 		"",
 		v.dashboardView(metrics, width),
 	}
@@ -103,7 +103,7 @@ func (v *View) taskPreview(route *Route, width int) string {
 		ui.Ranked(ranks, width, 0),
 		"",
 		components.Section(width, "Selected task"),
-		components.CardRow(v.vitals(metrics)),
+		components.CardRow(v.vitals(metrics), width),
 		"",
 		v.dashboardView(metrics, width),
 		"",
@@ -135,5 +135,7 @@ func (v *View) attemptPreview(route *Route, width int) string {
 		body = append(body, ui.MutedStyle.Render("no criteria"))
 	}
 	lines := []string{components.Section(width, "Selected attempt"), components.Panel("", strings.Join(body, "\n"), width, ui.Border)}
+	metrics := model.RunMetrics(v.store, route.RunID, "", route.ScenarioID)
+	lines = append(lines, "", components.Section(width, "Task stats"), components.CardRow(v.vitals(metrics), width))
 	return strings.Join(lines, "\n")
 }

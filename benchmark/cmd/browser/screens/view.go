@@ -137,12 +137,13 @@ func (v *View) HeadLines(route *Route, width int) int {
 }
 
 // DetailsHead returns the cached header of the attempt details pane.
-func (v *View) DetailsHead(route *Route) string {
-	if head, ok := v.detailHeads[route.Path]; ok {
+func (v *View) DetailsHead(route *Route, width int) string {
+	key := fmt.Sprintf("%s|%d", route.Path, width)
+	if head, ok := v.detailHeads[key]; ok {
 		return head
 	}
-	head := v.buildDetailsHead(route)
-	v.detailHeads[route.Path] = head
+	head := v.buildDetailsHead(route, width)
+	v.detailHeads[key] = head
 	return head
 }
 

@@ -32,13 +32,13 @@ func (v *View) attemptDetails(route *Route, width, height int) string {
 	if err != nil {
 		return ui.Danger.Render(err.Error())
 	}
-	head := v.DetailsHead(route)
+	head := v.DetailsHead(route, width)
 	body := v.attemptBodyLines(attempt, attempt.Grading(), contentWidth)
 	visible := max(1, height-ui.LineCount(head))
 	return components.Frame(head+"\n"+ui.Window(body, route.Offset, visible), contentWidth, height, len(body), route.Offset, visible)
 }
 
-func (v *View) buildDetailsHead(route *Route) string {
+func (v *View) buildDetailsHead(route *Route, width int) string {
 	attempt, err := v.store.Attempt(route.RunID, route.Ref())
 	title := ui.Title.Render(v.store.ScenarioTitle(route.ScenarioID)) + "  " +
 		ui.MutedStyle.Render(fmt.Sprintf("attempt %d · %s · %s", route.Attempt, route.Group, route.RunID))
@@ -58,6 +58,10 @@ func (v *View) buildDetailsHead(route *Route) string {
 			components.MetricCard("turns", fmt.Sprintf("%d", agent.Turns), ui.Section),
 			components.MetricCard("tool calls", fmt.Sprintf("%d", agent.ToolCallCount), ui.Section),
 			components.MetricCard("tokens", fmt.Sprintf("%d", agent.TokenUsage.TotalTokens), ui.Section),
+			components.MetricCard("in", fmt.Sprintf("%d", agent.TokenUsage.PromptTokens), ui.Section),
+			components.MetricCard("out", fmt.Sprintf("%d", agent.TokenUsage.CompletionTokens), ui.Section),
+			components.MetricCard("cached", fmt.Sprintf("%d", agent.TokenUsage.CachedTokens), ui.Section),
+			components.MetricCard("cache %", fmt.Sprintf("%.2f%%", model.CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens)*100), ui.Section),
 			components.MetricCard("termination", agent.Termination, ui.Termination(agent.Termination)),
 		}
 	} else if attempt.Validation != nil {
@@ -69,7 +73,7 @@ func (v *View) buildDetailsHead(route *Route) string {
 	}
 	head := title + "\n" + summary
 	if len(cards) > 0 {
-		head += "\n" + components.CardRow(cards)
+		head += "\n" + components.CardRow(cards, max(1, width-1))
 	}
 	return head
 }

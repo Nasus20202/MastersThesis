@@ -36,6 +36,18 @@ func TestBuildCollapsesLongMessagesUntilExpanded(t *testing.T) {
 	assert.Contains(t, strings.Join(collapsed.Lines, "\n"), "expand")
 }
 
+func TestBuildRendersReasoningBeforeContent(t *testing.T) {
+	messages := []inference.Message{{Role: "assistant", ReasoningContent: "weigh the options", Content: "final answer"}}
+	cards := render(messages, nil, ui.NewRenderer(60))
+	require.Len(t, cards, 2)
+	assert.Equal(t, "reasoning", cards[0].title)
+	assert.Equal(t, "assistant", cards[1].title)
+
+	layout := Build(messages, -1, nil, ui.NewRenderer(60), 60)
+	require.Len(t, layout.CardSpans, 2)
+	assert.Contains(t, strings.Join(layout.Lines, "\n"), "reasoning")
+}
+
 func TestRenderCardProducesBorderedBox(t *testing.T) {
 	item := card{title: "bash", body: []string{"kubectl get pods"}, border: ui.Green, titleStyle: ui.Warning}
 	lines := renderCard(item, 40, false)

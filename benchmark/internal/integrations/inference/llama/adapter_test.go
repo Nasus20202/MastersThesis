@@ -32,7 +32,7 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
                     "message": {"role": "assistant", "content": "done", "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "bash", "arguments": "{\"command\":\"true\"}"}}]},
                     "finish_reason": "tool_calls"
                 }],
-                "usage": {"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16},
+                "usage": {"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16, "prompt_tokens_details": {"cached_tokens": 7}},
                 "timings": {"prompt_n": 11, "prompt_ms": 1.5, "predicted_n": 5, "predicted_ms": 2.5}
             }`)
 		})},
@@ -51,7 +51,40 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 	assert.Equal(t, "done", response.Message.Content)
 	assert.Equal(t, "bash", response.Message.ToolCalls[0].Name)
 	assert.Equal(t, 16, response.Usage.TotalTokens)
+	assert.Equal(t, 7, response.Usage.CachedTokens)
 	assert.Equal(t, 5, response.Timings.PredictedN)
+}
+
+func TestAdapterPreservesReasoningContent(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			var payload struct {
+				ChatRequest
+			}
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			require.Len(t, payload.Messages, 2)
+			assert.Equal(t, "prior thought", payload.Messages[1].ReasoningContent)
+			return testResponse(http.StatusOK, `{
+                "id": "chatcmpl-reasoning",
+                "choices": [{
+                    "message": {"role": "assistant", "content": "done", "reasoning_content": "current thought"},
+                    "finish_reason": "stop"
+                }]
+            }`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	response, err := adapter.Chat(context.Background(), []inference.Message{
+		{Role: "user", Content: "Inspect"},
+		{Role: "assistant", Content: "working", ReasoningContent: "prior thought"},
+	}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "current thought", response.Message.ReasoningContent)
 }
 
 func TestNewAdapterRejectsNilClient(t *testing.T) {

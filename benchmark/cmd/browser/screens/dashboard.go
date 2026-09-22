@@ -59,6 +59,18 @@ func (v *View) vitals(metrics model.Metrics) []string {
 	if len(metrics.Tokens) > 0 {
 		cards = append(cards, components.MetricCard("mean tokens", fmt.Sprintf("%.0f", model.MeanInts(metrics.Tokens)), ui.Section))
 	}
+	if len(metrics.Prompt) > 0 {
+		cards = append(cards, components.MetricCard("mean in", fmt.Sprintf("%.0f", model.MeanInts(metrics.Prompt)), ui.Section))
+	}
+	if len(metrics.Completion) > 0 {
+		cards = append(cards, components.MetricCard("mean out", fmt.Sprintf("%.0f", model.MeanInts(metrics.Completion)), ui.Section))
+	}
+	if len(metrics.Cached) > 0 {
+		cards = append(cards, components.MetricCard("mean cached", fmt.Sprintf("%.0f", model.MeanInts(metrics.Cached)), ui.Section))
+	}
+	if len(metrics.CacheRatios) > 0 {
+		cards = append(cards, components.MetricCard("mean cache %", fmt.Sprintf("%.2f%%", model.Mean(metrics.CacheRatios)*100), ui.Section))
+	}
 	return cards
 }
 

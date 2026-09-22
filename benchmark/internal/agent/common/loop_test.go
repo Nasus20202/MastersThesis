@@ -251,14 +251,14 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 				}},
 			},
 			FinishReason: "tool_calls",
-			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14},
+			Usage:        &inference.Usage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14, CachedTokens: 6},
 			Timings:      &inference.Timings{PromptPerSecond: 20.5, PredictedPerSecond: 30.5},
 		},
 		{
 			ID:           "response-2",
 			Message:      inference.Message{Role: "assistant", Content: "The workload is healthy."},
 			FinishReason: "stop",
-			Usage:        &inference.Usage{PromptTokens: 20, CompletionTokens: 8, TotalTokens: 28},
+			Usage:        &inference.Usage{PromptTokens: 20, CompletionTokens: 8, TotalTokens: 28, CachedTokens: 9},
 		},
 	}}
 	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
@@ -267,7 +267,7 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 
 	result, err := loop.Run(context.Background(), "Inspect the workload.")
 	require.NoError(t, err)
-	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42}, result.TokenUsage)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42, CachedTokens: 15}, result.TokenUsage)
 
 	records := make([]map[string]any, 0)
 	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
@@ -356,6 +356,29 @@ func TestLoopExecutesToolCallsAndAppendsEvidence(t *testing.T) {
 	assert.Equal(t, client.results[0].Message.ToolCalls, tool.calls)
 	assert.Equal(t, result.Messages[:1], client.requests[0].messages)
 	assert.Equal(t, result.Messages[:3], client.requests[1].messages)
+}
+
+func TestLoopPreservesAndResendsAssistantReasoning(t *testing.T) {
+	client := &loopClient{results: []inference.Result{
+		{Message: inference.Message{
+			Role:             "assistant",
+			ReasoningContent: "check pods first",
+			ToolCalls: []inference.ToolCall{{
+				ID: "call-1", Type: "function", Name: "inspect", Arguments: `{}`,
+			}},
+		}},
+		{Message: inference.Message{Role: "assistant", Content: "finished"}},
+	}}
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}, result: ToolResult{Content: "healthy"}}
+	loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 2, MaxToolCalls: 1})
+	require.NoError(t, err)
+
+	result, err := loop.Run(context.Background(), "Inspect the workload.")
+	require.NoError(t, err)
+	require.Len(t, result.Messages, 4)
+	assert.Equal(t, "check pods first", result.Messages[1].ReasoningContent)
+	require.Len(t, client.requests, 2)
+	assert.Equal(t, "check pods first", client.requests[1].messages[1].ReasoningContent)
 }
 
 func TestLoopHandlesUnsupportedCallsAndToolErrors(t *testing.T) {

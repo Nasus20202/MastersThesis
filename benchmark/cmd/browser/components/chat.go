@@ -50,6 +50,15 @@ func render(messages []inference.Message, expanded map[int]bool, renderer *ui.Re
 			limit = systemLimit
 		}
 		isExpanded := expanded[index]
+		if strings.TrimSpace(message.ReasoningContent) != "" {
+			cards = append(cards, card{
+				owner:      index,
+				title:      "reasoning",
+				body:       collapse(renderer.Render(message.ReasoningContent), limit, isExpanded),
+				border:     ui.Muted,
+				titleStyle: ui.BadgeNeutral,
+			})
+		}
 		if strings.TrimSpace(message.Content) != "" {
 			cards = append(cards, card{
 				owner:      index,

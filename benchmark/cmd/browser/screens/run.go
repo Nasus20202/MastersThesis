@@ -28,7 +28,7 @@ func (v *View) runSummary(route *Route, width int) string {
 		components.MetricCard("attempts", attempts, ui.Section),
 		components.MetricCard("errors", errors, errorStyle(errors)),
 	}
-	lines := []string{title, components.CardRow(cards)}
+	lines := []string{title, components.CardRow(cards, width)}
 	if route.Task != "" {
 		lines = append(lines, ui.MutedStyle.Render("task: "+v.store.ScenarioTitle(route.Task)))
 	}
@@ -42,7 +42,7 @@ func (v *View) runDashboard(route *Route, width int) string {
 		return ui.MutedStyle.Render("loading…")
 	}
 	metrics := model.RunMetrics(v.store, route.RunID, route.Agent, route.Task)
-	lines := []string{components.CardRow(v.vitals(metrics)), "", v.dashboardView(metrics, width)}
+	lines := []string{components.CardRow(v.vitals(metrics), width), "", v.dashboardView(metrics, width)}
 	rows := v.store.ScenarioRows(route.RunID, route.Agent, route.Task)
 	if route.Cursor < len(rows) {
 		scenario := rows[route.Cursor]

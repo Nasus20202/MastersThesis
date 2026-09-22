@@ -47,14 +47,34 @@ func MetricCard(label, value string, valueStyle lipgloss.Style) string {
 	return ui.Card.Render(ui.FaintStyle.Render(label) + "\n" + valueStyle.Bold(true).Render(value))
 }
 
-// CardRow lays metric cards out horizontally.
-func CardRow(cards []string) string {
-	parts := make([]string, 0, len(cards)*2)
-	for index, card := range cards {
-		if index > 0 {
-			parts = append(parts, "  ")
-		}
-		parts = append(parts, card)
+// CardRow lays metric cards out horizontally, wrapping onto further rows so
+// the strip fits within width.
+func CardRow(cards []string, width int) string {
+	if len(cards) == 0 {
+		return ""
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	width = max(1, width)
+	const gap = 2
+	var rows []string
+	var current []string
+	currentWidth := 0
+	for _, card := range cards {
+		cardWidth := lipgloss.Width(card)
+		added := cardWidth
+		if len(current) > 0 {
+			added += gap
+		}
+		if len(current) > 0 && currentWidth+added > width {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, current...))
+			current, currentWidth = nil, 0
+			added = cardWidth
+		}
+		if len(current) > 0 {
+			current = append(current, strings.Repeat(" ", gap))
+		}
+		current = append(current, card)
+		currentWidth += added
+	}
+	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, current...))
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
