@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -63,6 +62,9 @@ func Parse(data []byte) (Definition, error) {
 	return definition, nil
 }
 
+// LoadInputs loads validation files from paths or directories. Directories are
+// scanned for validation.yaml or validation.yml files; a discovered file that
+// fails to load is returned as an error. Explicit file paths may use any name.
 func LoadInputs(inputs []string) ([]Definition, error) {
 	if len(inputs) == 0 {
 		return nil, errors.New("at least one validation path is required")
@@ -83,15 +85,14 @@ func LoadInputs(inputs []string) ([]Definition, error) {
 			continue
 		}
 
-		paths, err := discover(input)
+		paths, err := Discover(input)
 		if err != nil {
 			return nil, err
 		}
 		for _, path := range paths {
 			definition, err := Load(path)
 			if err != nil {
-				slog.Debug("skipping invalid discovered validation", "path", path, "error", err)
-				continue
+				return nil, err
 			}
 			definitions = append(definitions, definition)
 		}
@@ -103,19 +104,18 @@ func LoadInputs(inputs []string) ([]Definition, error) {
 	return definitions, nil
 }
 
-func discover(root string) ([]string, error) {
+// Discover returns the validation definition files under root, sorted by path.
+// A validation definition is a file named validation.yaml or validation.yml.
+func Discover(root string) ([]string, error) {
 	paths := make([]string, 0)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("scan validation directory %q: %w", root, err)
 		}
-		if entry.IsDir() {
+		if entry.IsDir() || !isValidationFile(entry.Name()) {
 			return nil
 		}
-		extension := filepath.Ext(entry.Name())
-		if extension == ".yaml" || extension == ".yml" {
-			paths = append(paths, path)
-		}
+		paths = append(paths, path)
 		return nil
 	})
 	if err != nil {
@@ -123,6 +123,11 @@ func discover(root string) ([]string, error) {
 	}
 	slices.Sort(paths)
 	return paths, nil
+}
+
+func isValidationFile(name string) bool {
+	extension := filepath.Ext(name)
+	return strings.TrimSuffix(name, extension) == "validation" && (extension == ".yaml" || extension == ".yml")
 }
 
 func (d Definition) Validate() error {

@@ -42,6 +42,19 @@ grading:
       program: ./scripts/check-restored.sh
 ```
 
+Each scenario lives in its own directory and its definition must be named
+`scenario.yaml` (or `scenario.yml`):
+
+```text
+scenarios/<area>/<scenario-id>/
+  scenario.yaml
+  validation.yaml
+  manifests/
+  scripts/
+  kind/
+  source.md
+```
+
 The runner performs these steps in order:
 
 1. prepare;
@@ -60,12 +73,31 @@ Command paths, manifest paths and the optional Kind config path are resolved
 relative to the scenario file. Without a Kind config, Kind uses its default
 single control-plane node configuration.
 
+### Cluster profiles and registry cache
+
+`cluster.kind.config` selects a cluster profile from `benchmark/kind/`:
+
+- `cluster.yaml` — the default kindnet profile, used by most scenarios;
+- `cluster-calico.yaml` — disables the default CNI and installs Calico for scenarios that need NetworkPolicy enforcement;
+- `cluster-registry.yaml` — the default profile plus a mirror for the in-cluster registry that the image scenarios deploy in `prepare`.
+
+The profiles declare `containerdConfigPatches` mirrors for `docker.io`,
+`quay.io` and `ghcr.io` that point at shared pull-through registry caches, with
+the upstream kept as a fallback endpoint. The caches run as containers on the
+`kind` Docker network and persist their data, so pinned images are pulled once
+and reused across disposable clusters. Start and stop them with
+`make registry-start` and `make registry-stop`; `make benchmark` and
+`make benchmark-validate` start them automatically.
+
+Scenario setup, fault handling and grading run in a pinned `benchmark-setup`
+container on the shared kind network, not in the model sandbox. The model
+sandbox remains the hardened agent boundary.
+
 ## Validation and results
 
-Validation manifests are YAML files that reference scenario files and declare
-deterministic repair cases with expected scores and full-success values. A
-directory input is scanned recursively for `.yaml` and `.yml` files; unrelated
-YAML files are skipped. For example:
+Validation manifests are YAML files named `validation.yaml` (or
+`validation.yml`) that reference scenario files and declare deterministic
+repair cases with expected scores and full-success values. For example:
 
 ```yaml
 scenarios:
@@ -82,12 +114,23 @@ scenarios:
         expected_full_success: true
 ```
 
-The `--scenario` and `--validate` options accept files or directories. Directory
-inputs are scanned recursively for YAML files. Use `--parallel N` to bound
-concurrent attempts and `--repeat N` to run each scenario or validation case
-more than once. Scenario runs select agents with `--agent baseline,prompt` or
-repeated flags such as `--agent baseline --agent prompt`; the default `all`
-selection runs both agents.
+The `--scenario` and `--validate` options accept files or directories. A
+directory is scanned recursively for `scenario.yaml`/`.yml` during scenario
+runs and `validation.yaml`/`.yml` during validation runs; other YAML files,
+such as manifests, are ignored. A discovered file that fails to load is
+reported as an error. Explicit file paths may use any name.
+
+`--check-corpus PATH` validates the whole corpus: it loads every scenario,
+requires the scenario ID to match its directory name, and requires a paired
+validation file with at least one case. A missing or unexpectedly named
+`scenario.yaml` or `validation.yaml` fails the check. Run it with
+`make check-corpus`.
+
+Use `--parallel N` to bound concurrent attempts and `--repeat N` to run each
+scenario or validation case more than once. Scenario runs select agents with
+`--agent baseline,prompt` or repeated flags such as
+`--agent baseline --agent prompt`; the default `all` selection runs both
+agents.
 
 Each benchmark invocation writes one logical run under `results/<run-id>/`,
 with agent attempt evidence at
@@ -114,14 +157,19 @@ go run ./cmd/benchmark \
 
 Benchmark configuration files use YAML and may be layered by repeating
 `--config`; later files override earlier files. The default `config.yaml`
-contains benchmark-specific logging and agent settings. Llama.cpp runtime and
-model settings remain in `config.env` and `model-profiles/*.env`; the Makefile
-loads those for the benchmark and Compose.
+contains logging, agent and container settings. Llama.cpp runtime and model
+settings remain in `config.env` and `model-profiles/*.env`; the Makefile loads
+those for the benchmark and Compose.
+
+JSON Schemas for `scenario.yaml`, `validation.yaml` and `config.yaml` live in
+`benchmark/schemas/`. VS Code applies them through `.vscode/settings.json` when
+the Red Hat YAML extension (`redhat.vscode-yaml`, recommended in
+`.vscode/extensions.json`) is installed. The schemas are an editor aid; the Go
+runner remains the source of truth.
 
 Start and stop the local llama-server service from the benchmark directory:
 
 ```sh
-cd benchmark
-docker compose --env-file config.env up -d
-docker compose --env-file config.env down
+make llama-start
+make llama-stop
 ```

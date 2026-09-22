@@ -24,6 +24,8 @@ type Runner struct {
 	ClusterFactory      clusterintegration.Factory
 	SandboxFactory      sandboxintegration.Factory
 	SandboxImageBuilder sandboxintegration.ImageBuilder
+	SetupFactory        sandboxintegration.Factory
+	SetupImageBuilder   sandboxintegration.ImageBuilder
 	AgentFactory        rootagent.Factory
 	AgentSlots          chan struct{} // Shared across benchmark workers; nil disables the limit.
 	Condition           string
@@ -44,6 +46,16 @@ const (
 type phase struct {
 	name string
 	step scenario.Step
+}
+
+// sandboxCommandExecutor adapts a sandbox executor to the command executor
+// interface used by the setup phases and grading.
+type sandboxCommandExecutor struct {
+	executor sandboxintegration.Executor
+}
+
+func (e sandboxCommandExecutor) Run(ctx context.Context, spec command.Spec) (command.Result, error) {
+	return e.executor.Exec(ctx, spec)
 }
 
 func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result RunResult, runErr error) {
@@ -92,6 +104,13 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 			return result, fmt.Errorf("build sandbox image: %w", err)
 		}
 	}
+	if r.SetupFactory != nil && r.SetupImageBuilder != nil {
+		if err := r.SetupImageBuilder.Build(ctx); err != nil {
+			logger.Error("setup image build failed", "error", err)
+			result.Failure = newFailureEvidence("build setup image", err)
+			return result, fmt.Errorf("build setup image: %w", err)
+		}
+	}
 	cluster, err := r.newCluster(clusterName, logger)
 	if err != nil {
 		return result, err
@@ -109,6 +128,30 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	if err := r.createCluster(ctx, cluster, clusterName, logger); err != nil {
 		result.Failure = newFailureEvidence("create cluster", err)
 		return result, err
+	}
+	phaseExecutor := r.Executor
+	if r.SetupFactory != nil {
+		setup, err := r.newSetup(clusterName, cluster.InternalKubeconfigPath(), logger)
+		if err != nil {
+			return result, err
+		}
+		if err := r.startSetup(ctx, setup, logger); err != nil {
+			result.Failure = newFailureEvidence("start setup", err)
+			return result, err
+		}
+		defer func() {
+			if err := r.cleanupSandbox(setup, logger); err != nil {
+				runErr = errors.Join(runErr, err)
+				if result.Failure == nil {
+					result.Failure = newFailureEvidence("cleanup setup", err)
+				}
+			}
+		}()
+		executor, ok := setup.(sandboxintegration.Executor)
+		if !ok {
+			return result, errors.New("setup sandbox does not provide command execution")
+		}
+		phaseExecutor = sandboxCommandExecutor{executor: executor}
 	}
 	var modelAgent rootagent.Agent
 	if r.SandboxFactory != nil {
@@ -139,7 +182,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 			}
 		}
 	}
-	grading, agentResult, err := r.runPhases(ctx, definition, repair, modelAgent, cluster.KubeconfigPath(), logger)
+	grading, agentResult, err := r.runPhases(ctx, definition, repair, modelAgent, cluster.InternalKubeconfigPath(), phaseExecutor, logger)
 	result.Agent = agentResult
 	result.Grading = grading
 	if err != nil && result.Failure == nil {
@@ -200,6 +243,33 @@ func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (sa
 	return sandbox, nil
 }
 
+func (r Runner) newSetup(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
+	setup, err := r.SetupFactory(name, kubeconfigPath)
+	if err != nil {
+		logger.Error("setup factory failed", "error", err)
+		return nil, fmt.Errorf("create setup: %w", err)
+	}
+	if setup == nil {
+		return nil, errors.New("create setup: factory returned a nil sandbox")
+	}
+	return setup, nil
+}
+
+func (r Runner) startSetup(ctx context.Context, setup sandboxintegration.Sandbox, logger *slog.Logger) error {
+	if r.SetupImageBuilder == nil {
+		if err := setup.Build(ctx); err != nil {
+			logger.Error("setup image build failed", "error", err)
+			return fmt.Errorf("build setup image: %w", err)
+		}
+	}
+	if err := setup.Start(ctx); err != nil {
+		logger.Error("setup start failed", "error", err)
+		return fmt.Errorf("start setup: %w", err)
+	}
+	logger.Info("setup started")
+	return nil
+}
+
 func (r Runner) startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
 	if r.SandboxImageBuilder == nil {
 		if err := sandbox.Build(ctx); err != nil {
@@ -239,7 +309,7 @@ func (r Runner) cleanupCluster(cluster clusterintegration.Cluster, logger *slog.
 	return nil
 }
 
-func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, modelAgent rootagent.Agent, kubeconfigPath string, logger *slog.Logger) (GradingResult, *common.Result, error) {
+func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, modelAgent rootagent.Agent, kubeconfigPath string, phaseExecutor command.Executor, logger *slog.Logger) (GradingResult, *common.Result, error) {
 	beforeAgent := []phase{
 		{name: phasePrepare, step: definition.Prepare},
 		{name: phaseVerifyClean, step: definition.VerifyClean},
@@ -250,11 +320,11 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 	if len(definition.VerifyFault) > 0 {
 		beforeAgent = append(beforeAgent, phase{name: phaseVerifyFault, step: definition.VerifyFault})
 	}
-	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, logger); err != nil {
+	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, phaseExecutor, logger); err != nil {
 		return GradingResult{}, nil, err
 	}
 	if len(repair) > 0 {
-		if err := r.runPhaseSteps(ctx, []phase{{name: phaseRepair, step: repair}}, kubeconfigPath, logger); err != nil {
+		if err := r.runPhaseSteps(ctx, []phase{{name: phaseRepair, step: repair}}, kubeconfigPath, phaseExecutor, logger); err != nil {
 			return GradingResult{}, nil, err
 		}
 	}
@@ -274,7 +344,7 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 	}
 
 	logger.Info("running scenario grading")
-	result, gradingErr := r.runGrading(ctx, definition.Grading, kubeconfigPath)
+	result, gradingErr := r.runGrading(ctx, definition.Grading, kubeconfigPath, phaseExecutor)
 	if gradingErr != nil {
 		logger.Error("scenario grading failed", "error", gradingErr)
 	} else {
@@ -302,10 +372,10 @@ func (r Runner) runModelAgent(ctx context.Context, modelAgent rootagent.Agent, t
 	return modelAgent.Run(ctx, task)
 }
 
-func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPath string, logger *slog.Logger) error {
+func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPath string, executor command.Executor, logger *slog.Logger) error {
 	for _, currentPhase := range phases {
 		logger.Info("running scenario phase", "phase", currentPhase.name)
-		if err := r.runStep(ctx, currentPhase.name, currentPhase.step, kubeconfigPath); err != nil {
+		if err := r.runStep(ctx, currentPhase.name, currentPhase.step, kubeconfigPath, executor); err != nil {
 			logger.Error("scenario phase failed", "phase", currentPhase.name, "error", err)
 			return err
 		}
@@ -314,10 +384,10 @@ func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPat
 	return nil
 }
 
-func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, kubeconfigPath string) error {
+func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, kubeconfigPath string, executor command.Executor) error {
 	for index, spec := range step.Specs() {
 		spec = withKubeconfig(spec, kubeconfigPath)
-		result, err := r.Executor.Run(ctx, spec)
+		result, err := executor.Run(ctx, spec)
 		if err != nil {
 			return &stepError{
 				phase:        phase,
@@ -331,10 +401,10 @@ func (r Runner) runStep(ctx context.Context, phase string, step scenario.Step, k
 	return nil
 }
 
-func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, kubeconfigPath string) (GradingResult, error) {
+func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, kubeconfigPath string, executor command.Executor) (GradingResult, error) {
 	results := make([]CriterionResult, 0, len(criteria))
 	for _, criterion := range criteria {
-		result, err := r.Executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
+		result, err := executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
 		criterionResult := CriterionResult{
 			ID:              criterion.ID,
 			Weight:          criterion.Weight,

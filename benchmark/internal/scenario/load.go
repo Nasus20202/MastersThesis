@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 )
@@ -31,12 +32,13 @@ func Load(path string) (Definition, error) {
 		return Definition{}, fmt.Errorf("load scenario %q: %w", path, err)
 	}
 	definition.setDir(filepath.Dir(absolutePath))
-	logger.Info("scenario loaded", "id", definition.ID, "resolved_path", absolutePath)
+	logger.Info("scenario loaded", "id", definition.ID)
 	return definition, nil
 }
 
-// LoadInputs loads scenario files from paths or directories.
-// Invalid files in directories are skipped; explicit file errors are returned.
+// LoadInputs loads scenario files from paths or directories. Directories are
+// scanned for scenario.yaml or scenario.yml files; a discovered file that fails
+// to load is returned as an error. Explicit file paths may use any name.
 func LoadInputs(inputs []string) ([]Definition, error) {
 	if len(inputs) == 0 {
 		return nil, errors.New("at least one scenario path is required")
@@ -61,15 +63,14 @@ func LoadInputs(inputs []string) ([]Definition, error) {
 			continue
 		}
 
-		paths, err := discover(input)
+		paths, err := Discover(input)
 		if err != nil {
 			return nil, err
 		}
 		for _, path := range paths {
 			definition, err := Load(path)
 			if err != nil {
-				slog.Debug("skipping invalid discovered scenario", "path", path, "error", err)
-				continue
+				return nil, err
 			}
 			if err := appendDefinition(&definitions, seenIDs, definition, path); err != nil {
 				return nil, err
@@ -83,19 +84,19 @@ func LoadInputs(inputs []string) ([]Definition, error) {
 	return definitions, nil
 }
 
-func discover(root string) ([]string, error) {
+// Discover returns the scenario definition files under root, sorted by path. A
+// scenario definition is a file named scenario.yaml or scenario.yml; other YAML
+// files in a scenario directory, such as manifests, are ignored.
+func Discover(root string) ([]string, error) {
 	paths := make([]string, 0)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("scan scenario directory %q: %w", root, err)
 		}
-		if entry.IsDir() {
+		if entry.IsDir() || !isScenarioFile(entry.Name()) {
 			return nil
 		}
-		extension := filepath.Ext(entry.Name())
-		if extension == ".yaml" || extension == ".yml" {
-			paths = append(paths, path)
-		}
+		paths = append(paths, path)
 		return nil
 	})
 	if err != nil {
@@ -103,6 +104,15 @@ func discover(root string) ([]string, error) {
 	}
 	slices.Sort(paths)
 	return paths, nil
+}
+
+func isScenarioFile(name string) bool {
+	extension := filepath.Ext(name)
+	return strings.TrimSuffix(name, extension) == "scenario" && isYAMLExtension(extension)
+}
+
+func isYAMLExtension(extension string) bool {
+	return extension == ".yaml" || extension == ".yml"
 }
 
 func appendDefinition(definitions *[]Definition, seenIDs map[string]string, definition Definition, path string) error {

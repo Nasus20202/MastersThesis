@@ -43,18 +43,26 @@ func New(executor command.Executor, config Config) (*Cluster, error) {
 	if config.ConfigPath != "" && strings.TrimSpace(config.ConfigPath) == "" {
 		return nil, errors.New("kind cluster config path is invalid")
 	}
+	// Kubeconfigs live in a per-cluster directory so the setup container can
+	// mount it read-write and persist command state (for example a published
+	// image digest) next to the kubeconfig across setup commands.
+	base := filepath.Join(os.TempDir(), config.Name)
 	return &Cluster{
 		executor:               executor,
 		name:                   config.Name,
 		configPath:             config.ConfigPath,
-		kubeconfigPath:         filepath.Join(os.TempDir(), config.Name+".kubeconfig"),
-		internalKubeconfigPath: filepath.Join(os.TempDir(), config.Name+".internal.kubeconfig"),
+		kubeconfigPath:         filepath.Join(base, "kubeconfig"),
+		internalKubeconfigPath: filepath.Join(base, "internal.kubeconfig"),
 	}, nil
 }
 
 func (c *Cluster) Create(ctx context.Context) error {
 	logger := slog.With("cluster", c.name)
 	logger.InfoContext(ctx, "creating kind cluster")
+	if err := os.MkdirAll(filepath.Dir(c.kubeconfigPath), 0o755); err != nil {
+		logger.ErrorContext(ctx, "kind kubeconfig directory creation failed", "error", err)
+		return fmt.Errorf("create kubeconfig directory for cluster %q: %w", c.name, err)
+	}
 	if _, err := c.run(ctx, "create", "cluster", "--name", c.name); err != nil {
 		logger.ErrorContext(ctx, "kind cluster creation failed", "error", err)
 		return err
@@ -70,10 +78,8 @@ func (c *Cluster) Create(ctx context.Context) error {
 func (c *Cluster) Delete(ctx context.Context) error {
 	logger := slog.With("cluster", c.name)
 	defer func() {
-		for _, path := range []string{c.kubeconfigPath, c.internalKubeconfigPath} {
-			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-				logger.WarnContext(ctx, "kind kubeconfig cleanup failed", "path", path, "error", err)
-			}
+		if err := os.RemoveAll(filepath.Dir(c.kubeconfigPath)); err != nil {
+			logger.WarnContext(ctx, "kind kubeconfig cleanup failed", "error", err)
 		}
 	}()
 	logger.InfoContext(ctx, "deleting kind cluster")

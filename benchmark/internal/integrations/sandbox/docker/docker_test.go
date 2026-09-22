@@ -45,6 +45,11 @@ func newSandbox(t *testing.T, executor command.Executor) *Sandbox {
 		Network:        "benchmark-sandbox-network",
 		NetworkTarget:  "benchmark-control-plane",
 		Layout:         DefaultImageLayout(),
+		Security: SecurityConfig{
+			ReadOnlyRoot:     true,
+			DropCapabilities: true,
+			NoNewPrivileges:  true,
+		},
 	})
 	require.NoError(t, err)
 	return sandbox

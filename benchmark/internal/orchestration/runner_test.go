@@ -37,9 +37,10 @@ func testDefinition() scenario.Definition {
 func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+		kubeconfigCtx:          "kind-test",
 	}
 	executor := &recordingExecutor{events: &events}
 	var clusterName string
@@ -63,9 +64,38 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	assert.Equal(t, []string{"factory", "create", "kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored", "delete"}, events)
 	require.NotEmpty(t, executor.specs)
 	assert.Equal(t, []string{"apply", "-f", "manifest.yaml"}, executor.specs[0].Args)
-	assert.Equal(t, "/tmp/test.kubeconfig", executor.specs[0].Env["KUBECONFIG"])
+	assert.Equal(t, "/tmp/test.internal.kubeconfig", executor.specs[0].Env["KUBECONFIG"])
 	_, hasDeadline := cluster.deleteCtx.Deadline()
 	assert.True(t, hasDeadline)
+}
+
+func TestRunnerRunsPhasesThroughSetupSandbox(t *testing.T) {
+	events := []string{}
+	cluster := &fakeCluster{
+		events:                 &events,
+		kubeconfigPath:         "/tmp/test.kubeconfig",
+		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
+	}
+	host := &recordingExecutor{events: &events}
+	setup := &fakeSandbox{events: &events}
+	runner := Runner{
+		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
+		Executor:       host,
+		SetupFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
+			assert.True(t, strings.HasPrefix(name, "benchmark-test-scenario-"))
+			assert.Equal(t, "/tmp/test.internal.kubeconfig", kubeconfigPath)
+			events = append(events, "setup-factory")
+			return setup, nil
+		},
+	}
+
+	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, host.specs)
+	assert.Equal(t, "setup-factory", events[1])
+	assert.Equal(t, 5, strings.Count(strings.Join(events, ","), "sandbox-exec"))
+	assert.Equal(t, []string{"create", "setup-factory", "sandbox-build", "sandbox-start"}, events[:4])
+	assert.Equal(t, []string{"sandbox-stop", "delete"}, events[len(events)-2:])
 }
 
 func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
@@ -385,7 +415,7 @@ func TestRunGradingRunsCriteriaIndependentlyAndCapturesEvidence(t *testing.T) {
 		{ID: "ready", Weight: 3, Check: scenario.Command{Program: "second-check"}},
 	}
 
-	result, err := runner.runGrading(context.Background(), criteria, "/tmp/test.kubeconfig")
+	result, err := runner.runGrading(context.Background(), criteria, "/tmp/test.kubeconfig", executor)
 	require.NoError(t, err)
 	assert.Equal(t, 0.25, result.Score)
 	assert.False(t, result.FullSuccess)

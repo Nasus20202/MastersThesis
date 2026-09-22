@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
@@ -17,7 +18,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, terminal *ui.Terminal) error {
+func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
@@ -58,12 +59,12 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	)
 
 	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
-	imageBuilder, err := newSandboxImageBuilder(commandExecutor)
+	deps, err := newRunnerDeps(commandExecutor, benchmarkConfig.Containers)
 	if err != nil {
 		return err
 	}
 	runCase := func(ctx context.Context, definition scenario.Definition, repair scenario.Step) (orchestration.RunResult, error) {
-		return newOrchestrationRunner(commandExecutor, definition, imageBuilder, "", nil, nil).RunWithRepair(ctx, definition, repair)
+		return newOrchestrationRunner(deps, definition, "", nil, nil).RunWithRepair(ctx, definition, repair)
 	}
 	tasks := make([]executor.Task, 0, len(cases)*repeat)
 	for attempt := 1; attempt <= repeat; attempt++ {

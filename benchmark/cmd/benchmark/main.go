@@ -40,6 +40,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		fmt.Fprintln(logOutput, "Usage:")
 		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--agent NAME[,NAME] ...] [--parallel N] [--repeat N] [--resume RUN_ID]")
 		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --validate PATH [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --check-corpus PATH")
 		fmt.Fprintln(logOutput, "\nOptions:")
 		flags.PrintDefaults()
 	}
@@ -54,14 +55,26 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
 	resumeID := flags.String("resume", "", "resume an incomplete scenario run by ID")
+	checkCorpus := flags.String("check-corpus", "", "validate the scenario corpus under PATH and exit")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if len(scenarioPaths) > 0 && len(validationPaths) > 0 {
-		return errors.New("scenario and validate paths cannot be combined")
+	corpusPath := strings.TrimSpace(*checkCorpus)
+	modes := 0
+	if len(scenarioPaths) > 0 {
+		modes++
 	}
-	if len(scenarioPaths) == 0 && len(validationPaths) == 0 {
-		return errors.New("scenario or validation path is required; use --scenario PATH or --validate PATH")
+	if len(validationPaths) > 0 {
+		modes++
+	}
+	if corpusPath != "" {
+		modes++
+	}
+	if modes > 1 {
+		return errors.New("scenario, validate and check-corpus paths cannot be combined")
+	}
+	if modes == 0 {
+		return errors.New("scenario, validation or corpus path is required; use --scenario, --validate or --check-corpus")
 	}
 	if flags.NArg() > 0 {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
@@ -75,6 +88,9 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		return err
 	}
 	slog.SetDefault(logger)
+	if corpusPath != "" {
+		return runCorpusCheck(corpusPath)
+	}
 	if *parallel < 1 {
 		return errors.New("parallel must be at least 1")
 	}
@@ -93,7 +109,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		if len(agentValues) > 0 && !explicitAllAgentSelection(agentValues) {
 			return errors.New("agent selection is only supported with scenario runs")
 		}
-		return runValidation(ctx, validationPaths, *parallel, *repeat, terminal)
+		return runValidation(ctx, validationPaths, *parallel, *repeat, benchmarkConfig, terminal)
 	}
 	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal, strings.TrimSpace(*resumeID))
 }

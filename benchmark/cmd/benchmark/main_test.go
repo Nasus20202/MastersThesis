@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
@@ -19,8 +22,9 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "missing mode", want: "scenario or validation path is required"},
+		{name: "missing mode", want: "scenario, validation or corpus path is required"},
 		{name: "both modes", args: []string{"--scenario", "scenario.yaml", "--validate", "validation.yaml"}, want: "cannot be combined"},
+		{name: "corpus with scenario", args: []string{"--scenario", "scenario.yaml", "--check-corpus", "scenarios"}, want: "cannot be combined"},
 		{name: "invalid parallelism", args: []string{"--scenario", "scenario.yaml", "--parallel", "0"}, want: "parallel must be at least 1"},
 		{name: "invalid repeat", args: []string{"--scenario", "scenario.yaml", "--repeat", "0"}, want: "repeat must be at least 1"},
 		{name: "invalid agent", args: []string{"--scenario", "scenario.yaml", "--agent", "unknown"}, want: "unsupported agent"},
@@ -47,6 +51,7 @@ func TestRunHelpListsModesAndParameters(t *testing.T) {
 	assert.Contains(t, logs.String(), "benchmark --config PATH ... --scenario PATH")
 	assert.Contains(t, logs.String(), "NAME[,NAME]")
 	assert.Contains(t, logs.String(), "benchmark --config PATH ... --validate PATH")
+	assert.Contains(t, logs.String(), "benchmark --check-corpus PATH")
 	assert.Contains(t, logs.String(), "-config")
 	assert.Contains(t, logs.String(), "-agent")
 	assert.Contains(t, logs.String(), "-repeat")
@@ -108,4 +113,94 @@ func TestValidationScenarioIDsAreUniqueAndOrdered(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{"first", "second"}, validationScenarioIDs(cases))
+}
+
+const corpusScenarioYAML = `
+id: %s
+title: Corpus scenario
+task: Restore the workload.
+prepare:
+  - program: prepare
+verify_clean:
+  - program: verify-clean
+grading:
+  - id: ready
+    weight: 1
+    check:
+      program: check
+`
+
+const corpusValidationYAML = `
+scenarios:
+  - scenario_file: scenario.yaml
+    cases:
+      - id: repaired
+        expected_score: 1
+        expected_full_success: true
+`
+
+func TestRunCorpusCheck(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T, root string)
+		want    string
+	}{
+		{
+			name: "valid pair",
+			prepare: func(t *testing.T, root string) {
+				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
+				writeCorpusValidation(t, filepath.Join(root, "good"))
+			},
+		},
+		{
+			name: "missing validation",
+			prepare: func(t *testing.T, root string) {
+				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
+			},
+			want: "missing validation.yaml",
+		},
+		{
+			name: "missing scenario",
+			prepare: func(t *testing.T, root string) {
+				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
+				writeCorpusValidation(t, filepath.Join(root, "good"))
+				writeCorpusValidation(t, filepath.Join(root, "orphan"))
+			},
+			want: "missing scenario.yaml",
+		},
+		{
+			name: "id mismatch",
+			prepare: func(t *testing.T, root string) {
+				writeCorpusScenario(t, filepath.Join(root, "wrong"), "good")
+				writeCorpusValidation(t, filepath.Join(root, "wrong"))
+			},
+			want: "does not match directory name",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			test.prepare(t, root)
+
+			err := runCorpusCheck(root)
+			if test.want == "" {
+				require.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, test.want)
+		})
+	}
+}
+
+func writeCorpusScenario(t *testing.T, dir, id string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "scenario.yaml"), []byte(fmt.Sprintf(corpusScenarioYAML, id)), 0o600))
+}
+
+func writeCorpusValidation(t *testing.T, dir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "validation.yaml"), []byte(corpusValidationYAML), 0o600))
 }
