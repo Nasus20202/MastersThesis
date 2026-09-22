@@ -37,6 +37,25 @@ func attemptResult(scenario string, full bool, score, duration float64, turns in
 	}
 }
 
+func TestRunMetricsAggregatesTokenUsage(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+	require.NoError(t, err)
+	result := attemptResult("alpha", true, 1, 10, 2)
+	result.Agent.TokenUsage = common.TokenUsage{PromptTokens: 25, CompletionTokens: 5, TotalTokens: 30, CachedTokens: 10}
+	require.NoError(t, store.WriteAttempt(1, "skill", result))
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := RunMetrics(read, "run-1", "", "")
+	assert.Equal(t, []int{30}, metrics.Tokens)
+	assert.Equal(t, []int{25}, metrics.Prompt)
+	assert.Equal(t, []int{5}, metrics.Completion)
+	assert.Equal(t, []int{10}, metrics.Cached)
+	assert.Equal(t, []float64{0.4}, metrics.CacheRatios)
+}
+
 func TestScenarioCriteriaComparesConditions(t *testing.T) {
 	root := t.TempDir()
 	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill", "baseline"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})

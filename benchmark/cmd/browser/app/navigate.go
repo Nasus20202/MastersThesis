@@ -17,7 +17,7 @@ func (m *Model) move(delta int) {
 		return
 	}
 	height := m.contentHeight()
-	visible := max(1, screens.DetailsHeight(m.width, height)-ui.LineCount(m.view.DetailsHead(current)))
+	visible := max(1, screens.DetailsHeight(m.width, height)-ui.LineCount(m.view.DetailsHead(current, screens.PaneWidth(m.width))))
 	maxOffset := max(0, len(m.view.DetailsLines(current, screens.PaneWidth(m.width)))-visible)
 	current.Offset = max(0, min(current.Offset+delta, maxOffset))
 }

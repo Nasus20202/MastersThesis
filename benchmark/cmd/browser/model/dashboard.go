@@ -13,9 +13,13 @@ type Metrics struct {
 	Failed    int
 	MeanScore float64
 
-	Durations []float64
-	Turns     []int
-	Tokens    []int
+	Durations   []float64
+	Turns       []int
+	Tokens      []int
+	Prompt      []int
+	Completion  []int
+	Cached      []int
+	CacheRatios []float64
 
 	Terminations map[string]int
 	Criteria     map[string]CriterionStat
@@ -67,6 +71,10 @@ func gather(store *Store, refs []ref) Metrics {
 			agent := attempt.Benchmark.Agent
 			metrics.Turns = append(metrics.Turns, agent.Turns)
 			metrics.Tokens = append(metrics.Tokens, agent.TokenUsage.TotalTokens)
+			metrics.Prompt = append(metrics.Prompt, agent.TokenUsage.PromptTokens)
+			metrics.Completion = append(metrics.Completion, agent.TokenUsage.CompletionTokens)
+			metrics.Cached = append(metrics.Cached, agent.TokenUsage.CachedTokens)
+			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens))
 			metrics.Terminations[agent.Termination]++
 		}
 		if attempt.Error() != "" || attempt.Failure() != nil {
@@ -167,6 +175,14 @@ func Ratio(passed, total int) float64 {
 		return 0
 	}
 	return float64(passed) / float64(total)
+}
+
+// CacheRatio is the cached fraction of a prompt, or zero with no prompt.
+func CacheRatio(prompt, cached int) float64 {
+	if prompt <= 0 {
+		return 0
+	}
+	return float64(cached) / float64(prompt)
 }
 
 // Mean is the arithmetic mean of values.
