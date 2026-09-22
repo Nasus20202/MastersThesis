@@ -118,10 +118,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 
 	defer func() {
 		if err := r.cleanupCluster(cluster, logger); err != nil {
-			runErr = errors.Join(runErr, err)
-			if result.Failure == nil {
-				result.Failure = newFailureEvidence("cleanup cluster", err)
-			}
+			joinCleanupError(&runErr, &result.Failure, "cleanup cluster", err)
 		}
 	}()
 
@@ -141,10 +138,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 		}
 		defer func() {
 			if err := r.cleanupSandbox(setup, logger); err != nil {
-				runErr = errors.Join(runErr, err)
-				if result.Failure == nil {
-					result.Failure = newFailureEvidence("cleanup setup", err)
-				}
+				joinCleanupError(&runErr, &result.Failure, "cleanup setup", err)
 			}
 		}()
 		executor, ok := setup.(sandboxintegration.Executor)
@@ -165,10 +159,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 		}
 		defer func() {
 			if err := r.cleanupSandbox(sandbox, logger); err != nil {
-				runErr = errors.Join(runErr, err)
-				if result.Failure == nil {
-					result.Failure = newFailureEvidence("cleanup sandbox", err)
-				}
+				joinCleanupError(&runErr, &result.Failure, "cleanup sandbox", err)
 			}
 		}()
 		if useAgent && r.AgentFactory != nil {
@@ -191,6 +182,15 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	return result, err
 }
 
+// joinCleanupError joins a cleanup error into runErr and, if no failure has
+// been recorded yet for this run, records phase as the failing step.
+func joinCleanupError(runErr *error, failure **FailureEvidence, phase string, err error) {
+	*runErr = errors.Join(*runErr, err)
+	if *failure == nil {
+		*failure = newFailureEvidence(phase, err)
+	}
+}
+
 func (r Runner) agentCondition() string {
 	if condition := strings.TrimSpace(r.Condition); condition != "" {
 		return condition
@@ -198,28 +198,31 @@ func (r Runner) agentCondition() string {
 	return "baseline"
 }
 
-func (r Runner) newAgent(executor sandboxintegration.Executor, logger *slog.Logger) (rootagent.Agent, error) {
-	agent, err := r.AgentFactory(executor)
+// wrapFactory calls a component factory, logs and wraps a returned error
+// under errLabel, and turns a nil result into an error, so every factory
+// wrapper below only has to name its logger prefix and error label.
+func wrapFactory[T any](logger *slog.Logger, logLabel, errLabel string, call func() (T, error)) (T, error) {
+	value, err := call()
 	if err != nil {
-		logger.Error("agent factory failed", "error", err)
-		return nil, fmt.Errorf("create model agent: %w", err)
+		logger.Error(logLabel+" factory failed", "error", err)
+		return value, fmt.Errorf("create %s: %w", errLabel, err)
 	}
-	if agent == nil {
-		return nil, errors.New("create model agent: factory returned a nil agent")
+	if any(value) == nil {
+		return value, fmt.Errorf("create %s: factory returned a nil %s", errLabel, errLabel)
 	}
-	return agent, nil
+	return value, nil
+}
+
+func (r Runner) newAgent(executor sandboxintegration.Executor, logger *slog.Logger) (rootagent.Agent, error) {
+	return wrapFactory(logger, "agent", "model agent", func() (rootagent.Agent, error) {
+		return r.AgentFactory(executor)
+	})
 }
 
 func (r Runner) newCluster(name string, logger *slog.Logger) (clusterintegration.Cluster, error) {
-	cluster, err := r.ClusterFactory(name)
-	if err != nil {
-		logger.Error("cluster factory failed", "error", err)
-		return nil, fmt.Errorf("create cluster: %w", err)
-	}
-	if cluster == nil {
-		return nil, errors.New("create cluster: factory returned a nil cluster")
-	}
-	return cluster, nil
+	return wrapFactory(logger, "cluster", "cluster", func() (clusterintegration.Cluster, error) {
+		return r.ClusterFactory(name)
+	})
 }
 
 func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cluster, name string, logger *slog.Logger) error {
@@ -232,57 +235,42 @@ func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cl
 }
 
 func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
-	sandbox, err := r.SandboxFactory(name, kubeconfigPath)
-	if err != nil {
-		logger.Error("sandbox factory failed", "error", err)
-		return nil, fmt.Errorf("create sandbox: %w", err)
-	}
-	if sandbox == nil {
-		return nil, errors.New("create sandbox: factory returned a nil sandbox")
-	}
-	return sandbox, nil
+	return wrapFactory(logger, "sandbox", "sandbox", func() (sandboxintegration.Sandbox, error) {
+		return r.SandboxFactory(name, kubeconfigPath)
+	})
 }
 
 func (r Runner) newSetup(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
-	setup, err := r.SetupFactory(name, kubeconfigPath)
-	if err != nil {
-		logger.Error("setup factory failed", "error", err)
-		return nil, fmt.Errorf("create setup: %w", err)
-	}
-	if setup == nil {
-		return nil, errors.New("create setup: factory returned a nil sandbox")
-	}
-	return setup, nil
+	return wrapFactory(logger, "setup", "setup", func() (sandboxintegration.Sandbox, error) {
+		return r.SetupFactory(name, kubeconfigPath)
+	})
 }
 
-func (r Runner) startSetup(ctx context.Context, setup sandboxintegration.Sandbox, logger *slog.Logger) error {
-	if r.SetupImageBuilder == nil {
-		if err := setup.Build(ctx); err != nil {
-			logger.Error("setup image build failed", "error", err)
-			return fmt.Errorf("build setup image: %w", err)
-		}
-	}
-	if err := setup.Start(ctx); err != nil {
-		logger.Error("setup start failed", "error", err)
-		return fmt.Errorf("start setup: %w", err)
-	}
-	logger.Info("setup started")
-	return nil
-}
-
-func (r Runner) startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
-	if r.SandboxImageBuilder == nil {
+// startSandboxLike builds sandbox (if no imageBuilder was supplied, meaning no
+// image was pre-built for it) and starts it, logging under label ("setup" or
+// "sandbox"). Shared by startSetup and startSandbox, which only differ in
+// which sandbox/image-builder pair they operate on.
+func startSandboxLike(ctx context.Context, sandbox sandboxintegration.Sandbox, imageBuilder sandboxintegration.ImageBuilder, label string, logger *slog.Logger) error {
+	if imageBuilder == nil {
 		if err := sandbox.Build(ctx); err != nil {
-			logger.Error("sandbox image build failed", "error", err)
-			return fmt.Errorf("build sandbox image: %w", err)
+			logger.Error(label+" image build failed", "error", err)
+			return fmt.Errorf("build %s image: %w", label, err)
 		}
 	}
 	if err := sandbox.Start(ctx); err != nil {
-		logger.Error("sandbox start failed", "error", err)
-		return fmt.Errorf("start sandbox: %w", err)
+		logger.Error(label+" start failed", "error", err)
+		return fmt.Errorf("start %s: %w", label, err)
 	}
-	logger.Info("sandbox started")
+	logger.Info(label + " started")
 	return nil
+}
+
+func (r Runner) startSetup(ctx context.Context, setup sandboxintegration.Sandbox, logger *slog.Logger) error {
+	return startSandboxLike(ctx, setup, r.SetupImageBuilder, "setup", logger)
+}
+
+func (r Runner) startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
+	return startSandboxLike(ctx, sandbox, r.SandboxImageBuilder, "sandbox", logger)
 }
 
 func (r Runner) cleanupSandbox(sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {

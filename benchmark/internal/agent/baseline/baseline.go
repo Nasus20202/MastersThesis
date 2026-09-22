@@ -2,8 +2,6 @@ package baseline
 
 import (
 	"context"
-	"errors"
-	"strings"
 
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -33,16 +31,10 @@ func New(client inference.Client, shell common.Shell, config common.Config) (*Ag
 }
 
 func (a *Agent) Run(ctx context.Context, task string) (common.Result, error) {
-	if a == nil || a.delegate == nil {
-		return common.Result{}, errors.New("baseline agent is not initialized")
-	}
-	if strings.TrimSpace(task) == "" {
-		return common.Result{}, errors.New("agent task is required")
-	}
-	result, err := a.delegate.Run(ctx, baselinePrompt(task))
-	result.Condition = "baseline"
-	result.Task = task
-	return result, err
+	initialized := a != nil && a.delegate != nil
+	return common.RunAgent(initialized, "baseline", "baseline", task, func() (common.Result, error) {
+		return a.delegate.Run(ctx, baselinePrompt(task))
+	})
 }
 
 func baselinePrompt(task string) string {

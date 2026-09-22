@@ -146,6 +146,23 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
+// RunAgent guards the shared preconditions for a condition's Run method
+// (the receiver must be initialized and task must be non-blank), then calls
+// run and stamps condition and task onto the result. Used by the baseline,
+// prompt, and skill agents, which otherwise duplicate this boilerplate.
+func RunAgent(initialized bool, name, condition, task string, run func() (Result, error)) (Result, error) {
+	if !initialized {
+		return Result{}, fmt.Errorf("%s agent is not initialized", name)
+	}
+	if strings.TrimSpace(task) == "" {
+		return Result{}, errors.New("agent task is required")
+	}
+	result, err := run()
+	result.Condition = condition
+	result.Task = task
+	return result, err
+}
+
 func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
 	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
 }
