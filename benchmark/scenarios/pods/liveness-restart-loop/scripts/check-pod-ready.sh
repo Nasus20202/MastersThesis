@@ -1,20 +1,21 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=90
-settle_seconds=8
 expected_replicas=2
 deadline=$(( $(date +%s) + timeout_seconds ))
+consecutive=0
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    ready="$(kubectl get deployment app -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
-    if [ "$ready" = "$expected_replicas" ]; then
-        sleep "$settle_seconds"
-        ready_after="$(kubectl get deployment app -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
-        if [ "$ready_after" = "$expected_replicas" ]; then
-            printf 'ready_replicas=%s\n' "$ready_after"
+    if workload_rollout_ready deployment app "$expected_replicas"; then
+        consecutive=$((consecutive + 1))
+        if [ "$consecutive" -ge 3 ]; then
             exit 0
         fi
+    else
+        consecutive=0
     fi
     sleep 2
 done

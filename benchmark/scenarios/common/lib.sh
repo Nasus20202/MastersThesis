@@ -4,10 +4,19 @@
 
 # Prints the name of a Running, non-terminating Pod matching the label
 # selector passed as the first argument, or nothing when no such Pod exists.
-# Terminating Pods from a previous generation are ignored so a rollout in
-# progress cannot be mistaken for the current state.
+# When the selector matches a Deployment, only Pods from its current
+# ReplicaSet (the one with the highest deployment.kubernetes.io/revision) are
+# considered, so a rollout in progress cannot return a Pod from the previous
+# generation. Terminating Pods are always ignored.
 running_pod() {
-    kubectl get pods -l "$1" \
+    _selector=$1
+    _hash="$(kubectl get replicasets -l "$_selector" \
+        -o go-template='{{range .items}}{{index .metadata.annotations "deployment.kubernetes.io/revision"}} {{.metadata.labels.pod-template-hash}}{{"\n"}}{{end}}' \
+        2>/dev/null | sort -n | tail -n 1 | cut -d' ' -f2)"
+    if [ -n "$_hash" ]; then
+        _selector="$_selector,pod-template-hash=$_hash"
+    fi
+    kubectl get pods -l "$_selector" \
         -o go-template='{{range .items}}{{if and (eq .status.phase "Running") (not .metadata.deletionTimestamp)}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' \
         2>/dev/null | head -n 1
 }
