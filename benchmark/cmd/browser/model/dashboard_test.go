@@ -98,6 +98,29 @@ func TestRunMetricsOmitsThroughputWithoutTimings(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestAttemptTokensPerSecondSumsResponseTimings(t *testing.T) {
+	attempt := results.Attempt{Benchmark: &results.AttemptResult{Agent: &common.Result{Responses: []common.ResponseEvidence{
+		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
+		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 40, PredictedMS: 3000, DraftN: 20, DraftNAccepted: 13}}},
+		{Response: inference.Result{}},
+	}}}}
+
+	assert.Equal(t, 25.0, AttemptTokensPerSecond(attempt))
+	rate, ok := AttemptDraftAcceptanceRate(attempt)
+	require.True(t, ok)
+	assert.Equal(t, 0.5, rate)
+}
+
+func TestAttemptThroughputWithoutTimings(t *testing.T) {
+	attempt := results.Attempt{Benchmark: &results.AttemptResult{Agent: &common.Result{}}}
+	assert.Zero(t, AttemptTokensPerSecond(attempt))
+	_, ok := AttemptDraftAcceptanceRate(attempt)
+	assert.False(t, ok)
+	assert.Zero(t, AttemptTokensPerSecond(results.Attempt{}))
+	_, ok = AttemptDraftAcceptanceRate(results.Attempt{})
+	assert.False(t, ok)
+}
+
 func TestScenarioCriteriaComparesConditions(t *testing.T) {
 	root := t.TempDir()
 	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill", "baseline"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
