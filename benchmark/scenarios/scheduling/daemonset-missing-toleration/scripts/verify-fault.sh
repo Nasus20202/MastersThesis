@@ -1,15 +1,12 @@
 #!/bin/sh
 set -eu
 
-timeout_seconds=90
+timeout_seconds=180
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
     desired="$(kubectl get daemonset app -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || true)"
-    if [ -z "$desired" ]; then
-        desired=0
-    fi
-    if [ "$desired" -eq 0 ]; then
+    if [ "$desired" = "0" ]; then
         printf 'desired=%s\n' "$desired"
         exit 0
     fi

@@ -1,11 +1,13 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=90
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    pod="$(kubectl get pods -l app=app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    pod="$(running_pod app=app)"
     if [ -n "$pod" ]; then
         if kubectl exec "$pod" -- sh -c 'test -s /var/run/secrets/kubernetes.io/serviceaccount/token && wget -q -O /dev/null --no-check-certificate --header "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc/api/v1/namespaces/default/configmaps/app-config' >/dev/null 2>&1; then
             printf 'service account read configmap/app-config through the API\n'

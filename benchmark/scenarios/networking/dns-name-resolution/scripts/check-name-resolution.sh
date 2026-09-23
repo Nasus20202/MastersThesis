@@ -1,12 +1,14 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=90
 deadline=$(( $(date +%s) + timeout_seconds ))
 consecutive=0
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    pod="$(kubectl get pods -l app=app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    pod="$(running_pod app=app)"
     if [ -n "$pod" ]; then
         status="$(kubectl exec "$pod" -- cat /shared/status 2>/dev/null || true)"
         if [ "$status" = "ok" ]; then

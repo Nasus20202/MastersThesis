@@ -1,0 +1,130 @@
+name: Benchmark Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "benchmark/**"
+      - "scripts/validation-shards.sh"
+      - "scripts/validation-summary.sh"
+      - "Makefile"
+      - ".github/workflows/benchmark-validation.yaml"
+  pull_request:
+    paths:
+      - "benchmark/**"
+      - "scripts/validation-shards.sh"
+      - "scripts/validation-summary.sh"
+      - "Makefile"
+      - ".github/workflows/benchmark-validation.yaml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: benchmark-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      categories: ${{ steps.list.outputs.categories }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Discover validation shards
+        id: list
+        run: |
+          categories="$(scripts/validation-shards.sh)"
+          printf 'categories=%s\n' "$categories" >> "$GITHUB_OUTPUT"
+          printf 'Scenario shards: %s\n' "$categories"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build sandbox image
+        uses: docker/build-push-action@v7
+        with:
+          context: benchmark/docker/sandbox
+          file: benchmark/docker/sandbox/Dockerfile.ubuntu-26.04
+          tags: benchmark-sandbox:ubuntu-26.04
+          load: true
+          cache-from: type=gha,scope=benchmark-sandbox:ubuntu-26.04
+          cache-to: type=gha,mode=max,scope=benchmark-sandbox:ubuntu-26.04
+
+      - name: Build setup image
+        uses: docker/build-push-action@v7
+        with:
+          context: benchmark/docker/setup
+          file: benchmark/docker/setup/Dockerfile.ubuntu-26.04
+          tags: benchmark-setup:ubuntu-26.04
+          load: true
+          cache-from: type=gha,scope=benchmark-setup:ubuntu-26.04
+          cache-to: type=gha,mode=max,scope=benchmark-setup:ubuntu-26.04
+
+      - name: Export images
+        run: docker save benchmark-sandbox:ubuntu-26.04 benchmark-setup:ubuntu-26.04 | gzip -1 > benchmark-images.tar.gz
+
+      - name: Upload images
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-images
+          path: benchmark-images.tar.gz
+          compression-level: 0
+          retention-days: 1
+
+  validate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        category: ${{ fromJSON(needs.prepare.outputs.categories) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: benchmark/go.mod
+          cache-dependency-path: benchmark/go.sum
+
+      - name: Install Kind and kubectl
+        uses: helm/kind-action@v1
+        with:
+          # renovate: datasource=github-releases depName=kubernetes-sigs/kind
+          version: v0.33.0
+          install_only: true
+          # renovate: datasource=github-releases depName=kubernetes/kubernetes
+          kubectl_version: v1.37.0
+
+      - name: Download images
+        uses: actions/download-artifact@v7
+        with:
+          name: benchmark-images
+
+      - name: Load images
+        run: gunzip -c benchmark-images.tar.gz | docker load
+
+      - name: Validate benchmark scenarios
+        run: make benchmark-validate SCENARIO=scenarios/${{ matrix.category }}
+
+      - name: Summarize results
+        if: always()
+        run: scripts/validation-summary.sh benchmark/results "${{ matrix.category }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean benchmark resources
+        if: always()
+        run: make docker-cleanup
+
+      - name: Upload shard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-validation-results-${{ matrix.category }}
+          path: benchmark/results/
+          if-no-files-found: ignore
