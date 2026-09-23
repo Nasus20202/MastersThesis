@@ -1,20 +1,16 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=150
 stable_seconds=20
 deadline=$(( $(date +%s) + timeout_seconds ))
 
-ready_now() {
-    replicas="$(kubectl get deployment app -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
-    ready="$(kubectl get deployment app -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
-    [ "$replicas" = "1" ] && [ "$ready" = "1" ]
-}
-
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    if ready_now; then
+    if workload_ready deployment app 1 >/dev/null; then
         sleep "$stable_seconds"
-        if ready_now; then
+        if workload_ready deployment app 1 >/dev/null; then
             printf 'replicas=1 ready=1 for %ss\n' "$stable_seconds"
             exit 0
         fi

@@ -1,15 +1,13 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=90
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    replicas="$(kubectl get deployment app -n restricted-app -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
-    updated="$(kubectl get deployment app -n restricted-app -o jsonpath='{.status.updatedReplicas}' 2>/dev/null || true)"
-    ready="$(kubectl get deployment app -n restricted-app -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
-    if [ "$replicas" = "1" ] && [ "$updated" = "1" ] && [ "$ready" = "1" ]; then
-        printf 'replicas=%s updated=%s ready=%s\n' "$replicas" "$updated" "$ready"
+    if workload_rollout_ready deployment app 1 restricted-app; then
         exit 0
     fi
     sleep 2

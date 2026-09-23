@@ -83,16 +83,11 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.Cached = append(metrics.Cached, agent.TokenUsage.CachedTokens)
 			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens))
 			metrics.Terminations[agent.Termination]++
-			for _, response := range agent.Responses {
-				timings := response.Response.Timings
-				if timings == nil {
-					continue
-				}
-				metrics.PredictedTokens += timings.PredictedN
-				metrics.PredictedSeconds += timings.PredictedMS / 1000
-				metrics.DraftTokens += timings.DraftN
-				metrics.DraftAccepted += timings.DraftNAccepted
-			}
+			predicted, seconds, draft, accepted := attemptTimings(attempt)
+			metrics.PredictedTokens += predicted
+			metrics.PredictedSeconds += seconds
+			metrics.DraftTokens += draft
+			metrics.DraftAccepted += accepted
 		}
 		if attempt.Error() != "" || attempt.Failure() != nil {
 			metrics.Terminations["error"]++
@@ -176,6 +171,45 @@ func AttemptDuration(attempt results.Attempt) float64 {
 		total += criterion.DurationSeconds
 	}
 	return total
+}
+
+// AttemptTokensPerSecond is one attempt's decode throughput from its generation
+// timings, summed over responses like the dashboard metrics.
+func AttemptTokensPerSecond(attempt results.Attempt) float64 {
+	predicted, seconds, _, _ := attemptTimings(attempt)
+	if seconds <= 0 {
+		return 0
+	}
+	return float64(predicted) / seconds
+}
+
+// AttemptDraftAcceptanceRate is one attempt's accepted fraction of drafted
+// tokens. It is false when the attempt recorded no drafts.
+func AttemptDraftAcceptanceRate(attempt results.Attempt) (float64, bool) {
+	_, _, draft, accepted := attemptTimings(attempt)
+	if draft <= 0 {
+		return 0, false
+	}
+	return float64(accepted) / float64(draft), true
+}
+
+// attemptTimings sums the generation timings recorded across an attempt's
+// responses.
+func attemptTimings(attempt results.Attempt) (predicted int, seconds float64, draft, accepted int) {
+	if attempt.Benchmark == nil || attempt.Benchmark.Agent == nil {
+		return 0, 0, 0, 0
+	}
+	for _, response := range attempt.Benchmark.Agent.Responses {
+		timings := response.Response.Timings
+		if timings == nil {
+			continue
+		}
+		predicted += timings.PredictedN
+		seconds += timings.PredictedMS / 1000
+		draft += timings.DraftN
+		accepted += timings.DraftNAccepted
+	}
+	return
 }
 
 // OutcomeRate is the full-success rate of a metrics set.

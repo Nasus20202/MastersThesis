@@ -1,14 +1,13 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=90
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
-    replicas="$(kubectl get statefulset app -o jsonpath='{.spec.replicas}' 2>/dev/null || true)"
-    ready="$(kubectl get statefulset app -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)"
-    if [ "$replicas" = "2" ] && [ "$ready" = "2" ]; then
-        printf 'replicas=%s ready=%s\n' "$replicas" "$ready"
+    if workload_ready statefulset app 2; then
         exit 0
     fi
     sleep 2

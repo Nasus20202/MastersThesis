@@ -64,6 +64,12 @@ func (v *View) buildDetailsHead(route *Route, width int) string {
 			components.MetricCard("cache %", fmt.Sprintf("%.2f%%", model.CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens)*100), ui.Section),
 			components.MetricCard("termination", agent.Termination, ui.Termination(agent.Termination)),
 		}
+		if rate := model.AttemptTokensPerSecond(attempt); rate > 0 {
+			cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", rate), ui.Section))
+		}
+		if rate, ok := model.AttemptDraftAcceptanceRate(attempt); ok {
+			cards = append(cards, components.MetricCard("draft accept %", fmt.Sprintf("%.0f%%", rate*100), ui.Section))
+		}
 	} else if attempt.Validation != nil {
 		cards = []string{
 			components.MetricCard("case", attempt.Validation.CaseID, ui.Section),

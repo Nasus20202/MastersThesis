@@ -4,6 +4,7 @@ BENCHMARK_DIR := benchmark
 LLAMA_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
+VALIDATION ?= $(SCENARIO)
 CORPUS ?= scenarios/
 AGENT ?= all
 REPEAT ?= 1
@@ -41,6 +42,8 @@ BENCHMARK_RESUME_ARGS :=
 ifneq ($(strip $(RESUME)),)
 BENCHMARK_RESUME_ARGS += --resume $(RESUME)
 endif
+BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
+BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 
 .DEFAULT_GOAL := help
 
@@ -68,7 +71,8 @@ help:
 	@printf '%s\n' 'Benchmark parameters:'
 	@printf '  %-28s %s\n' \
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
-		'SCENARIO=PATH' 'Select scenario or validation directory/file (default: scenarios/).' \
+		'SCENARIO=PATH...' 'Select scenario directories/files; space-separated (default: scenarios/).' \
+		'VALIDATION=PATH...' 'Select validation directories/files; space-separated (default: scenarios/).' \
 		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, or skill benchmark agents (default: all).' \
 		'CONFIG=PATH' 'Overlay a benchmark YAML config file.' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
@@ -125,10 +129,10 @@ browser:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
 
 benchmark: registry-start llama-start
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --scenario $(SCENARIO) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
 benchmark-validate: registry-start
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) --validate $(SCENARIO) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_VALIDATION_ARGS) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
 
 check-corpus:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --check-corpus $(CORPUS)

@@ -1,13 +1,15 @@
 #!/bin/sh
 set -eu
 
+. "$(dirname "$0")/../../../common/lib.sh"
+
 timeout_seconds=120
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
     value="$(kubectl get deployment app -o jsonpath='{.spec.template.spec.containers[?(@.name=="client")].env[?(@.name=="PEER_HOST")].value}' 2>/dev/null || true)"
     available="$(kubectl get deployment app -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)"
-    pod="$(kubectl get pods -l app=app -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    pod="$(running_pod app=app)"
     status=""
     if [ -n "$pod" ]; then
         status="$(kubectl exec "$pod" -- cat /shared/status 2>/dev/null || true)"
