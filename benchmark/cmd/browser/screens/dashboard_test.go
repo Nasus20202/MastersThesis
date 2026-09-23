@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,16 @@ func sum(values []int) int {
 		total += value
 	}
 	return total
+}
+
+func TestVitalsIncludeDecodingThroughput(t *testing.T) {
+	view := &View{}
+	metrics := model.Metrics{PredictedTokens: 100, PredictedSeconds: 4, DraftTokens: 50, DraftAccepted: 25}
+	out := strings.Join(view.vitals(metrics), " ")
+	assert.Contains(t, out, "out t/s")
+	assert.Contains(t, out, "25.0")
+	assert.Contains(t, out, "draft accept %")
+	assert.Contains(t, out, "50%")
 }
 
 func TestCriteriaMatrixRendersCells(t *testing.T) {

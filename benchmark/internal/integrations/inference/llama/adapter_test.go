@@ -55,6 +55,34 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 	assert.Equal(t, 5, response.Timings.PredictedN)
 }
 
+func TestAdapterDecodesDraftTimings(t *testing.T) {
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			return testResponse(http.StatusOK, `{
+                "id": "chatcmpl-draft",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "done"},
+                    "finish_reason": "stop"
+                }],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 6, "total_tokens": 11},
+                "timings": {"prompt_n": 5, "prompt_ms": 2.0, "predicted_n": 6, "predicted_ms": 3.0, "draft_n": 4, "draft_n_accepted": 3}
+            }`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	response, err := adapter.Chat(context.Background(), []inference.Message{{Role: "user", Content: "Inspect"}}, nil, inference.Options{})
+	require.NoError(t, err)
+	require.NotNil(t, response.Timings)
+	assert.Equal(t, 4, response.Timings.DraftN)
+	assert.Equal(t, 3, response.Timings.DraftNAccepted)
+}
+
 func TestAdapterPreservesReasoningContent(t *testing.T) {
 	client, err := NewClient(Config{
 		BaseURL: "http://llama.test",

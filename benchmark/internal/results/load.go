@@ -281,6 +281,7 @@ func deriveSummary(metadata RunMetadata, attempts []AttemptRef) (*RunSummary, er
 			return nil, fmt.Errorf("decode attempt %q: %w", ref.Path, err)
 		}
 		accumulator.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
+		accumulator.addThroughput(artifact.Condition, artifact.Agent)
 	}
 	state := metadata.State
 	if state == "" {

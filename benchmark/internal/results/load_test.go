@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,4 +140,30 @@ func TestLoadRunDerivesSummaryWhenResultsMissing(t *testing.T) {
 	assert.Equal(t, RunStateRunning, snapshot.Summary.State)
 	condition := snapshot.Summary.ByCondition["skill"]
 	assert.Equal(t, 0.5, condition.MeanScore)
+}
+
+func TestListRunsDerivesThroughputWhenResultsMissing(t *testing.T) {
+	root := t.TempDir()
+	store, err := New(root, RunMetadata{
+		RunID: "run-interrupted", StartedAt: time.Now().UTC(),
+		Agents: []string{"skill"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"scenario"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "skill", orchestration.RunResult{
+		ScenarioID: "scenario", Condition: "skill",
+		Agent: &common.Result{Responses: []common.ResponseEvidence{
+			{Response: inference.Result{Timings: &inference.Timings{PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
+		}},
+	}))
+	require.NoError(t, os.Remove(filepath.Join(root, "run-interrupted", "results.json")))
+
+	runs, err := ListRuns(root)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	throughput := runs[0].Summary.ByCondition["skill"].Throughput
+	require.NotNil(t, throughput)
+	assert.Equal(t, 60, throughput.PredictedTokens)
+	assert.Equal(t, 60.0, throughput.PredictedTokensPerSecond)
+	require.NotNil(t, throughput.DraftAcceptanceRate)
+	assert.Equal(t, 0.4, *throughput.DraftAcceptanceRate)
 }
