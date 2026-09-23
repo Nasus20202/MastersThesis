@@ -21,6 +21,13 @@ type Metrics struct {
 	Cached      []int
 	CacheRatios []float64
 
+	// Decoding throughput summed over responses, so long responses weigh more
+	// than short ones. Draft counters are zero when speculation is disabled.
+	PredictedTokens  int
+	PredictedSeconds float64
+	DraftTokens      int
+	DraftAccepted    int
+
 	Terminations map[string]int
 	Criteria     map[string]CriterionStat
 }
@@ -76,6 +83,16 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.Cached = append(metrics.Cached, agent.TokenUsage.CachedTokens)
 			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens))
 			metrics.Terminations[agent.Termination]++
+			for _, response := range agent.Responses {
+				timings := response.Response.Timings
+				if timings == nil {
+					continue
+				}
+				metrics.PredictedTokens += timings.PredictedN
+				metrics.PredictedSeconds += timings.PredictedMS / 1000
+				metrics.DraftTokens += timings.DraftN
+				metrics.DraftAccepted += timings.DraftNAccepted
+			}
 		}
 		if attempt.Error() != "" || attempt.Failure() != nil {
 			metrics.Terminations["error"]++
@@ -183,6 +200,24 @@ func CacheRatio(prompt, cached int) float64 {
 		return 0
 	}
 	return float64(cached) / float64(prompt)
+}
+
+// PredictedTokensPerSecond is decode throughput from summed tokens and seconds,
+// or zero when no generation timings were recorded.
+func PredictedTokensPerSecond(metrics Metrics) float64 {
+	if metrics.PredictedSeconds <= 0 {
+		return 0
+	}
+	return float64(metrics.PredictedTokens) / metrics.PredictedSeconds
+}
+
+// DraftAcceptanceRate is the accepted fraction of drafted tokens. It is false
+// when no drafts were recorded, as with speculative decoding disabled.
+func DraftAcceptanceRate(metrics Metrics) (float64, bool) {
+	if metrics.DraftTokens <= 0 {
+		return 0, false
+	}
+	return float64(metrics.DraftAccepted) / float64(metrics.DraftTokens), true
 }
 
 // Mean is the arithmetic mean of values.

@@ -26,15 +26,19 @@ The current execution host has an AMD Ryzen 5 3600 CPU (6 cores, 12 threads), 32
 
 The model-serving interface and material runtime settings must be recorded for reproducibility.
 
+## Speculative decoding
+
+Every model profile serves with multi-token prediction enabled (`--spec-type draft-mtp`), which changes decoding speed rather than the generated text. It applies to all conditions and can be disabled with `LLAMA_SPEC_TYPE=none`.
+
+Qwen 3.5 artifacts carry the prediction layer inside the target file. Gemma 4 publishes its drafter as a separate model, served as GGUF by the same repository as the target. Because a drafter belongs to one target, it is attached per model through the llama.cpp router preset `benchmark/models-preset.ini`; drafters are downloaded under `benchmark/models/drafts/`.
+
+Decoding throughput and draft acceptance are recorded per condition, because acceptance depends on the model and on how repetitive a condition's output is.
+
 ## Primary model
 
 Gemma 4 E4B is the primary model for the current experiment.
 
-The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it).
-
-The current reproducible implementation uses `gemma-4-E4B_q4_0-it.gguf` from [google/gemma-4-E4B-it-qat-q4_0-gguf](https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf) at repository revision `4b4a2c1d584be7264f87aac328a1bc739ce81b6c`. The downloaded file has SHA-256 `676c35070db6dbe52f93e9c864ee0fba4eddea94b9c875d9cb10daff453fbaee`. This artifact remains provisional for final evaluation and may be superseded through a recorded decision.
-
-The selected artifact and runtime configuration are maintained in `benchmark/config.env`.
+The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it). The served artifact is the [unsloth Gemma 4 E4B QAT GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF), a quantization of the Google QAT unquantized weights. Exact repositories, revisions and file hashes are pinned in the model profiles, and the runtime configuration is maintained in `benchmark/config.env`. This artifact remains provisional for final evaluation and may be superseded through a recorded decision.
 
 ## Conditional alternatives
 
@@ -95,7 +99,8 @@ Before final evaluation, record:
 - local registry image digest,
 - llama.cpp image and revision,
 - model repository, revision and file hash,
-- quantization and runtime parameters,
+- drafter repository, revision and file hash,
+- quantization, decoding and runtime parameters,
 - retrieval and embedding artifacts,
 - fine-tuning adapter and training configuration,
 - harness tool versions and external-access configuration.

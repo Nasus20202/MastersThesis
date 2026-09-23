@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
@@ -131,6 +132,7 @@ func Resume(root, runID string) (*Store, error) {
 		}
 		store.recorded[attemptKey(artifact.ScenarioID, artifact.Condition, artifact.Attempt)] = struct{}{}
 		store.summary.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
+		store.summary.addThroughput(artifact.Condition, artifact.Agent)
 	}
 	if err := store.writeRunMetadata(); err != nil {
 		return nil, err
@@ -262,6 +264,7 @@ func (s *Store) recordAttempt(path string, artifact any, condition, recordKey, s
 	}
 	s.recorded[attemptKey(scenarioID, recordKey, artifactAttempt(artifact))] = struct{}{}
 	s.summary.add(condition, scenarioID, fullSuccess, score, errorText, validationPassed)
+	s.summary.addThroughput(condition, artifactAgent(artifact))
 	if err := s.writeSummary(); err != nil {
 		return err
 	}
@@ -277,6 +280,15 @@ func artifactAttempt(artifact any) int {
 	default:
 		return 0
 	}
+}
+
+// artifactAgent returns the model-loop evidence of an attempt, or nil for
+// validation attempts, which run no model.
+func artifactAgent(artifact any) *common.Result {
+	if value, ok := artifact.(AttemptResult); ok {
+		return value.Agent
+	}
+	return nil
 }
 
 func (s *Store) Finalize(completedAt time.Time) error {

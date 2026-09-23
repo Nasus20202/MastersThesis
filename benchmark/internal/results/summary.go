@@ -1,6 +1,10 @@
 package results
 
-import "time"
+import (
+	"time"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+)
 
 type summaryAccumulator struct {
 	metadata         RunMetadata
@@ -17,7 +21,60 @@ type conditionAccumulator struct {
 	errorCount             int
 	validationPassedCount  int
 	validationAttemptCount int
+	throughput             throughputAccumulator
 	scenarios              map[string]*scenarioAccumulator
+}
+
+type throughputAccumulator struct {
+	promptTokens    int
+	promptMS        float64
+	predictedTokens int
+	predictedMS     float64
+	draftTokens     int
+	draftAccepted   int
+}
+
+func (a *throughputAccumulator) add(result *common.Result) {
+	if result == nil {
+		return
+	}
+	for _, response := range result.Responses {
+		timings := response.Response.Timings
+		if timings == nil {
+			continue
+		}
+		a.promptTokens += timings.PromptN
+		a.promptMS += timings.PromptMS
+		a.predictedTokens += timings.PredictedN
+		a.predictedMS += timings.PredictedMS
+		a.draftTokens += timings.DraftN
+		a.draftAccepted += timings.DraftNAccepted
+	}
+}
+
+func (a *throughputAccumulator) summary() *Throughput {
+	if a.promptTokens == 0 && a.predictedTokens == 0 {
+		return nil
+	}
+	result := &Throughput{
+		PromptTokens:     a.promptTokens,
+		PromptSeconds:    a.promptMS / 1000,
+		PredictedTokens:  a.predictedTokens,
+		PredictedSeconds: a.predictedMS / 1000,
+	}
+	if result.PromptSeconds > 0 {
+		result.PromptTokensPerSecond = float64(a.promptTokens) / result.PromptSeconds
+	}
+	if result.PredictedSeconds > 0 {
+		result.PredictedTokensPerSecond = float64(a.predictedTokens) / result.PredictedSeconds
+	}
+	if a.draftTokens > 0 {
+		rate := float64(a.draftAccepted) / float64(a.draftTokens)
+		result.DraftTokens = a.draftTokens
+		result.DraftTokensAccepted = a.draftAccepted
+		result.DraftAcceptanceRate = &rate
+	}
+	return result
 }
 
 type scenarioAccumulator struct {
@@ -114,6 +171,12 @@ func (a *summaryAccumulator) add(conditionID, scenarioID string, fullSuccess boo
 	}
 }
 
+// addThroughput records the decoding timings of one agent attempt. Validation
+// attempts run no model and pass a nil result.
+func (a *summaryAccumulator) addThroughput(conditionID string, result *common.Result) {
+	a.condition(conditionID).throughput.add(result)
+}
+
 func (a *summaryAccumulator) summary(state RunState, completedAt *time.Time) RunSummary {
 	result := RunSummary{
 		RunID:            a.metadata.RunID,
@@ -138,6 +201,7 @@ func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) Condit
 		FullSuccessCount:      a.fullSuccessCount,
 		ErrorCount:            a.errorCount,
 		ValidationPassedCount: a.validationPassedCount,
+		Throughput:            a.throughput.summary(),
 		Scenarios:             make(map[string]ScenarioSummary, len(a.scenarios)),
 	}
 	if a.attemptCount > 0 {

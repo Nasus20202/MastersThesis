@@ -53,7 +53,24 @@ type ConditionSummary struct {
 	ErrorCount            int                        `json:"error_count"`
 	ValidationPassedCount int                        `json:"validation_passed_count,omitempty"`
 	ValidationPassRate    *float64                   `json:"validation_pass_rate,omitempty"`
+	Throughput            *Throughput                `json:"throughput,omitempty"`
 	Scenarios             map[string]ScenarioSummary `json:"scenarios,omitempty"`
+}
+
+// Throughput aggregates the decoding timings llama.cpp reports per response.
+// Rates are computed from the summed tokens and seconds rather than averaged
+// per response, so long responses weigh more than short ones.
+type Throughput struct {
+	PromptTokens             int     `json:"prompt_tokens"`
+	PromptSeconds            float64 `json:"prompt_seconds"`
+	PromptTokensPerSecond    float64 `json:"prompt_tokens_per_second"`
+	PredictedTokens          int     `json:"predicted_tokens"`
+	PredictedSeconds         float64 `json:"predicted_seconds"`
+	PredictedTokensPerSecond float64 `json:"predicted_tokens_per_second"`
+	// Draft counters are present only when speculative decoding is enabled.
+	DraftTokens         int      `json:"draft_tokens,omitempty"`
+	DraftTokensAccepted int      `json:"draft_tokens_accepted,omitempty"`
+	DraftAcceptanceRate *float64 `json:"draft_acceptance_rate,omitempty"`
 }
 
 type ScenarioSummary struct {

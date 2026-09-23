@@ -135,6 +135,8 @@ func fromLlamaTimings(timings *Timings) *inference.Timings {
 		PredictedN:         timings.PredictedN,
 		PredictedMS:        timings.PredictedMS,
 		PredictedPerSecond: timings.PredictedPerSecond,
+		DraftN:             timings.DraftN,
+		DraftNAccepted:     timings.DraftNAccepted,
 	}
 }
 

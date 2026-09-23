@@ -26,6 +26,8 @@ endif
 COMPOSE := docker compose $(COMPOSE_ENV_FILES) -f $(BENCHMARK_DIR)/docker-compose.yaml
 
 export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_QUANTIZATION LLAMA_MODEL_SHA256 LLAMA_MODEL_DIR LLAMA_MODEL_NAME
+export LLAMA_MODEL_DRAFT_REPOSITORY LLAMA_MODEL_DRAFT_REVISION LLAMA_MODEL_DRAFT_FILE LLAMA_MODEL_DRAFT_SHA256
+export LLAMA_SPEC_TYPE LLAMA_DRAFT_DIR LLAMA_SPEC_DRAFT_N_MAX
 export LLAMA_KV_UNIFIED_PER_SLOT LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
 export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
 export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
@@ -51,7 +53,7 @@ help:
 		'make format' 'Format Go, Markdown, YAML, JSON, and other supported files.' \
 		'make lint' 'Run Go vet, format checks, Prettier, and Renovate validation.' \
 		'make check' 'Run test and lint checks.' \
-		'make download-models' 'Download the configured model from Hugging Face.' \
+		'make download-models' 'Download the configured model and drafter GGUF from Hugging Face.' \
 		'make llama-start' 'Start the llama.cpp model router.' \
 		'make llama-stop' 'Stop the llama.cpp model router.' \
 		'make llama-logs' 'Follow llama.cpp model router logs.' \

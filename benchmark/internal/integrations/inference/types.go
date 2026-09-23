@@ -57,4 +57,7 @@ type Timings struct {
 	PredictedN         int     `json:"predicted_n"`
 	PredictedMS        float64 `json:"predicted_ms"`
 	PredictedPerSecond float64 `json:"predicted_per_second"`
+	// Draft counters are reported only when speculative decoding is enabled.
+	DraftN         int `json:"draft_n,omitempty"`
+	DraftNAccepted int `json:"draft_n_accepted,omitempty"`
 }

@@ -20,3 +20,4 @@ This directory contains the research design, benchmark definition, technology ch
 - [Baseline incident evaluation](research/baseline-behaviour/README.md) — Gemma 4 E4B baseline on five development incidents, 10 attempts per incident, with merged raw evidence.
 - [Prompt selection](research/prompt-selection/README.md) — six troubleshooting prompts and two follow-up combinations compared on the development scenarios, with attempt-level evidence.
 - [Skills development evaluation](research/skills-development-evaluation/README.md) — first baseline/prompt/skill comparison and the skill-only follow-up iterations, with raw evidence and configuration snapshots.
+- [Multi-token prediction draft-length tuning](research/speculative-decoding/README.md) — throughput and draft-acceptance sweep over MTP off and draft lengths 1–4 for the four served models, selecting a per-model `--spec-draft-n-max`.

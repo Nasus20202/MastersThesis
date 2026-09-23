@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 )
@@ -54,6 +55,47 @@ func TestRunMetricsAggregatesTokenUsage(t *testing.T) {
 	assert.Equal(t, []int{5}, metrics.Completion)
 	assert.Equal(t, []int{10}, metrics.Cached)
 	assert.Equal(t, []float64{0.4}, metrics.CacheRatios)
+}
+
+func TestRunMetricsAggregatesDecodingThroughput(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+	require.NoError(t, err)
+	result := attemptResult("alpha", true, 1, 10, 2)
+	result.Agent.Responses = []common.ResponseEvidence{
+		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
+		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 40, PredictedMS: 3000, DraftN: 20, DraftNAccepted: 13}}},
+		{Response: inference.Result{}},
+	}
+	require.NoError(t, store.WriteAttempt(1, "skill", result))
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := RunMetrics(read, "run-1", "", "")
+	assert.Equal(t, 100, metrics.PredictedTokens)
+	assert.Equal(t, 4.0, metrics.PredictedSeconds)
+	assert.Equal(t, 50, metrics.DraftTokens)
+	assert.Equal(t, 25, metrics.DraftAccepted)
+	assert.Equal(t, 25.0, PredictedTokensPerSecond(metrics))
+	rate, ok := DraftAcceptanceRate(metrics)
+	require.True(t, ok)
+	assert.Equal(t, 0.5, rate)
+}
+
+func TestRunMetricsOmitsThroughputWithoutTimings(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("alpha", true, 1, 10, 2)))
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := RunMetrics(read, "run-1", "", "")
+	assert.Zero(t, PredictedTokensPerSecond(metrics))
+	_, ok := DraftAcceptanceRate(metrics)
+	assert.False(t, ok)
 }
 
 func TestScenarioCriteriaComparesConditions(t *testing.T) {

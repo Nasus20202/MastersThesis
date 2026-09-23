@@ -178,7 +178,10 @@ func TestStoreResumesIncompleteRunAndRebuildsRecordedAttempts(t *testing.T) {
 	result := orchestration.RunResult{
 		ScenarioID: "scenario",
 		Condition:  "skill",
-		Grading:    orchestration.GradingResult{Score: 0.5},
+		Agent: &common.Result{Responses: []common.ResponseEvidence{
+			{Response: inference.Result{Timings: &inference.Timings{PromptN: 300, PromptMS: 1000, PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
+		}},
+		Grading: orchestration.GradingResult{Score: 0.5},
 	}
 	require.NoError(t, store.WriteAttempt(1, "skill", result))
 	require.NoError(t, store.Finalize(startedAt.Add(time.Minute)))
@@ -197,6 +200,13 @@ func TestStoreResumesIncompleteRunAndRebuildsRecordedAttempts(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &summary))
 	assert.Equal(t, RunStateCompleted, summary.State)
 	assert.Equal(t, 2, summary.AttemptsRecorded)
+
+	throughput := summary.ByCondition["skill"].Throughput
+	require.NotNil(t, throughput)
+	assert.Equal(t, 120, throughput.PredictedTokens)
+	assert.Equal(t, 60.0, throughput.PredictedTokensPerSecond)
+	require.NotNil(t, throughput.DraftAcceptanceRate)
+	assert.Equal(t, 0.4, *throughput.DraftAcceptanceRate)
 }
 
 func TestStoreResumeRejectsCompletedRun(t *testing.T) {
@@ -227,4 +237,73 @@ func TestStoreRejectsInvalidValidationAttempt(t *testing.T) {
 func TestWriteJSONReturnsMarshalErrors(t *testing.T) {
 	err := writeJSON(filepath.Join(t.TempDir(), "result.json"), make(chan int))
 	assert.Error(t, err)
+}
+
+func TestStoreSummarizesDecodingThroughputPerCondition(t *testing.T) {
+	root := t.TempDir()
+	store, err := New(root, RunMetadata{
+		RunID:       "run-throughput",
+		Agents:      []string{"baseline"},
+		Parallelism: 1,
+		RepeatCount: 2,
+		Scenarios:   []string{"scenario"},
+	})
+	require.NoError(t, err)
+
+	attemptWith := func(timings ...*inference.Timings) orchestration.RunResult {
+		responses := make([]common.ResponseEvidence, 0, len(timings))
+		for _, timing := range timings {
+			responses = append(responses, common.ResponseEvidence{Response: inference.Result{Timings: timing}})
+		}
+		return orchestration.RunResult{
+			ScenarioID: "scenario",
+			Condition:  "baseline",
+			Agent:      &common.Result{Responses: responses},
+		}
+	}
+
+	require.NoError(t, store.WriteAttempt(1, "baseline", attemptWith(
+		&inference.Timings{PromptN: 300, PromptMS: 1000, PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12},
+		nil,
+	)))
+	require.NoError(t, store.WriteAttempt(2, "baseline", attemptWith(
+		&inference.Timings{PromptN: 100, PromptMS: 1000, PredictedN: 40, PredictedMS: 3000, DraftN: 20, DraftNAccepted: 13},
+	)))
+	require.NoError(t, store.Finalize(time.Now()))
+
+	data, err := os.ReadFile(filepath.Join(root, "run-throughput", "results.json"))
+	require.NoError(t, err)
+	var summary RunSummary
+	require.NoError(t, json.Unmarshal(data, &summary))
+
+	throughput := summary.ByCondition["baseline"].Throughput
+	require.NotNil(t, throughput)
+	assert.Equal(t, 400, throughput.PromptTokens)
+	assert.Equal(t, 2.0, throughput.PromptSeconds)
+	assert.Equal(t, 200.0, throughput.PromptTokensPerSecond)
+	assert.Equal(t, 100, throughput.PredictedTokens)
+	assert.Equal(t, 4.0, throughput.PredictedSeconds)
+	assert.Equal(t, 25.0, throughput.PredictedTokensPerSecond)
+	assert.Equal(t, 50, throughput.DraftTokens)
+	assert.Equal(t, 25, throughput.DraftTokensAccepted)
+	require.NotNil(t, throughput.DraftAcceptanceRate)
+	assert.Equal(t, 0.5, *throughput.DraftAcceptanceRate)
+}
+
+func TestStoreOmitsThroughputForValidationRuns(t *testing.T) {
+	root := t.TempDir()
+	store, err := New(root, RunMetadata{
+		RunID:       "run-validation",
+		RunType:     "validation",
+		Parallelism: 1,
+		RepeatCount: 1,
+		Scenarios:   []string{"scenario"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteValidationAttempt(1, "scenario", "case", 1, true, orchestration.RunResult{ScenarioID: "scenario"}, nil))
+	require.NoError(t, store.Finalize(time.Now()))
+
+	data, err := os.ReadFile(filepath.Join(root, "run-validation", "results.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "throughput")
 }

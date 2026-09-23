@@ -314,6 +314,12 @@ func logInferenceResponse(logger *slog.Logger, ctx context.Context, turn int, re
 			"prompt_tokens_timed", response.Timings.PromptN,
 			"predicted_tokens_timed", response.Timings.PredictedN,
 		)
+		if response.Timings.DraftN > 0 {
+			args = append(args,
+				"draft_tokens", response.Timings.DraftN,
+				"draft_tokens_accepted", response.Timings.DraftNAccepted,
+			)
+		}
 	}
 	logger.InfoContext(ctx, "inference response received", args...)
 	logger.DebugContext(ctx, "inference response received",
