@@ -38,6 +38,49 @@ func attemptResult(scenario string, full bool, score, duration float64, turns in
 	}
 }
 
+func conditionResult(scenario, condition string, full bool, score, duration float64, turns int) orchestration.RunResult {
+	result := attemptResult(scenario, full, score, duration, turns)
+	result.Condition = condition
+	return result
+}
+
+func TestRunAgentMetricsGroupsConditions(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill", "baseline"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("alpha", true, 1, 10, 2)))
+	require.NoError(t, store.WriteAttempt(1, "baseline", conditionResult("alpha", "baseline", false, 0.5, 10, 2)))
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := RunAgentMetrics(read, "run-1", "", "")
+	require.Len(t, metrics, 2)
+	assert.Equal(t, 1.0, metrics["skill"].MeanScore)
+	assert.Equal(t, 1.0, OutcomeRate(metrics["skill"]))
+	assert.Equal(t, 0.5, metrics["baseline"].MeanScore)
+	assert.Equal(t, 0.0, OutcomeRate(metrics["baseline"]))
+}
+
+func TestTaskAgentMetricsAcrossRuns(t *testing.T) {
+	root := t.TempDir()
+	for _, runID := range []string{"run-1", "run-2"} {
+		store, err := results.New(root, results.RunMetadata{RunID: runID, Agents: []string{"skill", "baseline"}, Scenarios: []string{"alpha", "beta"}, Parallelism: 1, RepeatCount: 1})
+		require.NoError(t, err)
+		require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("alpha", true, 1, 10, 2)))
+		require.NoError(t, store.WriteAttempt(1, "baseline", conditionResult("alpha", "baseline", false, 0.5, 10, 2)))
+		require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("beta", true, 1, 10, 2)))
+	}
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := TaskAgentMetrics(read, "alpha")
+	require.Len(t, metrics, 2)
+	assert.Equal(t, 1.0, metrics["skill"].MeanScore)
+	assert.Equal(t, 0.5, metrics["baseline"].MeanScore)
+}
+
 func TestRunMetricsAggregatesTokenUsage(t *testing.T) {
 	root := t.TempDir()
 	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
@@ -119,6 +162,26 @@ func TestAttemptThroughputWithoutTimings(t *testing.T) {
 	assert.Zero(t, AttemptTokensPerSecond(results.Attempt{}))
 	_, ok = AttemptDraftAcceptanceRate(results.Attempt{})
 	assert.False(t, ok)
+}
+
+func TestTotalMetricsAggregatesAllRuns(t *testing.T) {
+	root := t.TempDir()
+	for _, runID := range []string{"run-1", "run-2"} {
+		store, err := results.New(root, results.RunMetadata{RunID: runID, Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+		require.NoError(t, err)
+		result := attemptResult("alpha", true, 1, 10, 2)
+		result.Agent.TokenUsage = common.TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, CachedTokens: 25}
+		require.NoError(t, store.WriteAttempt(1, "skill", result))
+	}
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := TotalMetrics(read)
+	assert.Equal(t, 2, metrics.Attempts)
+	assert.Equal(t, 300, SumInts(metrics.Tokens))
+	assert.Equal(t, 200, SumInts(metrics.Prompt))
+	assert.Equal(t, 20.0, Sum(metrics.Durations))
 }
 
 func TestScenarioCriteriaComparesConditions(t *testing.T) {

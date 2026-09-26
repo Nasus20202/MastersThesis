@@ -43,6 +43,9 @@ func (m *Model) renderBody(height int) string {
 	if current.Kind == screens.Attempt {
 		return m.view.Attempt(current, m.width, height)
 	}
+	if current.Kind == screens.Totals {
+		return m.view.Totals(current, m.width, height)
+	}
 	if !screens.IsList(current.Kind) {
 		return ""
 	}

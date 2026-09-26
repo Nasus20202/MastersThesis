@@ -47,15 +47,15 @@ BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus
+.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint
 
 help:
 	@printf '%s\n' 'Available commands:'
 	@printf '  %-28s %s\n' \
 		'make test' 'Run the benchmark Go tests.' \
 		'make format' 'Format Go, Markdown, YAML, JSON, and other supported files.' \
-		'make lint' 'Run Go vet, format checks, Prettier, and Renovate validation.' \
-		'make check' 'Run test and lint checks.' \
+		'make lint' 'Run Go vet, golangci-lint, and Renovate validation.' \
+		'make check' 'Run test, lint, format and corpus checks.' \
 		'make download-models' 'Download the configured model and drafter GGUF from Hugging Face.' \
 		'make llama-start' 'Start the llama.cpp model router.' \
 		'make llama-stop' 'Stop the llama.cpp model router.' \
@@ -89,13 +89,16 @@ format:
 	$(MAKE) benchmark-go-format
 	$(MAKE) prettier
 
-lint:
-	$(MAKE) benchmark-go-vet
+format-check:
 	$(MAKE) benchmark-go-format-check
 	$(MAKE) prettier-check
+
+lint:
+	$(MAKE) benchmark-go-vet
+	$(MAKE) benchmark-go-lint
 	$(MAKE) renovate-check
 
-check: test lint check-corpus
+check: test lint format-check check-corpus
 
 download-models:
 	./scripts/download-models.sh
@@ -142,6 +145,9 @@ benchmark-go-test:
 
 benchmark-go-vet:
 	cd $(BENCHMARK_DIR) && $(GO) vet ./...
+
+benchmark-go-lint:
+	cd $(BENCHMARK_DIR) && $(GO) tool golangci-lint run ./...
 
 benchmark-go-format:
 	cd $(BENCHMARK_DIR) && $(GO) fmt ./...

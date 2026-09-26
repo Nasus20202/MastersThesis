@@ -89,7 +89,7 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.DraftTokens += draft
 			metrics.DraftAccepted += accepted
 		}
-		if attempt.Error() != "" || attempt.Failure() != nil {
+		if attempt.ErrorMessage() != "" || attempt.Failure() != nil {
 			metrics.Terminations["error"]++
 		}
 	}
@@ -101,24 +101,13 @@ func gather(store *Store, refs []ref) Metrics {
 
 // RunMetrics gathers the attempts of one run, optionally filtered by agent and task.
 func RunMetrics(store *Store, runID, filterAgent, filterTask string) Metrics {
-	if err := store.EnsureSnapshot(runID); err != nil {
-		return newMetrics()
-	}
-	snapshot, ok := store.Snapshot(runID)
-	if !ok {
-		return newMetrics()
-	}
-	var refs []ref
-	for _, item := range snapshot.Attempts {
-		if filterAgent != "" && item.Group != filterAgent {
-			continue
-		}
-		if filterTask != "" && item.ScenarioID != filterTask {
-			continue
-		}
-		refs = append(refs, ref{runID: runID, ref: item})
-	}
-	return gather(store, refs)
+	return gather(store, runRefs(store, runID, filterAgent, filterTask))
+}
+
+// RunAgentMetrics gathers one run's attempts grouped by condition, honoring the
+// same agent and task filters as RunMetrics.
+func RunAgentMetrics(store *Store, runID, filterAgent, filterTask string) map[string]Metrics {
+	return metricsByAgent(store, runRefs(store, runID, filterAgent, filterTask))
 }
 
 // AgentMetrics gathers every attempt of one condition across all runs.
@@ -143,22 +132,68 @@ func AgentMetrics(store *Store, agent string) Metrics {
 
 // TaskMetrics gathers every attempt of one scenario across all runs.
 func TaskMetrics(store *Store, task string) Metrics {
+	return gather(store, taskRefs(store, task))
+}
+
+// TotalMetrics gathers every attempt across all runs, without any grouping.
+func TotalMetrics(store *Store) Metrics {
+	var refs []ref
+	for _, run := range store.Runs() {
+		refs = append(refs, runRefs(store, run.RunID, "", "")...)
+	}
+	return gather(store, refs)
+}
+
+// TaskAgentMetrics gathers one scenario's attempts across all runs grouped by
+// condition.
+func TaskAgentMetrics(store *Store, task string) map[string]Metrics {
+	return metricsByAgent(store, taskRefs(store, task))
+}
+
+func runRefs(store *Store, runID, filterAgent, filterTask string) []ref {
+	if err := store.EnsureSnapshot(runID); err != nil {
+		return nil
+	}
+	snapshot, ok := store.Snapshot(runID)
+	if !ok {
+		return nil
+	}
+	var refs []ref
+	for _, item := range snapshot.Attempts {
+		if filterAgent != "" && item.Group != filterAgent {
+			continue
+		}
+		if filterTask != "" && item.ScenarioID != filterTask {
+			continue
+		}
+		refs = append(refs, ref{runID: runID, ref: item})
+	}
+	return refs
+}
+
+func taskRefs(store *Store, task string) []ref {
 	var refs []ref
 	for _, run := range store.RunsForTask(task) {
 		if err := store.EnsureSnapshot(run.RunID); err != nil {
 			continue
 		}
-		snapshot, ok := store.Snapshot(run.RunID)
-		if !ok {
-			continue
-		}
-		for _, item := range snapshot.Attempts {
-			if item.ScenarioID == task {
-				refs = append(refs, ref{runID: run.RunID, ref: item})
-			}
+		for _, item := range store.AttemptsFor(run.RunID, task, "") {
+			refs = append(refs, ref{runID: run.RunID, ref: item})
 		}
 	}
-	return gather(store, refs)
+	return refs
+}
+
+func metricsByAgent(store *Store, refs []ref) map[string]Metrics {
+	groups := make(map[string][]ref)
+	for _, item := range refs {
+		groups[item.ref.Group] = append(groups[item.ref.Group], item)
+	}
+	metrics := make(map[string]Metrics, len(groups))
+	for agent, groupRefs := range groups {
+		metrics[agent] = gather(store, groupRefs)
+	}
+	return metrics
 }
 
 // AttemptDuration is the wall-clock duration of an attempt.
@@ -264,6 +299,24 @@ func Mean(values []float64) float64 {
 		total += value
 	}
 	return total / float64(len(values))
+}
+
+// Sum is the total of values.
+func Sum(values []float64) float64 {
+	total := 0.0
+	for _, value := range values {
+		total += value
+	}
+	return total
+}
+
+// SumInts is the total of integers.
+func SumInts(values []int) int {
+	total := 0
+	for _, value := range values {
+		total += value
+	}
+	return total
 }
 
 // MeanInts is the arithmetic mean of integers.

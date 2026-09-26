@@ -72,5 +72,6 @@ func TestNewWithSystemPromptUsesConfiguredPrompt(t *testing.T) {
 func TestSystemPromptIncludesOperationalInstructions(t *testing.T) {
 	assert.Contains(t, systemPrompt, "Use Bash to discover relevant resource names and namespaces")
 	assert.Contains(t, systemPrompt, "Do not ask for details available from the sandbox")
-	assert.Contains(t, systemPrompt, "continue until the task is repaired and verified")
+	assert.Contains(t, systemPrompt, "confirm the originally reported symptom is actually gone")
+	assert.Contains(t, systemPrompt, "require them to match")
 }

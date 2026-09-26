@@ -40,10 +40,10 @@ Resource-addressing and patch behavior in the kubectl skill were also checked ag
 - [Resource addressing examples](https://github.com/kubernetes/kubectl/blob/1b00e2938f9d80b35b004d2f7392b2ebaa6e5e49/pkg/cmd/get/get.go), `pkg/cmd/get/get.go`.
 - [Patch types and examples](https://github.com/kubernetes/kubectl/blob/1b00e2938f9d80b35b004d2f7392b2ebaa6e5e49/pkg/cmd/patch/patch.go), `pkg/cmd/patch/patch.go`.
 
-## Bash
+## Subsystem skills
 
-The Bash skill summarizes stable shell behavior such as quoting, pipelines, exit status, redirection, files, and processes. Its primary external reference is the GNU Bash Reference Manual. Kubernetes benchmark incidents and expected repairs are not used as Bash-skill source material.
+The subsystem skills (`scheduling`, `storage`, `workloads`, `authorization`, `networking`, `configuration`, `governance`, `security`, `resources`) are concise procedural summaries of the same frozen corpus areas listed above. They describe class-wide repair procedures by subsystem rather than scenario-specific sequences: the symptom-to-check mapping, the smallest justified change, and the direct observation that proves the outcome. Kubernetes benchmark incidents and expected repairs are not used as source material.
 
 ## Troubleshooting
 
-The troubleshooting skill is a generic workflow derived from the project's observed procedural weaknesses and the research goal of testing explicit procedural knowledge. It intentionally contains no scenario-specific repair sequence.
+The troubleshooting skill is a generic workflow derived from the project's observed procedural weaknesses and the research goal of testing explicit procedural knowledge. It intentionally contains no scenario-specific repair sequence, and it routes the agent to the subsystem skill that matches the observed symptom.

@@ -18,7 +18,9 @@ type KeyMap struct {
 	ModeRuns   key.Binding
 	ModeAgents key.Binding
 	ModeTasks  key.Binding
+	ModeTotals key.Binding
 	NextMode   key.Binding
+	Pane       key.Binding
 }
 
 // Default is the browser's key map.
@@ -36,12 +38,14 @@ var DefaultKeyMap = KeyMap{
 	ModeRuns:   key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "runs")),
 	ModeAgents: key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "agents")),
 	ModeTasks:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "tasks")),
-	NextMode:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "view / pane")),
+	ModeTotals: key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "totals")),
+	NextMode:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
+	Pane:       key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "view / pane")),
 }
 
 // ShortHelp implements help.KeyMap.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Open, k.Back, k.Chat, k.Expand, k.NextMode, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Open, k.Back, k.Chat, k.Expand, k.NextMode, k.Pane, k.Help, k.Quit}
 }
 
 // FullHelp implements help.KeyMap.
@@ -49,7 +53,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown},
 		{k.Open, k.Back, k.Chat, k.Expand},
-		{k.ModeRuns, k.ModeAgents, k.ModeTasks, k.NextMode},
-		{k.Help, k.Quit},
+		{k.ModeRuns, k.ModeAgents, k.ModeTasks, k.ModeTotals},
+		{k.NextMode, k.Pane, k.Help, k.Quit},
 	}
 }

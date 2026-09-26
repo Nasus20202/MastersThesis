@@ -21,7 +21,7 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 	lines = append(lines, "")
 
 	lines = append(lines, components.Section(width, "Speed distribution"))
-	if labels, counts := histogram(metrics.Durations, 5, durationLabel); len(counts) > 0 {
+	if labels, counts := histogram(metrics.Durations, durationLabel); len(counts) > 0 {
 		lines = append(lines, ui.Histogram(chartWidth, 5, labels, counts))
 	} else {
 		lines = append(lines, ui.MutedStyle.Render("no durations recorded"))
@@ -30,7 +30,7 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 
 	if len(metrics.Turns) > 0 {
 		lines = append(lines, components.Section(width, "Turns distribution"))
-		labels, counts := histogram(intsToFloats(metrics.Turns), 5, wholeNumber)
+		labels, counts := histogram(intsToFloats(metrics.Turns), wholeNumber)
 		lines = append(lines, ui.Histogram(chartWidth, 5, labels, counts))
 		lines = append(lines, "")
 	}
@@ -38,6 +38,40 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 	if len(metrics.Terminations) > 0 {
 		lines = append(lines, components.Section(width, "Termination"))
 		lines = append(lines, terminationBars(chartWidth, metrics.Terminations))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// agentRankGraphs renders one line per agent combining the mean-score and
+// full-success bars, best mean score first.
+func agentRankGraphs(metrics map[string]model.Metrics, width int) string {
+	agents := make([]string, 0, len(metrics))
+	for agent := range metrics {
+		agents = append(agents, agent)
+	}
+	sort.SliceStable(agents, func(i, j int) bool {
+		left, right := metrics[agents[i]], metrics[agents[j]]
+		if left.MeanScore != right.MeanScore {
+			return left.MeanScore > right.MeanScore
+		}
+		return model.OutcomeRate(left) > model.OutcomeRate(right)
+	})
+
+	const rateWidth = 4
+	labelWidth := min(24, max(12, width/4))
+	barWidth := max(4, (width-labelWidth-2*rateWidth-2)/2)
+	lines := []string{components.Section(width, "Mean score · full success by agent")}
+	for _, agent := range agents {
+		item := metrics[agent]
+		score, rate := item.MeanScore, model.OutcomeRate(item)
+		lines = append(lines, ui.PadRight(ui.Truncate(agent, labelWidth), labelWidth)+
+			ui.Meter(score, barWidth, ui.Outcome(score >= 1, score))+
+			ui.MutedStyle.Render(" "+ui.PadRight(ui.Rate(score), rateWidth))+
+			ui.Meter(rate, barWidth, ui.Outcome(rate >= 1, rate))+
+			ui.MutedStyle.Render(" "+ui.Rate(rate)))
+	}
+	if len(agents) == 0 {
+		lines = append(lines, ui.MutedStyle.Render("no data"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -142,7 +176,8 @@ func criteriaMatrix(matrix model.CriteriaMatrix, width int) string {
 
 // histogram splits values into at most buckets ranges spanning the observed
 // minimum and maximum, so the chart adapts to the data instead of fixed edges.
-func histogram(values []float64, buckets int, format func(float64) string) ([]string, []int) {
+func histogram(values []float64, format func(float64) string) ([]string, []int) {
+	const buckets = 5
 	if len(values) == 0 {
 		return nil, nil
 	}
@@ -154,7 +189,6 @@ func histogram(values []float64, buckets int, format func(float64) string) ([]st
 	if maximum <= minimum {
 		return []string{format(minimum)}, []int{len(values)}
 	}
-	buckets = max(1, buckets)
 	step := (maximum - minimum) / float64(buckets)
 	labels := make([]string, buckets)
 	counts := make([]int, buckets)

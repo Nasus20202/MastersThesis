@@ -8,4 +8,4 @@ Environment variables sourced from a ConfigMap or Secret are resolved when a con
 
 Immutable ConfigMaps and Secrets cannot have their data changed after creation. Workloads that need versioned configuration can reference objects with versioned names or change their Pod template when configuration changes.
 
-A controller creates new Pods when its Pod template changes. Merely changing a referenced ConfigMap or Secret does not necessarily recreate Pods.
+A controller creates new Pods when its Pod template changes. Merely changing a referenced ConfigMap or Secret does not necessarily recreate Pods. After adding or changing a key or value that a workload consumes as environment variables, trigger a new rollout, for example with `kubectl rollout restart`, then confirm the new Pods report the updated value. A mounted ConfigMap or Secret volume is updated by the kubelet, but an application that reads the file once at startup still needs a restart to observe the change.

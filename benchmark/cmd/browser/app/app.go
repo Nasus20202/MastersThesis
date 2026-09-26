@@ -97,7 +97,11 @@ func (m *Model) current() *screens.Route {
 func (m *Model) setMode(next screens.Mode) {
 	m.mode = next
 	m.view.SetMode(next)
-	m.stack = []screens.Route{{Kind: screens.List}}
+	kind := screens.List
+	if next == screens.ModeTotals {
+		kind = screens.Totals
+	}
+	m.stack = []screens.Route{{Kind: kind}}
 	m.clamp()
 }
 

@@ -58,7 +58,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		}
 	} else {
 		startedAt := time.Now().UTC()
-		revision, workingTreeDirty := repositoryProvenance()
+		revision, workingTreeDirty := repositoryProvenance(ctx)
 		metadata := results.RunMetadata{
 			RunID:              runID(startedAt),
 			RunType:            "benchmark",
@@ -114,7 +114,6 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		agentFactory := agentFactories[agentName]
 		for attempt := 1; attempt <= repeat; attempt++ {
 			for _, definition := range definitions {
-				definition := definition
 				if store.HasAttempt(attempt, definition.ID, string(agentName)) {
 					continue
 				}

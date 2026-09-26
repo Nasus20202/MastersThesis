@@ -33,14 +33,14 @@ func (m *Model) renderHeader() string {
 		}
 		tabs = append(tabs, ui.TabIdle.Render(label))
 	}
-	hint := "tab switch"
+	hint := "tab next tab"
 	switch {
 	case m.current().Kind == screens.Attempt:
-		hint = "tab pane"
+		hint = "c conversation"
 	case screens.IsList(m.current().Kind) && screens.TwoColumn(m.width) && m.current().Focus == screens.FocusSecondary:
-		hint = "dashboard pane · tab back to list"
+		hint = "dashboard pane · v back to list"
 	case screens.IsList(m.current().Kind) && screens.TwoColumn(m.width):
-		hint = "tab dashboard"
+		hint = "v dashboard"
 	}
 	if m.canGoBack() {
 		hint = "esc back · " + hint

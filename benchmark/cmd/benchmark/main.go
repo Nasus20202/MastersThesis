@@ -23,15 +23,20 @@ import (
 const envNoColor = "NO_COLOR"
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return
+			return 0
 		}
 		slog.Error("benchmark failed", "error", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func run(ctx context.Context, args []string, logOutput io.Writer) error {

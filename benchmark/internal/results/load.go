@@ -178,8 +178,8 @@ func (a Attempt) Failure() *orchestration.FailureEvidence {
 	return nil
 }
 
-// Error returns the recorded execution error of whichever artifact is set.
-func (a Attempt) Error() string {
+// ErrorMessage returns the recorded execution error of whichever artifact is set.
+func (a Attempt) ErrorMessage() string {
 	if a.Validation != nil {
 		return a.Validation.Error
 	}

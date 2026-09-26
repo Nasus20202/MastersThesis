@@ -24,7 +24,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		return err
 	}
 	startedAt := time.Now().UTC()
-	revision, workingTreeDirty := repositoryProvenance()
+	revision, workingTreeDirty := repositoryProvenance(ctx)
 	metadata := results.RunMetadata{
 		RunID:              runID(startedAt),
 		RunType:            "validation",
