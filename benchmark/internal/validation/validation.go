@@ -80,7 +80,6 @@ func LoadCases(inputs []string) ([]ValidationCase, error) {
 func Tasks(cases []ValidationCase, run RunFunc) []executor.Task {
 	tasks := make([]executor.Task, len(cases))
 	for index, item := range cases {
-		item := item
 		tasks[index] = executor.Task{
 			ScenarioID: item.Scenario.ID,
 			CaseID:     item.ID,

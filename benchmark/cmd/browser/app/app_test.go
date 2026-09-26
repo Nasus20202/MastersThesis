@@ -126,6 +126,17 @@ func TestModelSwitchesViewModes(t *testing.T) {
 	assert.Equal(t, screens.ModeRuns, model.mode)
 }
 
+func TestModelShowsTotalsPage(t *testing.T) {
+	model := newTestModel(t)
+
+	model.Update(press("4"))
+	assert.Equal(t, screens.ModeTotals, model.mode)
+	require.Equal(t, screens.Totals, model.current().Kind)
+	content := model.View().Content
+	assert.Contains(t, content, "All runs")
+	assert.Contains(t, content, "Tokens")
+}
+
 func TestModelTogglesHelp(t *testing.T) {
 	model := newTestModel(t)
 	model.Update(press("?"))
@@ -237,14 +248,14 @@ func TestBackReturnsToPreviousScreen(t *testing.T) {
 	require.Equal(t, screens.List, model.current().Kind)
 }
 
-func TestTabFocusesDashboardAndKeysScrollIt(t *testing.T) {
+func TestPaneKeyFocusesDashboardAndKeysScrollIt(t *testing.T) {
 	model := newTestModel(t)
 	model.Update(tea.WindowSizeMsg{Width: 120, Height: 12})
 	model.Update(press("enter"))
 	current := model.current()
 	require.Equal(t, screens.Run, current.Kind)
 
-	model.Update(press("tab"))
+	model.Update(press("v"))
 	require.Equal(t, screens.FocusSecondary, current.Focus)
 
 	model.Update(press("pgdown"))
@@ -253,8 +264,24 @@ func TestTabFocusesDashboardAndKeysScrollIt(t *testing.T) {
 	model.Update(press("g"))
 	assert.Equal(t, 0, current.PreviewOffset)
 
-	model.Update(press("tab"))
+	model.Update(press("v"))
 	assert.Equal(t, screens.FocusPrimary, current.Focus)
+}
+
+func TestTabCyclesModesAtWideWidth(t *testing.T) {
+	model := newTestModel(t)
+	model.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	require.Equal(t, screens.ModeRuns, model.mode)
+
+	model.Update(press("tab"))
+	assert.Equal(t, screens.ModeAgents, model.mode)
+	model.Update(press("tab"))
+	assert.Equal(t, screens.ModeTasks, model.mode)
+	model.Update(press("tab"))
+	assert.Equal(t, screens.ModeTotals, model.mode)
+	require.Equal(t, screens.Totals, model.current().Kind)
+	model.Update(press("tab"))
+	assert.Equal(t, screens.ModeRuns, model.mode)
 }
 
 func TestRunsPageShowsSelectedRunDashboard(t *testing.T) {

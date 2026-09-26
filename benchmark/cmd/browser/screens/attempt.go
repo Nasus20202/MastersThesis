@@ -48,8 +48,8 @@ func (v *View) buildDetailsHead(route *Route, width int) string {
 	grading := attempt.Grading()
 	summary := ui.OutcomeBadge(grading.FullSuccess, grading.Score) + "  " +
 		ui.MutedStyle.Render(fmt.Sprintf("score %s · duration %s", ui.Rate(grading.Score), ui.Seconds(model.AttemptDuration(attempt))))
-	if attempt.Error() != "" {
-		summary += "  " + ui.BadgeDanger.Render("ERROR") + " " + ui.Danger.Render(ui.FirstLine(attempt.Error()))
+	if attempt.ErrorMessage() != "" {
+		summary += "  " + ui.BadgeDanger.Render("ERROR") + " " + ui.Danger.Render(ui.FirstLine(attempt.ErrorMessage()))
 	}
 	var cards []string
 	if attempt.Benchmark != nil && attempt.Benchmark.Agent != nil {

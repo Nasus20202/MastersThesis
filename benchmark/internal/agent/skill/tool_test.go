@@ -36,20 +36,30 @@ func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
 	prompt, err := routingSystemPrompt()
 	require.NoError(t, err)
 	for _, entry := range []string{
-		"- bash: Bash shell syntax",
+		"- authorization: Repairing RBAC and ServiceAccount faults",
+		"- configuration: Repairing ConfigMap and Secret references",
+		"- governance: Repairing admission rejections from LimitRange and ResourceQuota",
 		"- kubectl: kubectl command syntax",
 		"- kubernetes: Kubernetes concepts",
+		"- networking: Repairing Service reachability, NetworkPolicy, DNS, Ingress and Gateway routing",
+		"- resources: Repairing CPU and memory requests and limits",
+		"- scheduling: Placing or repairing Pending and unschedulable Pods and DaemonSets",
+		"- security: Making workloads compliant with Pod Security Admission",
+		"- storage: Repairing PersistentVolumeClaims, volume mounts and shared volumes",
 		"- troubleshooting: General diagnosis, repair, and verification workflow",
+		"- workloads: Repairing rollouts, probes, crash loops, StatefulSets, headless Services and Jobs",
 	} {
 		assert.Contains(t, prompt, entry)
 	}
-	assert.Contains(t, prompt, "required initial sequence is to call `load_skill` for `troubleshooting` and `kubernetes`")
-	assert.Contains(t, prompt, "Do not call Bash until both skills have loaded successfully")
-	assert.Contains(t, prompt, "call `load_reference` for each Kubernetes reference that covers them before choosing a repair")
-	assert.Contains(t, prompt, "Use `skill: \"kubernetes\"` and set `reference` to the exact filename")
-	assert.Contains(t, prompt, "Before the first Kubernetes mutation, call `load_skill` for `kubectl`")
+	assert.Contains(t, prompt, "Before the first Bash call, load the `troubleshooting` skill")
+	assert.Contains(t, prompt, "Match the observed symptom to the subsystem")
+	assert.Contains(t, prompt, "load the reference that covers the affected subsystem with `load_reference`")
+	assert.Contains(t, prompt, "using `skill: \"kubernetes\"` and the exact filename")
+	assert.Contains(t, prompt, "Load `kubectl` as well when command or patch semantics are uncertain")
+	assert.Contains(t, prompt, "Prove the requested outcome before reporting success")
+	assert.Contains(t, prompt, "Avoid these common wrong fixes")
+	assert.Contains(t, prompt, "Report `Outcome: complete` only when every required check passes")
 	assert.NotContains(t, prompt, "Load other skills and listed references only when their guidance is useful")
-	assert.NotContains(t, prompt, ".md")
 	assert.NotContains(t, prompt, "Execute every fix")
 }
 
@@ -68,10 +78,10 @@ func TestKubernetesReferencesDoNotContainTroubleshootingPlaybooks(t *testing.T) 
 func TestSkillToolSuggestsReferenceForReferenceName(t *testing.T) {
 	tool := newSkillTool()
 
-	for _, name := range []string{"authorization", "authorization.md"} {
+	for _, name := range []string{"api", "api.md"} {
 		result := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"name":"` + name + `"}`})
 		require.Error(t, result.Error)
-		assert.Contains(t, result.Content, `skill "authorization`)
+		assert.Contains(t, result.Content, `skill "api`)
 		assert.Contains(t, result.Content, "is a reference of skill")
 		assert.Contains(t, result.Content, `"kubernetes"`)
 		assert.Contains(t, result.Content, "load_reference")
@@ -92,12 +102,12 @@ func TestSkillToolDefinition(t *testing.T) {
 func TestSkillToolLoadsSkill(t *testing.T) {
 	tool := newSkillTool()
 
-	skillResult := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"name":"bash"}`})
+	skillResult := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"name":"workloads"}`})
 	require.NoError(t, skillResult.Error)
-	assert.Contains(t, skillResult.Content, "# Bash")
-	assert.NotContains(t, skillResult.Content, "name: bash")
+	assert.Contains(t, skillResult.Content, "# Workloads")
+	assert.NotContains(t, skillResult.Content, "name: workloads")
 	assert.NotContains(t, skillResult.Content, "description:")
-	assert.Equal(t, skillEvidence{Skill: "bash"}, skillResult.Details)
+	assert.Equal(t, skillEvidence{Skill: "workloads"}, skillResult.Details)
 }
 
 func TestReferenceToolDefinition(t *testing.T) {
@@ -141,7 +151,7 @@ func TestReferenceToolRejectsInvalidRequests(t *testing.T) {
 		{name: "missing skill", arguments: `{}`, want: "skill name is required"},
 		{name: "missing reference", arguments: `{"skill":"kubernetes"}`, want: "reference filename is required"},
 		{name: "unknown skill", arguments: `{"skill":"unknown","reference":"workloads.md"}`, want: `skill "unknown" is not available`},
-		{name: "unsupported reference", arguments: `{"skill":"bash","reference":"workloads.md"}`, want: `skill "bash" has no reference files`},
+		{name: "unsupported reference", arguments: `{"skill":"kubectl","reference":"workloads.md"}`, want: `skill "kubectl" has no reference files`},
 		{name: "unknown reference", arguments: `{"skill":"kubernetes","reference":"missing.md"}`, want: `reference "missing.md" is not available`},
 	} {
 		t.Run(test.name, func(t *testing.T) {

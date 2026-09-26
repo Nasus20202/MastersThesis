@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 )
 
-func repositoryProvenance() (string, bool) {
-	rootOutput, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+func repositoryProvenance(ctx context.Context) (string, bool) {
+	rootOutput, err := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", false
 	}
@@ -14,11 +15,11 @@ func repositoryProvenance() (string, bool) {
 	if root == "" {
 		return "", false
 	}
-	revisionOutput, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
+	revisionOutput, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "HEAD").Output()
 	if err != nil {
 		return "", false
 	}
-	statusOutput, err := exec.Command("git", "-C", root, "status", "--porcelain").Output()
+	statusOutput, err := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain").Output()
 	if err != nil {
 		return strings.TrimSpace(string(revisionOutput)), false
 	}

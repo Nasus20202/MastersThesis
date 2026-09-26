@@ -30,6 +30,7 @@ type View struct {
 	details     map[string][]string
 	detailHeads map[string]string
 	layouts     map[string]cachedLayout
+	totals      map[int][]string
 	markdown    *ui.Renderer
 }
 
@@ -47,6 +48,7 @@ func NewView(store *model.Store) *View {
 		details:     make(map[string][]string),
 		detailHeads: make(map[string]string),
 		layouts:     make(map[string]cachedLayout),
+		totals:      make(map[int][]string),
 	}
 }
 
@@ -63,6 +65,7 @@ func (v *View) Invalidate() {
 	v.details = make(map[string][]string)
 	v.detailHeads = make(map[string]string)
 	v.layouts = make(map[string]cachedLayout)
+	v.totals = make(map[int][]string)
 }
 
 // TwoColumn reports whether the terminal is wide enough for two panes.

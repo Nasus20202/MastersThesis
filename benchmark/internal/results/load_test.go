@@ -91,7 +91,7 @@ func TestLoadRunIndexesAttemptsAndLoadsPayloads(t *testing.T) {
 	assert.Nil(t, attempt.Validation)
 	assert.Equal(t, 2, attempt.Benchmark.Attempt)
 	assert.True(t, attempt.Grading().FullSuccess)
-	assert.Empty(t, attempt.Error())
+	assert.Empty(t, attempt.ErrorMessage())
 }
 
 func TestLoadRunLoadsValidationAttempts(t *testing.T) {

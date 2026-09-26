@@ -114,6 +114,24 @@ func Rate(value float64) string {
 	return fmt.Sprintf("%.0f%%", value*100)
 }
 
+// Count formats an integer with thousands separators.
+func Count(value int) string {
+	sign := ""
+	if value < 0 {
+		sign = "-"
+		value = -value
+	}
+	digits := fmt.Sprintf("%d", value)
+	var builder strings.Builder
+	for index, digit := range digits {
+		if index > 0 && (len(digits)-index)%3 == 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteRune(digit)
+	}
+	return sign + builder.String()
+}
+
 // Seconds formats a duration in seconds, or a dash when unset.
 func Seconds(seconds float64) string {
 	if seconds <= 0 {

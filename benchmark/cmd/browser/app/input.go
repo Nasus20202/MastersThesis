@@ -37,11 +37,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.setMode(screens.ModeAgents)
 	case "3":
 		m.setMode(screens.ModeTasks)
+	case "4":
+		m.setMode(screens.ModeTotals)
 	case "tab":
-		if current.Kind == screens.Attempt || (screens.IsList(current.Kind) && screens.TwoColumn(m.width)) {
+		m.setMode((m.mode + 1) % screens.ModeCount)
+	case "v":
+		if screens.IsList(current.Kind) && screens.TwoColumn(m.width) {
 			m.toggleFocus()
-		} else {
-			m.setMode((m.mode + 1) % screens.ModeCount)
 		}
 	case "esc", "backspace", "h":
 		m.goBack()
@@ -224,7 +226,7 @@ func (m *Model) tabAt(mouse tea.Mouse) (screens.Mode, bool) {
 }
 
 func (m *Model) clickAttempt(current *screens.Route, mouse tea.Mouse) {
-	chatTop := 0
+	var chatTop int
 	if screens.TwoColumn(m.width) {
 		leftWidth, _ := screens.ColumnWidths(m.width)
 		if mouse.X < leftWidth {

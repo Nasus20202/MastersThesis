@@ -2,13 +2,14 @@ package screens
 
 import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 
-// Mode is the top-level tab: runs, agents or tasks.
+// Mode is the top-level tab: runs, agents, tasks or totals.
 type Mode int
 
 const (
 	ModeRuns Mode = iota
 	ModeAgents
 	ModeTasks
+	ModeTotals
 	ModeCount
 )
 
@@ -19,6 +20,8 @@ func (m Mode) Label() string {
 		return "Agents"
 	case ModeTasks:
 		return "Tasks"
+	case ModeTotals:
+		return "Totals"
 	default:
 		return "Runs"
 	}
@@ -40,6 +43,7 @@ const (
 	Run
 	Attempts
 	Attempt
+	Totals
 )
 
 // IsList reports whether a kind renders a table with an optional preview pane.

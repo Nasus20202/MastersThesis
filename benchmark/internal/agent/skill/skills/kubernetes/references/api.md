@@ -9,3 +9,5 @@ API groups and versions identify resource schemas, for example `apps/v1` for Dep
 Some resource types are namespaced and others are cluster-scoped. Whether one object may reference another object in a different namespace is defined by the specific API field; many built-in workload references, including Pod references to ConfigMaps and Secrets, are same-namespace only.
 
 Subresources expose narrower operations with their own API and authorization semantics, for example `pods/log`, `pods/exec`, and `deployments/scale`.
+
+An API server serves a specific set of group/versions. `kubectl api-versions` lists served versions and `kubectl api-resources` lists served resources with their group and namespaced scope. When a manifest targets a group/version the cluster no longer serves, translate the object to the served version of the same kind, for example `apps/v1` for a Deployment, while preserving the requested name, labels, replicas, and image rather than changing the workload behaviour.

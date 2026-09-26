@@ -16,10 +16,19 @@ func (m *Model) move(delta int) {
 		m.scrollCursorIntoView(current)
 		return
 	}
+	if current.Kind == screens.Totals {
+		m.scrollTotals(delta)
+		return
+	}
 	height := m.contentHeight()
 	visible := max(1, screens.DetailsHeight(m.width, height)-ui.LineCount(m.view.DetailsHead(current, screens.PaneWidth(m.width))))
 	maxOffset := max(0, len(m.view.DetailsLines(current, screens.PaneWidth(m.width)))-visible)
 	current.Offset = max(0, min(current.Offset+delta, maxOffset))
+}
+
+func (m *Model) scrollTotals(delta int) {
+	current := m.current()
+	current.Offset = ui.ClampOffset(current.Offset+delta, m.view.TotalsLineCount(m.width), m.contentHeight())
 }
 
 func (m *Model) scrollCursorIntoView(current *screens.Route) {
@@ -35,6 +44,14 @@ func (m *Model) scrollCursorIntoView(current *screens.Route) {
 func (m *Model) jump(index int) {
 	current := m.current()
 	if !screens.IsList(current.Kind) {
+		if current.Kind == screens.Totals {
+			if index < 0 {
+				m.scrollTotals(1 << 30)
+			} else {
+				m.scrollTotals(-(1 << 30))
+			}
+			return
+		}
 		if index < 0 {
 			current.Offset = 1 << 30
 		} else {

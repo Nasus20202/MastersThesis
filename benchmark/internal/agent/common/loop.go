@@ -238,7 +238,7 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 			}
 			return l.finish(&result, TerminationInference, chatErr)
 		}
-		logInferenceResponse(logger, runCtx, turn, response, time.Since(responseStarted))
+		logInferenceResponse(runCtx, logger, turn, response, time.Since(responseStarted))
 		message := response.Message
 		result.Messages = append(result.Messages, message)
 		if len(message.ToolCalls) == 0 {
@@ -290,7 +290,7 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 	return l.finish(&result, TerminationTurnLimit, nil)
 }
 
-func logInferenceResponse(logger *slog.Logger, ctx context.Context, turn int, response inference.Result, duration time.Duration) {
+func logInferenceResponse(ctx context.Context, logger *slog.Logger, turn int, response inference.Result, duration time.Duration) {
 	args := []any{
 		"turn", turn,
 		"response_id", response.ID,

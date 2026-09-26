@@ -107,6 +107,8 @@ func (v *View) taskPreview(route *Route, width int) string {
 		"",
 		v.dashboardView(metrics, width),
 		"",
+		agentRankGraphs(model.TaskAgentMetrics(v.store, task.ScenarioID), width),
+		"",
 		components.Section(width, "Criteria by agent"),
 		criteriaMatrix(model.TaskCriteria(v.store, task.ScenarioID), width),
 	}

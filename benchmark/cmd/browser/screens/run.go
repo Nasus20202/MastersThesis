@@ -42,7 +42,13 @@ func (v *View) runDashboard(route *Route, width int) string {
 		return ui.MutedStyle.Render("loading…")
 	}
 	metrics := model.RunMetrics(v.store, route.RunID, route.Agent, route.Task)
-	lines := []string{components.CardRow(v.vitals(metrics), width), "", v.dashboardView(metrics, width)}
+	lines := []string{
+		components.CardRow(v.vitals(metrics), width),
+		"",
+		v.dashboardView(metrics, width),
+		"",
+		agentRankGraphs(model.RunAgentMetrics(v.store, route.RunID, route.Agent, route.Task), width),
+	}
 	rows := v.store.ScenarioRows(route.RunID, route.Agent, route.Task)
 	if route.Cursor < len(rows) {
 		scenario := rows[route.Cursor]

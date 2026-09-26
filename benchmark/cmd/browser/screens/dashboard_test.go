@@ -11,7 +11,7 @@ import (
 )
 
 func TestHistogramSpansDataRange(t *testing.T) {
-	labels, counts := histogram([]float64{10, 20, 30, 40, 50}, 5, wholeNumber)
+	labels, counts := histogram([]float64{10, 20, 30, 40, 50}, wholeNumber)
 	require.Len(t, labels, 5)
 	require.Len(t, counts, 5)
 	assert.Equal(t, 5, sum(counts))
@@ -20,7 +20,7 @@ func TestHistogramSpansDataRange(t *testing.T) {
 }
 
 func TestHistogramHandlesSingleValue(t *testing.T) {
-	labels, counts := histogram([]float64{7}, 5, wholeNumber)
+	labels, counts := histogram([]float64{7}, wholeNumber)
 	assert.Equal(t, []string{"7"}, labels)
 	assert.Equal(t, []int{1}, counts)
 }
@@ -41,6 +41,21 @@ func TestVitalsIncludeDecodingThroughput(t *testing.T) {
 	assert.Contains(t, out, "25.0")
 	assert.Contains(t, out, "draft accept %")
 	assert.Contains(t, out, "50%")
+}
+
+func TestAgentRankGraphsCombineScoreAndRatePerLine(t *testing.T) {
+	metrics := map[string]model.Metrics{
+		"skill":    {Attempts: 2, Full: 2, MeanScore: 1},
+		"baseline": {Attempts: 2, Full: 1, MeanScore: 0.5},
+	}
+	out := agentRankGraphs(metrics, 80)
+	assert.Contains(t, out, "Mean score · full success by agent")
+	lines := strings.Split(out, "\n")
+	require.Len(t, lines, 3)
+	assert.Contains(t, lines[1], "skill")
+	assert.Contains(t, lines[1], "100%")
+	assert.Contains(t, lines[2], "baseline")
+	assert.Contains(t, lines[2], "50%")
 }
 
 func TestCriteriaMatrixRendersCells(t *testing.T) {

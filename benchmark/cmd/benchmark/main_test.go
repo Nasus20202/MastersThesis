@@ -148,6 +148,7 @@ func TestRunCorpusCheck(t *testing.T) {
 		{
 			name: "valid pair",
 			prepare: func(t *testing.T, root string) {
+				t.Helper()
 				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
 				writeCorpusValidation(t, filepath.Join(root, "good"))
 			},
@@ -155,6 +156,7 @@ func TestRunCorpusCheck(t *testing.T) {
 		{
 			name: "missing validation",
 			prepare: func(t *testing.T, root string) {
+				t.Helper()
 				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
 			},
 			want: "missing validation.yaml",
@@ -162,6 +164,7 @@ func TestRunCorpusCheck(t *testing.T) {
 		{
 			name: "missing scenario",
 			prepare: func(t *testing.T, root string) {
+				t.Helper()
 				writeCorpusScenario(t, filepath.Join(root, "good"), "good")
 				writeCorpusValidation(t, filepath.Join(root, "good"))
 				writeCorpusValidation(t, filepath.Join(root, "orphan"))
@@ -171,6 +174,7 @@ func TestRunCorpusCheck(t *testing.T) {
 		{
 			name: "id mismatch",
 			prepare: func(t *testing.T, root string) {
+				t.Helper()
 				writeCorpusScenario(t, filepath.Join(root, "wrong"), "good")
 				writeCorpusValidation(t, filepath.Join(root, "wrong"))
 			},
