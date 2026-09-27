@@ -32,6 +32,20 @@ func TestTasksPreserveCasesAndPassRepairToRunner(t *testing.T) {
 	assert.Equal(t, "repair", gotRepair[0].Program)
 }
 
+func TestFilterCasesKeepsOnlyMatchingScenarios(t *testing.T) {
+	cases := []ValidationCase{
+		{Scenario: scenario.Definition{ID: "easy", Tags: map[string]string{"difficulty": "easy"}}},
+		{Scenario: scenario.Definition{ID: "hard", Tags: map[string]string{"difficulty": "hard"}}},
+		{Scenario: scenario.Definition{ID: "untagged"}},
+	}
+
+	assert.Len(t, FilterCases(cases, scenario.TagFilter{}), 3)
+
+	filtered := FilterCases(cases, scenario.TagFilter{"difficulty": {"hard"}})
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "hard", filtered[0].Scenario.ID)
+}
+
 func TestCheckMatchesExpectedScoreAndSuccess(t *testing.T) {
 	item := ValidationCase{
 		Scenario:            scenario.Definition{ID: "scenario"},
