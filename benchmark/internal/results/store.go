@@ -143,7 +143,6 @@ func Resume(root, runID string) (*Store, error) {
 	return store, nil
 }
 
-// HasAttempt reports whether an attempt artifact is already persisted.
 func (s *Store) HasAttempt(attempt int, scenarioID, condition string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

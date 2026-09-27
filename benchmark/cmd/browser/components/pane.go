@@ -1,4 +1,3 @@
-// Box, section and card primitives shared by the screens.
 package components
 
 import (
@@ -20,7 +19,6 @@ func Section(width int, title string) string {
 	return prefix + ui.Rule.Render(strings.Repeat("─", remaining))
 }
 
-// Panel draws a titled box around pre-formatted content.
 func Panel(title, body string, width int, borderColor color.Color) string {
 	inner := max(6, width-2)
 	border := lipgloss.NewStyle().Foreground(borderColor)
@@ -42,7 +40,6 @@ func Panel(title, body string, width int, borderColor color.Color) string {
 	return strings.Join(lines, "\n")
 }
 
-// MetricCard renders a small labelled value card.
 func MetricCard(label, value string, valueStyle lipgloss.Style) string {
 	return ui.Card.Render(ui.FaintStyle.Render(label) + "\n" + valueStyle.Bold(true).Render(value))
 }

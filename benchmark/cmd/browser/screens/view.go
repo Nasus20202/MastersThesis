@@ -20,7 +20,6 @@ const (
 	columnGap      = 2
 )
 
-// View renders routes against a read model.
 type View struct {
 	store *model.Store
 	mode  Mode
@@ -39,7 +38,6 @@ type cachedLayout struct {
 	ok     bool
 }
 
-// NewView returns a view over the given store.
 func NewView(store *model.Store) *View {
 	return &View{
 		store:       store,
@@ -52,10 +50,8 @@ func NewView(store *model.Store) *View {
 	}
 }
 
-// Store returns the underlying read model.
 func (v *View) Store() *model.Store { return v.store }
 
-// SetMode selects the active top-level tab.
 func (v *View) SetMode(mode Mode) { v.mode = mode }
 
 // Invalidate drops every cached rendering; call it when the data reloads.
@@ -68,16 +64,13 @@ func (v *View) Invalidate() {
 	v.totals = make(map[int][]string)
 }
 
-// TwoColumn reports whether the terminal is wide enough for two panes.
 func TwoColumn(width int) bool { return width >= twoColumnWidth }
 
-// ColumnWidths splits a width into primary and secondary pane widths.
 func ColumnWidths(width int) (int, int) {
 	left := (width - columnGap) * 58 / 100
 	return left, width - columnGap - left
 }
 
-// PaneWidth is the primary pane width for a terminal width.
 func PaneWidth(width int) int {
 	if TwoColumn(width) {
 		left, _ := ColumnWidths(width)
@@ -86,7 +79,6 @@ func PaneWidth(width int) int {
 	return width
 }
 
-// PreviewWidth is the secondary pane width for a terminal width.
 func PreviewWidth(width int) int {
 	if TwoColumn(width) {
 		_, right := ColumnWidths(width)
@@ -95,7 +87,6 @@ func PreviewWidth(width int) int {
 	return width
 }
 
-// ChatVisible is the number of visible conversation lines for a terminal size.
 func ChatVisible(width, height int) int {
 	if TwoColumn(width) {
 		return max(1, height-1)
@@ -103,7 +94,6 @@ func ChatVisible(width, height int) int {
 	return max(1, height/2-1)
 }
 
-// DetailsHeight is the height of the details pane for a terminal size.
 func DetailsHeight(width, height int) int {
 	if TwoColumn(width) {
 		return height
@@ -111,7 +101,6 @@ func DetailsHeight(width, height int) int {
 	return max(1, height/2)
 }
 
-// Join lays two rendered blocks side by side, padded to the target size.
 func Join(left, right string, width, height int) string {
 	leftWidth, rightWidth := ColumnWidths(width)
 	joined := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -134,7 +123,6 @@ func (v *View) md(width int) *ui.Renderer {
 	return v.markdown
 }
 
-// HeadLines reports how many lines the list header occupies.
 func (v *View) HeadLines(route *Route, width int) int {
 	return ui.LineCount(v.screenHead(route, width))
 }
@@ -292,7 +280,6 @@ func (v *View) screenTable(route *Route, width, height int) string {
 	}
 }
 
-// ListCount is the number of selectable rows for a list route.
 func (v *View) ListCount(route *Route) int {
 	switch route.Kind {
 	case List:

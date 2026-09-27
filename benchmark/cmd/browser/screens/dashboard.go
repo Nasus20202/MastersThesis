@@ -11,7 +11,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 )
 
-// dashboardView renders the full dashboard for a metrics set.
 func (v *View) dashboardView(metrics model.Metrics, width int) string {
 	chartWidth := max(20, width-2)
 	var lines []string

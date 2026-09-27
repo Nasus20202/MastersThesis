@@ -1,6 +1,3 @@
-// The viewport is a scrollable pane built on the Bubbles viewport. It adds
-// the one-column scrollbar the Bubbles component lacks, and lets the owning
-// screen drive scrolling so wheel and keyboard routing stay consistent.
 package components
 
 import (
@@ -11,14 +8,15 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
 )
 
-// Model is one scrollable pane.
+// Model is a scrollable pane on the Bubbles viewport. It adds the one-column
+// scrollbar the Bubbles component lacks, and lets the owning screen drive
+// scrolling so wheel and keyboard routing stay consistent.
 type Model struct {
 	width  int
 	height int
 	inner  bubbles.Model
 }
 
-// New returns an empty pane.
 func NewViewport() *Model {
 	inner := bubbles.New()
 	inner.SoftWrap = false
@@ -44,7 +42,6 @@ func (m *Model) SetOffset(offset int) {
 	m.inner.SetYOffset(offset)
 }
 
-// Scroll moves the offset by delta lines.
 func (m *Model) Scroll(delta int) {
 	if delta >= 0 {
 		m.inner.ScrollDown(delta)
@@ -53,16 +50,12 @@ func (m *Model) Scroll(delta int) {
 	m.inner.ScrollUp(-delta)
 }
 
-// Offset returns the first visible line.
 func (m *Model) Offset() int { return m.inner.YOffset() }
 
-// Total returns the number of content lines.
 func (m *Model) Total() int { return m.inner.TotalLineCount() }
 
-// Visible returns the number of visible content lines.
 func (m *Model) Visible() int { return m.height }
 
-// MaxOffset returns the largest valid offset.
 func (m *Model) MaxOffset() int {
 	return max(0, m.Total()-m.Visible())
 }

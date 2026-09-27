@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// Rank is one row in a ranked bar list.
 type Rank struct {
 	Label  string
 	Value  float64 // 0..1

@@ -2,7 +2,6 @@ package screens
 
 import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 
-// Mode is the top-level tab: runs, agents, tasks or totals.
 type Mode int
 
 const (
@@ -13,7 +12,6 @@ const (
 	ModeCount
 )
 
-// Label is the tab label for a mode.
 func (m Mode) Label() string {
 	switch m {
 	case ModeAgents:
@@ -27,13 +25,11 @@ func (m Mode) Label() string {
 	}
 }
 
-// Focus selects which pane receives navigation keys.
 const (
 	FocusPrimary   = 0
 	FocusSecondary = 1
 )
 
-// Kind identifies the screen a route points at.
 type Kind int
 
 const (
@@ -75,7 +71,6 @@ type Route struct {
 	Expanded      map[int]bool
 }
 
-// Ref returns the attempt reference described by the route.
 func (r *Route) Ref() results.AttemptRef {
 	return results.AttemptRef{ScenarioID: r.ScenarioID, Group: r.Group, Attempt: r.Attempt, Path: r.Path}
 }

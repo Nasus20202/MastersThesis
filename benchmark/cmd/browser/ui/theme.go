@@ -1,5 +1,3 @@
-// The design system: one accent, a muted palette and
-// outcome colors so the same meaning keeps the same color on every screen.
 package ui
 
 import "charm.land/lipgloss/v2"
@@ -57,7 +55,6 @@ func Outcome(fullSuccess bool, score float64) lipgloss.Style {
 	}
 }
 
-// State colors a run state.
 func State(state string) lipgloss.Style {
 	switch state {
 	case "completed":
@@ -69,7 +66,6 @@ func State(state string) lipgloss.Style {
 	}
 }
 
-// StateBadge renders a run state as a filled badge.
 func StateBadge(state string) string {
 	switch state {
 	case "completed":
@@ -81,7 +77,6 @@ func StateBadge(state string) string {
 	}
 }
 
-// OutcomeBadge renders a grading outcome as a filled badge.
 func OutcomeBadge(fullSuccess bool, score float64) string {
 	switch {
 	case fullSuccess:
@@ -93,7 +88,6 @@ func OutcomeBadge(fullSuccess bool, score float64) string {
 	}
 }
 
-// Termination colors a termination reason.
 func Termination(reason string) lipgloss.Style {
 	switch reason {
 	case "completed":

@@ -1,6 +1,3 @@
-// Table renders the browser's responsive, selectable data tables. It is
-// presentational: the owning screen keeps the cursor and scroll offset so click
-// handling and keyboard navigation stay in one place.
 package components
 
 import (
@@ -18,12 +15,13 @@ type Column struct {
 	Max   int
 }
 
-// Table renders rows against a fixed set of columns.
+// Table renders the browser's responsive, selectable data tables. It is
+// presentational: the owning screen keeps the cursor and scroll offset so
+// click handling and keyboard navigation stay in one place.
 type Table struct {
 	Columns []Column
 }
 
-// New returns a table with the given columns.
 func NewTable(columns ...Column) Table {
 	return Table{Columns: columns}
 }
@@ -65,7 +63,6 @@ func (t Table) Render(width, height int, rows [][]string, cursor, offset int, st
 	return builder.String()
 }
 
-// VisibleRows reports how many data rows fit in a table of the given height.
 func VisibleRows(height int) int {
 	return max(1, height-1)
 }

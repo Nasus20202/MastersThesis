@@ -8,7 +8,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
 )
 
-// Totals renders the full-width aggregate stats page over every run.
 func (v *View) Totals(route *Route, width, height int) string {
 	width = max(1, width)
 	lines := v.totalsLines(width)
@@ -19,7 +18,6 @@ func (v *View) Totals(route *Route, width, height int) string {
 	return view.View()
 }
 
-// TotalsLineCount is the number of lines in the totals page for a width.
 func (v *View) TotalsLineCount(width int) int {
 	return len(v.totalsLines(max(1, width)))
 }

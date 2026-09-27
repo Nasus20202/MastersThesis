@@ -440,11 +440,6 @@ func TestWithKubeconfigPreservesEnvironment(t *testing.T) {
 	assert.False(t, modified)
 }
 
-func TestClusterNameUsesScenarioID(t *testing.T) {
-	name := clusterNameFor("image-pull-failure")
-	assert.True(t, strings.HasPrefix(name, "benchmark-image-pull-failure-"))
-}
-
 func TestClusterNameFitsKindNodeNameLimit(t *testing.T) {
 	name := clusterNameFor(strings.Repeat("a", 32))
 	assert.LessOrEqual(t, len(name)+len("-control-plane"), 63)

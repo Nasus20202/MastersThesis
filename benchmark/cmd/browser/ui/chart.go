@@ -73,7 +73,6 @@ func Meter(value float64, width int, style lipgloss.Style) string {
 	return style.Render(strings.Repeat("█", filled)) + MutedStyle.Render(strings.Repeat("░", width-filled))
 }
 
-// Segment is one slice of a donut chart.
 type Segment struct {
 	Label string
 	Value float64

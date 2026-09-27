@@ -133,7 +133,6 @@ func LoadRun(root, runID string) (RunSnapshot, error) {
 	}, nil
 }
 
-// LoadAttempt decodes the attempt referenced by ref using the run's type.
 func LoadAttempt(ref AttemptRef, runType string) (Attempt, error) {
 	data, err := os.ReadFile(ref.Path)
 	if err != nil {

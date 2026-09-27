@@ -13,7 +13,6 @@ type Adapter struct {
 	client *Client
 }
 
-// NewAdapter wraps a llama client for use by an agent.
 func NewAdapter(client *Client) (inference.Client, error) {
 	if client == nil {
 		return nil, errors.New("llama client is required")
