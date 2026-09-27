@@ -21,13 +21,14 @@ func (v *View) runsPreview(route *Route, width int) string {
 	default:
 		runs = v.store.Runs()
 	}
-	lines := []string{components.Section(width, "Across runs"), v.runComparison(route, width)}
+	scoped := !v.store.TagFilter().Empty() || route.Agent != "" || route.Task != ""
+	lines := []string{components.Section(width, "Across runs"), v.runComparison(runs, route.Agent, route.Task, width)}
 	if route.Cursor < len(runs) {
 		run := runs[route.Cursor]
 		metrics := model.RunMetrics(v.store, run.RunID, route.Agent, route.Task)
 		lines = append(lines,
 			components.Section(width, "Selected run"),
-			v.runPreview(run, metrics, width),
+			v.runPreview(run, metrics, scoped, width),
 			"",
 			components.CardRow(v.vitals(metrics), width),
 			"",
@@ -37,16 +38,15 @@ func (v *View) runsPreview(route *Route, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (v *View) runComparison(route *Route, width int) string {
-	runs := v.store.Runs()
+func (v *View) runComparison(runs []results.RunRef, agent, task string, width int) string {
 	ranks := make([]ui.Rank, 0, len(runs))
 	for _, run := range runs {
-		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, route.Agent, route.Task))})
+		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, agent, task))})
 	}
 	return ui.Ranked(ranks, width, 0)
 }
 
-func (v *View) runPreview(run results.RunRef, metrics model.Metrics, width int) string {
+func (v *View) runPreview(run results.RunRef, metrics model.Metrics, scoped bool, width int) string {
 	body := []string{
 		ui.Header.Render(run.RunID) + "  " + ui.StateBadge(string(run.Metadata.State)),
 		ui.MutedStyle.Render(fmt.Sprintf("type %s · agents %s · repeat %d · parallel %d",
@@ -54,10 +54,12 @@ func (v *View) runPreview(run results.RunRef, metrics model.Metrics, width int) 
 		ui.MutedStyle.Render(fmt.Sprintf("started %s · rev %s", ui.Time(run.Metadata.StartedAt), ui.ShortRevision(run.Metadata.RepositoryRevision))),
 	}
 	if run.Summary != nil {
-		body = append(body,
-			fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount),
-			fmt.Sprintf("full success %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.MeanScore)),
-		)
+		if scoped {
+			body = append(body, fmt.Sprintf("attempts %d · errors %d", metrics.Attempts, metrics.Terminations["error"]))
+		} else {
+			body = append(body, fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount))
+		}
+		body = append(body, fmt.Sprintf("full success %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.MeanScore)))
 	}
 	return components.Panel("", strings.Join(body, "\n"), width, ui.Border)
 }
