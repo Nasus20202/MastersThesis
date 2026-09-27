@@ -54,15 +54,16 @@ type Criterion struct {
 }
 
 type Definition struct {
-	ID          string        `yaml:"id" validate:"required,scenarioid,max=32"`
-	Title       string        `yaml:"title" validate:"required,notblank"`
-	Task        string        `yaml:"task" validate:"required,notblank"`
-	Cluster     ClusterConfig `yaml:"cluster,omitempty"`
-	Prepare     Step          `yaml:"prepare" validate:"required,min=1,dive"`
-	VerifyClean Step          `yaml:"verify_clean" validate:"required,min=1,dive"`
-	InjectFault Step          `yaml:"inject_fault,omitempty" validate:"omitempty,dive"`
-	VerifyFault Step          `yaml:"verify_fault,omitempty" validate:"omitempty,dive"`
-	Grading     []Criterion   `yaml:"grading" validate:"required,min=1,dive"`
+	ID          string            `yaml:"id" validate:"required,scenarioid,max=32"`
+	Title       string            `yaml:"title" validate:"required,notblank"`
+	Task        string            `yaml:"task" validate:"required,notblank"`
+	Tags        map[string]string `yaml:"tags,omitempty"`
+	Cluster     ClusterConfig     `yaml:"cluster,omitempty"`
+	Prepare     Step              `yaml:"prepare" validate:"required,min=1,dive"`
+	VerifyClean Step              `yaml:"verify_clean" validate:"required,min=1,dive"`
+	InjectFault Step              `yaml:"inject_fault,omitempty" validate:"omitempty,dive"`
+	VerifyFault Step              `yaml:"verify_fault,omitempty" validate:"omitempty,dive"`
+	Grading     []Criterion       `yaml:"grading" validate:"required,min=1,dive"`
 }
 
 func (d *Definition) setDir(dir string) {

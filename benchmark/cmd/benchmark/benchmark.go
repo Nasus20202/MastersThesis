@@ -33,10 +33,14 @@ const (
 	controlPlaneSuffix = "-control-plane"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string) error {
+func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string, tagFilter scenario.TagFilter) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
+	}
+	definitions = scenario.FilterByTags(definitions, tagFilter)
+	if len(definitions) == 0 {
+		return fmt.Errorf("no scenarios match tag filter %q", tagFilter.String())
 	}
 	if len(agentNames) == 0 {
 		return errors.New("benchmark requires at least one agent")
@@ -70,6 +74,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			Parallelism:        parallelism,
 			RepeatCount:        repeat,
 			Scenarios:          scenarioIDs(definitions),
+			TagSelector:        tagFilter.String(),
 		}
 		store, err = results.New("results", metadata)
 	}

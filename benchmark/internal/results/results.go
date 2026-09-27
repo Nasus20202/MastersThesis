@@ -22,6 +22,7 @@ type RunMetadata struct {
 	Parallelism        int        `json:"parallelism"`
 	RepeatCount        int        `json:"repeat_count"`
 	Scenarios          []string   `json:"scenarios"`
+	TagSelector        string     `json:"tag_selector,omitempty"`
 }
 
 type RunState string

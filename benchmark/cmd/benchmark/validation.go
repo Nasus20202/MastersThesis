@@ -18,10 +18,14 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal) error {
+func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, tagFilter scenario.TagFilter) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
+	}
+	cases = validation.FilterCases(cases, tagFilter)
+	if len(cases) == 0 {
+		return fmt.Errorf("no validation cases match tag filter %q", tagFilter.String())
 	}
 	startedAt := time.Now().UTC()
 	revision, workingTreeDirty := repositoryProvenance(ctx)
@@ -35,6 +39,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		Parallelism:        parallelism,
 		RepeatCount:        repeat,
 		Scenarios:          validationScenarioIDs(cases),
+		TagSelector:        tagFilter.String(),
 	}
 	store, err := results.New("results", metadata)
 	if err != nil {

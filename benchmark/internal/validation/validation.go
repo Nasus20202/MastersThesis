@@ -77,6 +77,19 @@ func LoadCases(inputs []string) ([]ValidationCase, error) {
 	return cases, nil
 }
 
+func FilterCases(cases []ValidationCase, filter scenario.TagFilter) []ValidationCase {
+	if filter.Empty() {
+		return cases
+	}
+	filtered := make([]ValidationCase, 0, len(cases))
+	for _, item := range cases {
+		if filter.Matches(item.Scenario.Tags) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
 func Tasks(cases []ValidationCase, run RunFunc) []executor.Task {
 	tasks := make([]executor.Task, len(cases))
 	for index, item := range cases {
