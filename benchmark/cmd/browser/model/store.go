@@ -1,6 +1,3 @@
-// The store is the browser's read model: it loads and caches the persisted
-// run history and the scenario catalogue, and answers the aggregate queries the
-// screens and dashboards are built from.
 package model
 
 import (
@@ -13,7 +10,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
-// Config locates the read model's inputs.
 type StoreConfig struct {
 	ResultsRoot   string
 	ScenariosRoot string
@@ -25,8 +21,10 @@ type Store struct {
 	resultsRoot   string
 	scenariosRoot string
 	catalog       map[string]scenario.Definition
+	selector      scenario.TagFilter
 
 	runs     []results.RunRef
+	visible  []results.RunRef
 	agents   []results.AgentRollup
 	tasks    []results.TaskRollup
 	snapshot map[string]results.RunSnapshot
@@ -56,26 +54,112 @@ func (s *Store) Reload() error {
 		return err
 	}
 	s.runs = runs
-	s.agents = results.RollupAgents(runs)
-	s.tasks = results.RollupTasks(runs)
 	s.snapshot = make(map[string]results.RunSnapshot)
 	s.attempts = make(map[string]attemptEntry)
+	s.recompute()
 	return nil
 }
 
-// Runs returns every discovered run, newest first.
-func (s *Store) Runs() []results.RunRef { return s.runs }
+// recompute rebuilds the tag-filtered views from the full run list.
+func (s *Store) recompute() {
+	s.visible = s.filterRuns(s.runs)
+	s.agents = results.RollupAgentsWhere(s.runs, s.matchesTags)
+	s.tasks = results.RollupTasksWhere(s.runs, s.matchesTags)
+}
 
-// Agents returns the cross-run condition rollups.
+// Runs returns every discovered run that matches the active tag filter, newest first.
+func (s *Store) Runs() []results.RunRef { return s.visible }
+
 func (s *Store) Agents() []results.AgentRollup { return s.agents }
 
-// Tasks returns the cross-run scenario rollups.
 func (s *Store) Tasks() []results.TaskRollup { return s.tasks }
 
-// Catalog returns the scenario definitions keyed by ID.
+// SetTagFilter sets the active filter and recomputes the filtered views.
+func (s *Store) SetTagFilter(filter scenario.TagFilter) {
+	s.selector = filter
+	s.recompute()
+}
+
+func (s *Store) TagFilter() scenario.TagFilter { return s.selector }
+
+// TagOptions returns every catalogue tag key with its sorted, unique values.
+func (s *Store) TagOptions() map[string][]string {
+	values := make(map[string]map[string]struct{})
+	for _, definition := range s.catalog {
+		for key, value := range definition.Tags {
+			if values[key] == nil {
+				values[key] = make(map[string]struct{})
+			}
+			values[key][value] = struct{}{}
+		}
+	}
+	options := make(map[string][]string, len(values))
+	for key, set := range values {
+		keyValues := make([]string, 0, len(set))
+		for value := range set {
+			keyValues = append(keyValues, value)
+		}
+		sort.Strings(keyValues)
+		options[key] = keyValues
+	}
+	return options
+}
+
+// ScenarioTags returns a scenario's tags, or nil when it is unknown.
+func (s *Store) ScenarioTags(scenarioID string) map[string]string {
+	if definition, ok := s.catalog[scenarioID]; ok {
+		return definition.Tags
+	}
+	return nil
+}
+
+func (s *Store) matchesTags(scenarioID string) bool {
+	return s.selector.Matches(s.ScenarioTags(scenarioID))
+}
+
+// filterRuns keeps the runs that have attempts for a matching scenario. A run
+// without a summary cannot be evaluated and stays visible.
+func (s *Store) filterRuns(runs []results.RunRef) []results.RunRef {
+	if s.selector.Empty() {
+		return runs
+	}
+	filtered := make([]results.RunRef, 0, len(runs))
+	for _, run := range runs {
+		if s.runMatchesTags(run) {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered
+}
+
+func (s *Store) runMatchesTags(run results.RunRef) bool {
+	if run.Summary == nil {
+		return true
+	}
+	for _, condition := range run.Summary.ByCondition {
+		if s.conditionMatches(condition) {
+			return true
+		}
+	}
+	return false
+}
+
+// conditionMatches reports whether a condition has attempts from matching
+// scenarios; a summary without per-scenario detail falls back to its total.
+func (s *Store) conditionMatches(condition results.ConditionSummary) bool {
+	if len(condition.Scenarios) == 0 {
+		return condition.AttemptCount > 0
+	}
+	for scenarioID, scenario := range condition.Scenarios {
+		if scenario.AttemptCount > 0 && s.matchesTags(scenarioID) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) Catalog() map[string]scenario.Definition { return s.catalog }
 
-// ScenarioTitle resolves a scenario ID to its human title.
 func (s *Store) ScenarioTitle(scenarioID string) string {
 	if definition, ok := s.catalog[scenarioID]; ok && definition.Title != "" {
 		return definition.Title
@@ -83,7 +167,6 @@ func (s *Store) ScenarioTitle(scenarioID string) string {
 	return scenarioID
 }
 
-// Snapshot returns a loaded run snapshot.
 func (s *Store) Snapshot(runID string) (results.RunSnapshot, bool) {
 	snapshot, ok := s.snapshot[runID]
 	return snapshot, ok
@@ -116,24 +199,26 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 	return attempt, err
 }
 
-// RunsForAgent returns the runs that contain attempts for an agent.
 func (s *Store) RunsForAgent(agent string) []results.RunRef {
 	var runs []results.RunRef
-	for _, run := range s.runs {
+	for _, run := range s.visible {
 		if run.Summary == nil {
 			continue
 		}
-		if condition, ok := run.Summary.ByCondition[agent]; ok && condition.AttemptCount > 0 {
+		condition, ok := run.Summary.ByCondition[agent]
+		if ok && s.conditionMatches(condition) {
 			runs = append(runs, run)
 		}
 	}
 	return runs
 }
 
-// RunsForTask returns the runs that contain attempts for a scenario.
 func (s *Store) RunsForTask(task string) []results.RunRef {
+	if !s.matchesTags(task) {
+		return nil
+	}
 	var runs []results.RunRef
-	for _, run := range s.runs {
+	for _, run := range s.visible {
 		if run.Summary == nil {
 			continue
 		}
@@ -187,6 +272,9 @@ func (s *Store) ScenarioRows(runID, filterAgent, filterTask string) []ScenarioRo
 	var rows []ScenarioRow
 	for _, scenarioID := range snapshot.Metadata.Scenarios {
 		if filterTask != "" && scenarioID != filterTask {
+			continue
+		}
+		if !s.selector.Empty() && !s.matchesTags(scenarioID) {
 			continue
 		}
 		row := ScenarioRow{ID: scenarioID}

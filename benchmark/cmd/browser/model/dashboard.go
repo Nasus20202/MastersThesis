@@ -5,7 +5,6 @@ package model
 
 import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 
-// Metrics is the aggregated evidence for one dashboard scope.
 type Metrics struct {
 	Attempts  int
 	Full      int
@@ -32,7 +31,6 @@ type Metrics struct {
 	Criteria     map[string]CriterionStat
 }
 
-// CriterionStat is a pass count for one grading criterion.
 type CriterionStat struct {
 	Passed int
 	Total  int
@@ -122,7 +120,7 @@ func AgentMetrics(store *Store, agent string) Metrics {
 			continue
 		}
 		for _, item := range snapshot.Attempts {
-			if item.Group == agent {
+			if item.Group == agent && store.matchesTags(item.ScenarioID) {
 				refs = append(refs, ref{runID: run.RunID, ref: item})
 			}
 		}
@@ -166,12 +164,18 @@ func runRefs(store *Store, runID, filterAgent, filterTask string) []ref {
 		if filterTask != "" && item.ScenarioID != filterTask {
 			continue
 		}
+		if !store.matchesTags(item.ScenarioID) {
+			continue
+		}
 		refs = append(refs, ref{runID: runID, ref: item})
 	}
 	return refs
 }
 
 func taskRefs(store *Store, task string) []ref {
+	if !store.matchesTags(task) {
+		return nil
+	}
 	var refs []ref
 	for _, run := range store.RunsForTask(task) {
 		if err := store.EnsureSnapshot(run.RunID); err != nil {
@@ -289,7 +293,6 @@ func DraftAcceptanceRate(metrics Metrics) (float64, bool) {
 	return float64(metrics.DraftAccepted) / float64(metrics.DraftTokens), true
 }
 
-// Mean is the arithmetic mean of values.
 func Mean(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
@@ -301,7 +304,6 @@ func Mean(values []float64) float64 {
 	return total / float64(len(values))
 }
 
-// Sum is the total of values.
 func Sum(values []float64) float64 {
 	total := 0.0
 	for _, value := range values {
@@ -310,7 +312,6 @@ func Sum(values []float64) float64 {
 	return total
 }
 
-// SumInts is the total of integers.
 func SumInts(values []int) int {
 	total := 0
 	for _, value := range values {
@@ -319,7 +320,6 @@ func SumInts(values []int) int {
 	return total
 }
 
-// MeanInts is the arithmetic mean of integers.
 func MeanInts(values []int) float64 {
 	if len(values) == 0 {
 		return 0

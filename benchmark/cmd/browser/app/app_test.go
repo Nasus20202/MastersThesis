@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 func press(key string) tea.KeyPressMsg {
@@ -30,6 +33,8 @@ func press(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "backspace":
 		return tea.KeyPressMsg{Code: tea.KeyBackspace}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace}
 	default:
 		runes := []rune(key)
 		return tea.KeyPressMsg{Code: runes[0], Text: key}
@@ -298,4 +303,83 @@ func TestHelpClosesOnClick(t *testing.T) {
 	require.True(t, model.showHelp)
 	model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 5, Y: 5})
 	assert.False(t, model.showHelp)
+}
+
+func writeTestScenario(t *testing.T, root, id, difficulty string) {
+	t.Helper()
+	dir := filepath.Join(root, id)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	body := "id: " + id + "\ntitle: " + id + "\ntags:\n  difficulty: " + difficulty +
+		"\n  area: pods\ntask: Restore the workload.\nprepare:\n  - program: prepare\n" +
+		"verify_clean:\n  - program: verify\ngrading:\n  - id: ready\n    weight: 1\n    check:\n      program: check\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "scenario.yaml"), []byte(body), 0o600))
+}
+
+func newFilterModel(t *testing.T) *Model {
+	t.Helper()
+	root := t.TempDir()
+	createRun(t, root, "run-older", time.Date(2026, time.September, 22, 12, 0, 0, 0, time.UTC))
+	scenarios := t.TempDir()
+	writeTestScenario(t, scenarios, "easy-task", "easy")
+	writeTestScenario(t, scenarios, "hard-task", "hard")
+	model := New(Config{ResultsRoot: root, ScenariosRoot: scenarios})
+	model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	require.NoError(t, model.err)
+	return model
+}
+
+func TestTagFilterOverlayTogglesWithSpaceAndApplies(t *testing.T) {
+	model := newFilterModel(t)
+	model.Update(press("/"))
+	require.True(t, model.filterOpen)
+	require.NotEmpty(t, model.filterOptions)
+
+	first := model.filterOptions[0]
+	model.Update(press("space"))
+	assert.True(t, model.filterOptions[0].selected)
+
+	model.Update(press("esc"))
+	assert.False(t, model.filterOpen)
+	assert.Equal(t, []string{first.value}, model.view.Store().TagFilter()[first.key])
+}
+
+func TestTagFilterOverlayMouseToggleResetAndClose(t *testing.T) {
+	model := newFilterModel(t)
+	model.Update(press("/"))
+
+	row := 2 + 1 // heading, spacer, first key section row, then first option
+	model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: row})
+	assert.True(t, model.filterOptions[0].selected)
+
+	resetStart, _, _, _ := model.filterButtons()
+	model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: resetStart + 1, Y: 0})
+	assert.False(t, model.filterOptions[0].selected)
+
+	_, _, closeStart, _ := model.filterButtons()
+	model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: closeStart + 1, Y: 0})
+	assert.False(t, model.filterOpen)
+}
+
+func TestHeaderFilterButtonOpensOverlay(t *testing.T) {
+	model := newFilterModel(t)
+	_, start, end := model.headerRight()
+	require.Greater(t, end, start)
+	model.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: start + 1, Y: 0})
+	assert.True(t, model.filterOpen)
+}
+
+func TestHeaderShowsActiveFilterChip(t *testing.T) {
+	model := newFilterModel(t)
+	model.view.Store().SetTagFilter(scenario.TagFilter{"difficulty": {"hard"}})
+	assert.Contains(t, model.View().Content, "difficulty=hard")
+}
+
+func TestTagFilterOverlayMouseWheelMovesCursor(t *testing.T) {
+	model := newFilterModel(t)
+	model.Update(press("/"))
+	require.Equal(t, 0, model.filterCursor)
+	model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 2, Y: 5})
+	assert.Greater(t, model.filterCursor, 0)
+	model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp, X: 2, Y: 5})
+	assert.Equal(t, 0, model.filterCursor)
 }

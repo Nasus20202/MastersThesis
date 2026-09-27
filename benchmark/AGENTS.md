@@ -22,8 +22,11 @@ documentation policy, which also apply here.
 - Prefer readable, simple solutions over clever ones.
 - Every package has a one-sentence `// Package <name> ...` doc comment on its
   primary file.
-- Add comments only when they give value (a "why", an invariant, a gotcha).
-  Keep them short and to the point; don't restate what the code already says.
+- Add comments only when they give value (a "why", an invariant, a gotcha),
+  and keep them short: don't restate what the code already says. Keep a
+  comment only for ordering, units, a sentinel return, an edge case or a
+  rationale — not comments like `// Sum is the total of values.` or
+  `// Snapshot returns a loaded run snapshot.`
 - `go fmt ./...` and `go vet ./...` (`make format` / `make lint`) must pass
   before committing.
 
@@ -35,6 +38,9 @@ documentation policy, which also apply here.
 
 - New code needs tests, but keep them concise — don't over-verbose test
   setup, table cases, or assertions.
+- Every test must exercise some logic and fail under a small change to the
+  code it covers. Do not add tests that only assert a constant against
+  itself, a constructor's trivial output, or embedded prompt/content text.
 
 ## After implementing
 

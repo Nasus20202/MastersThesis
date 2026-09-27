@@ -22,7 +22,6 @@ const (
 	healthPath          = "/health"
 )
 
-// Config contains the connection details for a llama-server instance.
 type Config struct {
 	BaseURL    string
 	Model      string
@@ -31,7 +30,6 @@ type Config struct {
 	Metadata   inference.Metadata
 }
 
-// Client is an HTTP client for the llama-server API.
 type Client struct {
 	baseURL    *url.URL
 	model      string
@@ -100,7 +98,6 @@ func cloneSettings(settings map[string]string) map[string]string {
 	return cloned
 }
 
-// Metadata describes the llama-server and model used by the client.
 func (c *Client) Metadata() inference.Metadata {
 	metadata := c.metadata
 	metadata.RuntimeSettings = cloneSettings(metadata.RuntimeSettings)

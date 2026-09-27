@@ -29,7 +29,7 @@ excluded from the balance and capped at two. Labels are design hypotheses
 calibrated by the baseline run. Difficulty is evaluator metadata, never shown to
 the model.
 
-Current tally: **11 easy / 23 medium / 11 hard** across 45 graded scenarios (24 / 51 / 24),
+Current tally: **11 easy / 22 medium / 11 hard** across 44 graded scenarios (25 / 50 / 25),
 plus 2 anchors.
 
 ## Cluster profiles and add-ons
@@ -58,61 +58,97 @@ Type: T troubleshooting, C constructive. Difficulty: E easy, M medium, H hard,
 A anchor. Knowledge: G general, D documentation-dependent, M multi-source,
 V version-specific.
 
-| Scenario                           | Area                   | Type | Diff | Know | Env      |
-| ---------------------------------- | ---------------------- | ---- | ---- | ---- | -------- |
-| `deployment-selector-mismatch`     | workloads              | T    | M    | G    | default  |
-| `rollback-bad-release`             | workloads              | T    | M    | D    | default  |
-| `daemonset-missing-toleration`     | scheduling             | T    | M    | D    | default  |
-| `job-backoff-exhausted`            | workloads              | T    | E    | G    | default  |
-| `statefulset-headless-service`     | workloads + networking | T    | H    | M    | default  |
-| `readiness-probe-breaks-endpoints` | pods + networking      | T    | M    | D    | default  |
-| `liveness-restart-loop`            | pods                   | T    | M    | D    | default  |
-| `startup-probe-slow-app`           | pods                   | C    | E    | D    | default  |
-| `stuck-terminating-pod`            | lifecycle              | T    | M    | G    | default  |
-| `sidecar-shared-volume`            | pods + configuration   | C    | H    | M    | default  |
-| `container-crash-loop`             | workloads + pods       | T    | H    | G    | default  |
-| `image-pull-failure`               | images                 | T    | A    | G    | default  |
-| `stale-image-ifnotpresent`         | images                 | T    | M    | D    | registry |
-| `private-registry-pull-secret`     | images                 | C    | E    | D    | registry |
-| `unschedulable-cpu-request`        | resources              | T    | E    | G    | default  |
-| `node-selector-no-match`           | scheduling             | T    | E    | G    | default  |
-| `taint-toleration-placement`       | scheduling             | C    | E    | D    | default  |
-| `antiaffinity-unschedulable`       | scheduling             | T    | M    | D    | default  |
-| `oom-memory-limit`                 | resources              | T    | E    | G    | default  |
-| `qos-guaranteed-requests`          | resources              | C    | E    | D    | default  |
-| `service-targetport-mismatch`      | networking             | T    | M    | D    | default  |
-| `headless-service-dns`             | networking             | C    | M    | D    | default  |
-| `dns-name-resolution`              | networking             | T    | M    | M    | default  |
-| `ingress-path-routing`             | networking             | C    | M    | D    | traefik  |
-| `gateway-httproute-basic`          | networking             | C    | M    | D    | traefik  |
-| `gateway-route-misconfig`          | networking             | T    | H    | D    | traefik  |
-| `networkpolicy-blocked`            | networking             | T    | H    | D    | calico   |
-| `networkpolicy-egress-dns`         | networking             | T    | H    | M    | calico   |
-| `networkpolicy-cross-namespace`    | networking             | T    | M    | D    | calico   |
-| `pvc-pending`                      | storage                | T    | M    | D    | default  |
-| `bind-precreated-pv`               | storage                | C    | M    | D    | default  |
-| `statefulset-volumeclaim`          | storage + workloads    | T    | H    | M    | default  |
-| `hostpath-fsgroup`                 | storage + security     | T    | M    | M    | default  |
-| `configmap-missing-key`            | configuration          | T    | E    | G    | default  |
-| `secret-ref-mismatch`              | configuration          | T    | E    | G    | default  |
-| `immutable-configmap`              | configuration          | T    | M    | V    | default  |
-| `configmap-update-needs-reload`    | configuration          | T    | H    | D    | default  |
-| `missing-rbac-binding`             | authorization          | T    | H    | G    | default  |
-| `overprivileged-serviceaccount`    | authorization          | C    | H    | D    | default  |
-| `automount-token-disabled`         | authorization          | T    | M    | D    | default  |
-| `nonroot-securitycontext`          | security               | T    | M    | D    | default  |
-| `readonly-rootfs`                  | security               | T    | M    | D    | default  |
-| `psa-restricted-namespace`         | security               | T    | H    | V    | default  |
-| `resourcequota-blocked`            | governance             | T    | M    | D    | default  |
-| `limitrange-defaults`              | governance             | C    | E    | D    | default  |
-| `deprecated-api-group`             | api                    | C    | M    | V    | default  |
-| `basic-deploy-service`             | workloads + networking | C    | A    | G    | default  |
+| Scenario                                                                                                            | Area                   | Type | Diff | Know | Env      |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---- | ---- | ---- | -------- |
+| [`rollback-bad-release`](../benchmark/scenarios/workloads/rollback-bad-release/scenario.yaml)                       | workloads              | T    | M    | D    | default  |
+| [`daemonset-missing-toleration`](../benchmark/scenarios/scheduling/daemonset-missing-toleration/scenario.yaml)      | scheduling             | T    | M    | D    | default  |
+| [`job-backoff-exhausted`](../benchmark/scenarios/workloads/job-backoff-exhausted/scenario.yaml)                     | workloads              | T    | E    | G    | default  |
+| [`statefulset-headless-service`](../benchmark/scenarios/workloads/statefulset-headless-service/scenario.yaml)       | workloads + networking | T    | H    | M    | default  |
+| [`readiness-probe-breaks-endpoints`](../benchmark/scenarios/pods/readiness-probe-breaks-endpoints/scenario.yaml)    | pods + networking      | T    | M    | D    | default  |
+| [`liveness-restart-loop`](../benchmark/scenarios/pods/liveness-restart-loop/scenario.yaml)                          | pods                   | T    | M    | D    | default  |
+| [`startup-probe-slow-app`](../benchmark/scenarios/pods/startup-probe-slow-app/scenario.yaml)                        | pods                   | C    | E    | D    | default  |
+| [`stuck-terminating-pod`](../benchmark/scenarios/lifecycle/stuck-terminating-pod/scenario.yaml)                     | lifecycle              | T    | M    | G    | default  |
+| [`sidecar-shared-volume`](../benchmark/scenarios/pods/sidecar-shared-volume/scenario.yaml)                          | pods + configuration   | C    | H    | M    | default  |
+| [`container-crash-loop`](../benchmark/scenarios/workloads/container-crash-loop/scenario.yaml)                       | workloads + pods       | T    | H    | G    | default  |
+| [`image-pull-failure`](../benchmark/scenarios/images/image-pull-failure/scenario.yaml)                              | images                 | T    | A    | G    | default  |
+| [`stale-image-ifnotpresent`](../benchmark/scenarios/images/stale-image-ifnotpresent/scenario.yaml)                  | images                 | T    | M    | D    | registry |
+| [`private-registry-pull-secret`](../benchmark/scenarios/images/private-registry-pull-secret/scenario.yaml)          | images                 | C    | E    | D    | registry |
+| [`unschedulable-cpu-request`](../benchmark/scenarios/resources/unschedulable-cpu-request/scenario.yaml)             | resources              | T    | E    | G    | default  |
+| [`node-selector-no-match`](../benchmark/scenarios/scheduling/node-selector-no-match/scenario.yaml)                  | scheduling             | T    | E    | G    | default  |
+| [`taint-toleration-placement`](../benchmark/scenarios/scheduling/taint-toleration-placement/scenario.yaml)          | scheduling             | C    | E    | D    | default  |
+| [`antiaffinity-unschedulable`](../benchmark/scenarios/scheduling/antiaffinity-unschedulable/scenario.yaml)          | scheduling             | T    | M    | D    | default  |
+| [`oom-memory-limit`](../benchmark/scenarios/resources/oom-memory-limit/scenario.yaml)                               | resources              | T    | E    | G    | default  |
+| [`qos-guaranteed-requests`](../benchmark/scenarios/resources/qos-guaranteed-requests/scenario.yaml)                 | resources              | C    | E    | D    | default  |
+| [`service-targetport-mismatch`](../benchmark/scenarios/networking/service-targetport-mismatch/scenario.yaml)        | networking             | T    | M    | D    | default  |
+| [`headless-service-dns`](../benchmark/scenarios/networking/headless-service-dns/scenario.yaml)                      | networking             | C    | M    | D    | default  |
+| [`dns-name-resolution`](../benchmark/scenarios/networking/dns-name-resolution/scenario.yaml)                        | networking             | T    | M    | M    | default  |
+| [`ingress-path-routing`](../benchmark/scenarios/networking/ingress-path-routing/scenario.yaml)                      | networking             | C    | M    | D    | traefik  |
+| [`gateway-httproute-basic`](../benchmark/scenarios/networking/gateway-httproute-basic/scenario.yaml)                | networking             | C    | M    | D    | traefik  |
+| [`gateway-route-misconfig`](../benchmark/scenarios/networking/gateway-route-misconfig/scenario.yaml)                | networking             | T    | H    | D    | traefik  |
+| [`networkpolicy-blocked`](../benchmark/scenarios/networking/networkpolicy-blocked/scenario.yaml)                    | networking             | T    | H    | D    | calico   |
+| [`networkpolicy-egress-dns`](../benchmark/scenarios/networking/networkpolicy-egress-dns/scenario.yaml)              | networking             | T    | H    | M    | calico   |
+| [`networkpolicy-cross-namespace`](../benchmark/scenarios/networking/networkpolicy-cross-namespace/scenario.yaml)    | networking             | T    | M    | D    | calico   |
+| [`pvc-pending`](../benchmark/scenarios/storage/pvc-pending/scenario.yaml)                                           | storage                | T    | M    | D    | default  |
+| [`bind-precreated-pv`](../benchmark/scenarios/storage/bind-precreated-pv/scenario.yaml)                             | storage                | C    | M    | D    | default  |
+| [`statefulset-volumeclaim`](../benchmark/scenarios/storage/statefulset-volumeclaim/scenario.yaml)                   | storage + workloads    | T    | H    | M    | default  |
+| [`hostpath-fsgroup`](../benchmark/scenarios/storage/hostpath-fsgroup/scenario.yaml)                                 | storage + security     | T    | M    | M    | default  |
+| [`configmap-missing-key`](../benchmark/scenarios/configuration/configmap-missing-key/scenario.yaml)                 | configuration          | T    | E    | G    | default  |
+| [`secret-ref-mismatch`](../benchmark/scenarios/configuration/secret-ref-mismatch/scenario.yaml)                     | configuration          | T    | E    | G    | default  |
+| [`immutable-configmap`](../benchmark/scenarios/configuration/immutable-configmap/scenario.yaml)                     | configuration          | T    | M    | V    | default  |
+| [`configmap-update-needs-reload`](../benchmark/scenarios/configuration/configmap-update-needs-reload/scenario.yaml) | configuration          | T    | H    | D    | default  |
+| [`missing-rbac-binding`](../benchmark/scenarios/authorization/missing-rbac-binding/scenario.yaml)                   | authorization          | T    | H    | G    | default  |
+| [`overprivileged-serviceaccount`](../benchmark/scenarios/authorization/overprivileged-serviceaccount/scenario.yaml) | authorization          | C    | H    | D    | default  |
+| [`automount-token-disabled`](../benchmark/scenarios/authorization/automount-token-disabled/scenario.yaml)           | authorization          | T    | M    | D    | default  |
+| [`nonroot-securitycontext`](../benchmark/scenarios/security/nonroot-securitycontext/scenario.yaml)                  | security               | T    | M    | D    | default  |
+| [`readonly-rootfs`](../benchmark/scenarios/security/readonly-rootfs/scenario.yaml)                                  | security               | T    | M    | D    | default  |
+| [`psa-restricted-namespace`](../benchmark/scenarios/security/psa-restricted-namespace/scenario.yaml)                | security               | T    | H    | V    | default  |
+| [`resourcequota-blocked`](../benchmark/scenarios/governance/resourcequota-blocked/scenario.yaml)                    | governance             | T    | M    | D    | default  |
+| [`limitrange-defaults`](../benchmark/scenarios/governance/limitrange-defaults/scenario.yaml)                        | governance             | C    | E    | D    | default  |
+| [`deprecated-api-group`](../benchmark/scenarios/api/deprecated-api-group/scenario.yaml)                             | api                    | C    | M    | V    | default  |
+| [`basic-deploy-service`](../benchmark/scenarios/workloads/basic-deploy-service/scenario.yaml)                       | workloads + networking | C    | A    | G    | default  |
+
+## Coverage
+
+Each scenario declares its `difficulty`, `task_type`, `knowledge` and `area`
+tags in its `scenario.yaml`, and the counts below are derived from them. The
+development set is reviewed against these agreed categories. The difficulty
+balance is in [Difficulty](#difficulty). The runner and browser filter by the
+same tags (see [benchmark/README.md](../benchmark/README.md)).
+
+### Task type and knowledge
+
+| Dimension  | Distribution                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| Task type  | 33 troubleshooting (T) / 13 constructive (C)                                                  |
+| Knowledge  | 26 documentation-dependent (D) / 11 general (G) / 6 multi-source (M) / 3 version-specific (V) |
+| Difficulty | 11 easy (E) / 22 medium (M) / 11 hard (H); 2 anchors excluded and capped at two               |
+| Profile    | 38 default / 3 traefik / 3 calico / 2 registry                                                |
+
+### Technical areas
+
+Counts by the scenario's top-level category, which is also the validation shard.
+
+| Area          | Troubleshooting | Constructive | Total  |
+| ------------- | --------------- | ------------ | ------ |
+| networking    | 6               | 3            | 9      |
+| workloads     | 4               | 1            | 5      |
+| configuration | 4               | 0            | 4      |
+| scheduling    | 3               | 1            | 4      |
+| pods          | 2               | 2            | 4      |
+| storage       | 3               | 1            | 4      |
+| authorization | 2               | 1            | 3      |
+| images        | 2               | 1            | 3      |
+| resources     | 2               | 1            | 3      |
+| security      | 3               | 0            | 3      |
+| governance    | 1               | 1            | 2      |
+| api           | 0               | 1            | 1      |
+| lifecycle     | 1               | 0            | 1      |
+| **Total**     | **33**          | **13**       | **46** |
 
 ## Scenario detail
 
 ### Workload controllers
 
-- **`deployment-selector-mismatch`** — **Fault:** `spec.selector.app=web` but template `app=app`; no ReplicaSet created. **Fix:** replace the Deployment with a matching selector (selector is immutable). **Grade:** available 3 [2]; selector matches template and RS owned [1]. **Note:** may stall baseline on the immutable rule.
 - **`rollback-bad-release`** — **Fault:** rev1 healthy, rev2 bad, available<3. **Fix:** restore rev1 via `rollout undo` or re-apply the good image. **Grade:** available [2]; running image == last good [1]; history preserved [1]. **Note:** requires rollout-history reasoning, not Pod deletion.
 - **`daemonset-missing-toleration`** — **Fault:** DS desired<N; node carries a custom `NoSchedule` taint. **Fix:** add the matching toleration, keep the taint. **Grade:** `numberReady==desiredNumberScheduled` [2]; taint intact [1].
 - **`job-backoff-exhausted`** — **Fault:** Job hits `BackoffLimitExceeded`, 0 succeeded. **Fix:** correct the command/args so the Job completes. **Grade:** `succeeded>=1` [2]; no CrashLoop/Error Pod [1].

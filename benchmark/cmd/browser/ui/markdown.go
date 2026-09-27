@@ -1,5 +1,3 @@
-// Markdown renders agent transcripts to terminal lines, auto-fencing
-// raw YAML so glamour can highlight it and caching by width and source
 package ui
 
 import (
@@ -28,7 +26,6 @@ type Renderer struct {
 	cache    map[string][]string
 }
 
-// New returns a renderer for the given content width.
 func NewRenderer(width int) *Renderer {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStandardStyle("dark"),
@@ -41,7 +38,6 @@ func NewRenderer(width int) *Renderer {
 	return &Renderer{width: width, renderer: renderer, cache: make(map[string][]string)}
 }
 
-// Width reports the content width the renderer was built for.
 func (r *Renderer) Width() int { return r.width }
 
 // Render converts markdown (with embedded YAML fenced automatically) to

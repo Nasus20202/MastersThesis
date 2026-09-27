@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// Rollup is an aggregate outcome over one or more attempts.
 type Rollup struct {
 	Attempts         int
 	FullSuccessCount int
@@ -63,8 +62,13 @@ func (a *rollupAccumulator) rollup() Rollup {
 	return result
 }
 
-// RollupAgents aggregates every condition across the given runs.
 func RollupAgents(runs []RunRef) []AgentRollup {
+	return RollupAgentsWhere(runs, nil)
+}
+
+// RollupAgentsWhere is RollupAgents restricted to scenarios for which include
+// returns true; a nil include keeps all.
+func RollupAgentsWhere(runs []RunRef, include func(string) bool) []AgentRollup {
 	accumulators := make(map[string]*rollupAccumulator)
 	runCounts := make(map[string]int)
 	for _, run := range runs {
@@ -72,15 +76,24 @@ func RollupAgents(runs []RunRef) []AgentRollup {
 			continue
 		}
 		for agent, condition := range run.Summary.ByCondition {
-			accumulator := accumulators[agent]
-			if accumulator == nil {
-				accumulator = &rollupAccumulator{}
-				accumulators[agent] = accumulator
-			}
-			runCounts[agent]++
-			accumulator.add(condition.FullSuccessCount, condition.AttemptCount, condition.MeanScore*float64(condition.AttemptCount))
+			var accumulator *rollupAccumulator
 			for scenarioID, scenario := range condition.Scenarios {
-				accumulator.child(scenarioID).add(scenario.FullSuccessCount, scenario.AttemptCount, scenario.MeanScore*float64(scenario.AttemptCount))
+				if scenario.AttemptCount == 0 || !included(include, scenarioID) {
+					continue
+				}
+				if accumulator == nil {
+					accumulator = accumulators[agent]
+					if accumulator == nil {
+						accumulator = &rollupAccumulator{}
+						accumulators[agent] = accumulator
+					}
+				}
+				scoreTotal := scenario.MeanScore * float64(scenario.AttemptCount)
+				accumulator.add(scenario.FullSuccessCount, scenario.AttemptCount, scoreTotal)
+				accumulator.child(scenarioID).add(scenario.FullSuccessCount, scenario.AttemptCount, scoreTotal)
+			}
+			if accumulator != nil {
+				runCounts[agent]++
 			}
 		}
 	}
@@ -96,8 +109,13 @@ func RollupAgents(runs []RunRef) []AgentRollup {
 	return rollups
 }
 
-// RollupTasks aggregates every scenario across the given runs.
 func RollupTasks(runs []RunRef) []TaskRollup {
+	return RollupTasksWhere(runs, nil)
+}
+
+// RollupTasksWhere is RollupTasks restricted to scenarios for which include
+// returns true; a nil include keeps all.
+func RollupTasksWhere(runs []RunRef, include func(string) bool) []TaskRollup {
 	accumulators := make(map[string]*rollupAccumulator)
 	runCounts := make(map[string]int)
 	for _, run := range runs {
@@ -107,7 +125,7 @@ func RollupTasks(runs []RunRef) []TaskRollup {
 		seen := make(map[string]struct{})
 		for agent, condition := range run.Summary.ByCondition {
 			for scenarioID, scenario := range condition.Scenarios {
-				if scenario.AttemptCount == 0 {
+				if scenario.AttemptCount == 0 || !included(include, scenarioID) {
 					continue
 				}
 				accumulator := accumulators[scenarioID]
@@ -135,4 +153,8 @@ func RollupTasks(runs []RunRef) []TaskRollup {
 	}
 	slices.SortFunc(rollups, func(a, b TaskRollup) int { return strings.Compare(a.ScenarioID, b.ScenarioID) })
 	return rollups
+}
+
+func included(include func(string) bool, scenarioID string) bool {
+	return include == nil || include(scenarioID)
 }

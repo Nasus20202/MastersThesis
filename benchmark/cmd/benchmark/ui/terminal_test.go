@@ -35,9 +35,3 @@ func TestTerminalRedrawsProgressAfterLogOutput(t *testing.T) {
 	assert.Contains(t, output.String(), "log message\n")
 	assert.GreaterOrEqual(t, strings.Count(output.String(), "["), 2)
 }
-
-func TestTerminalWidthDefaultsForNonFileWriter(t *testing.T) {
-	terminal := NewTerminal(&bytes.Buffer{})
-
-	assert.Equal(t, defaultTerminalWidth, terminal.width())
-}

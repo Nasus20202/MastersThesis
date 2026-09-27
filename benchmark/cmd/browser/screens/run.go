@@ -36,7 +36,6 @@ func (v *View) runSummary(route *Route, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// runDashboard is the right-pane dashboard for a run.
 func (v *View) runDashboard(route *Route, width int) string {
 	if _, ok := v.store.Snapshot(route.RunID); !ok {
 		return ui.MutedStyle.Render("loading…")

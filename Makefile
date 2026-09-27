@@ -9,6 +9,7 @@ CORPUS ?= scenarios/
 AGENT ?= all
 REPEAT ?= 1
 CONFIG ?=
+TAG ?=
 BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 4
 RESUME ?=
@@ -44,6 +45,7 @@ BENCHMARK_RESUME_ARGS += --resume $(RESUME)
 endif
 BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
 BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
+BENCHMARK_TAG_ARGS := $(foreach tag,$(TAG),--tag $(tag))
 
 .DEFAULT_GOAL := help
 
@@ -75,6 +77,7 @@ help:
 		'VALIDATION=PATH...' 'Select validation directories/files; space-separated (default: scenarios/).' \
 		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, or skill benchmark agents (default: all).' \
 		'CONFIG=PATH' 'Overlay a benchmark YAML config file.' \
+		'TAG=SELECTOR' 'Filter scenarios by tag selector, e.g. difficulty=hard (default: none).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
@@ -132,10 +135,10 @@ browser:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
 
 benchmark: registry-start llama-start
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
 benchmark-validate: registry-start
-	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_VALIDATION_ARGS) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_VALIDATION_ARGS) $(BENCHMARK_TAG_ARGS) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)
 
 check-corpus:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark --check-corpus $(CORPUS)

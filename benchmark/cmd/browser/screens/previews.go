@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
@@ -20,13 +21,14 @@ func (v *View) runsPreview(route *Route, width int) string {
 	default:
 		runs = v.store.Runs()
 	}
-	lines := []string{components.Section(width, "Across runs"), v.runComparison(width)}
+	scoped := !v.store.TagFilter().Empty() || route.Agent != "" || route.Task != ""
+	lines := []string{components.Section(width, "Across runs"), v.runComparison(runs, route.Agent, route.Task, width)}
 	if route.Cursor < len(runs) {
 		run := runs[route.Cursor]
 		metrics := model.RunMetrics(v.store, run.RunID, route.Agent, route.Task)
 		lines = append(lines,
 			components.Section(width, "Selected run"),
-			v.runPreview(run, width),
+			v.runPreview(run, metrics, scoped, width),
 			"",
 			components.CardRow(v.vitals(metrics), width),
 			"",
@@ -36,20 +38,15 @@ func (v *View) runsPreview(route *Route, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (v *View) runComparison(width int) string {
-	runs := v.store.Runs()
+func (v *View) runComparison(runs []results.RunRef, agent, task string, width int) string {
 	ranks := make([]ui.Rank, 0, len(runs))
 	for _, run := range runs {
-		value := 0.0
-		if run.Summary != nil {
-			value = overallRate(run.Summary)
-		}
-		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: value})
+		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, agent, task))})
 	}
 	return ui.Ranked(ranks, width, 0)
 }
 
-func (v *View) runPreview(run results.RunRef, width int) string {
+func (v *View) runPreview(run results.RunRef, metrics model.Metrics, scoped bool, width int) string {
 	body := []string{
 		ui.Header.Render(run.RunID) + "  " + ui.StateBadge(string(run.Metadata.State)),
 		ui.MutedStyle.Render(fmt.Sprintf("type %s · agents %s · repeat %d · parallel %d",
@@ -57,10 +54,12 @@ func (v *View) runPreview(run results.RunRef, width int) string {
 		ui.MutedStyle.Render(fmt.Sprintf("started %s · rev %s", ui.Time(run.Metadata.StartedAt), ui.ShortRevision(run.Metadata.RepositoryRevision))),
 	}
 	if run.Summary != nil {
-		body = append(body,
-			fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount),
-			fmt.Sprintf("full success %s · mean %s", ui.Rate(overallRate(run.Summary)), ui.Rate(runMean(run.Summary))),
-		)
+		if scoped {
+			body = append(body, fmt.Sprintf("attempts %d · errors %d", metrics.Attempts, metrics.Terminations["error"]))
+		} else {
+			body = append(body, fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount))
+		}
+		body = append(body, fmt.Sprintf("full success %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.MeanScore)))
 	}
 	return components.Panel("", strings.Join(body, "\n"), width, ui.Border)
 }
@@ -103,6 +102,7 @@ func (v *View) taskPreview(route *Route, width int) string {
 		ui.Ranked(ranks, width, 0),
 		"",
 		components.Section(width, "Selected task"),
+		ui.MutedStyle.Render("tags: " + tagsText(v.store.ScenarioTags(task.ScenarioID))),
 		components.CardRow(v.vitals(metrics), width),
 		"",
 		v.dashboardView(metrics, width),
@@ -113,6 +113,22 @@ func (v *View) taskPreview(route *Route, width int) string {
 		criteriaMatrix(model.TaskCriteria(v.store, task.ScenarioID), width),
 	}
 	return strings.Join(lines, "\n")
+}
+
+func tagsText(tags map[string]string) string {
+	if len(tags) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(tags))
+	for key := range tags {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+tags[key])
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (v *View) attemptPreview(route *Route, width int) string {

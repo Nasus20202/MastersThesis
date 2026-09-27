@@ -7,7 +7,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
 )
 
-// List is the primary pane for list routes.
 func (v *View) List(route *Route, width, height int) string {
 	contentWidth := max(1, PaneWidth(width)-1)
 	head := v.screenHead(route, contentWidth)

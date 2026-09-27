@@ -18,6 +18,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/logging"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 const envNoColor = "NO_COLOR"
@@ -45,8 +46,8 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.SetOutput(logOutput)
 	flags.Usage = func() {
 		fmt.Fprintln(logOutput, "Usage:")
-		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--agent NAME[,NAME] ...] [--parallel N] [--repeat N] [--resume RUN_ID]")
-		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --validate PATH [--parallel N] [--repeat N]")
+		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --scenario PATH [--tag KEY=VALUE] [--agent NAME[,NAME] ...] [--parallel N] [--repeat N] [--resume RUN_ID]")
+		fmt.Fprintln(logOutput, "  benchmark --config PATH ... --validate PATH [--tag KEY=VALUE] [--parallel N] [--repeat N]")
 		fmt.Fprintln(logOutput, "  benchmark --check-corpus PATH")
 		fmt.Fprintln(logOutput, "\nOptions:")
 		flags.PrintDefaults()
@@ -59,6 +60,8 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.Var(&configPaths, "config", "load benchmark YAML configuration; may be repeated in overlay order")
 	var agentValues agentList
 	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, prompt, or skill; may be repeated or comma-separated (default: all)")
+	var tagValues stringList
+	flags.Var(&tagValues, "tag", "filter scenarios by tag, e.g. difficulty=hard or area=networking; may be repeated or comma-separated")
 	parallel := flags.Int("parallel", 1, "maximum number of tasks running at once")
 	repeat := flags.Int("repeat", 1, "number of times to run each scenario or validation case")
 	resumeID := flags.String("resume", "", "resume an incomplete scenario run by ID")
@@ -86,6 +89,10 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	if flags.NArg() > 0 {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
+	tagFilter, err := scenario.ParseTagFilter(tagValues)
+	if err != nil {
+		return err
+	}
 	benchmarkConfig, err := config.Load(configPaths...)
 	if err != nil {
 		return err
@@ -96,6 +103,9 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	}
 	slog.SetDefault(logger)
 	if corpusPath != "" {
+		if !tagFilter.Empty() {
+			return errors.New("tag filtering is only supported with scenario or validation runs")
+		}
 		return runCorpusCheck(corpusPath)
 	}
 	if *parallel < 1 {
@@ -116,9 +126,9 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		if len(agentValues) > 0 && !explicitAllAgentSelection(agentValues) {
 			return errors.New("agent selection is only supported with scenario runs")
 		}
-		return runValidation(ctx, validationPaths, *parallel, *repeat, benchmarkConfig, terminal)
+		return runValidation(ctx, validationPaths, *parallel, *repeat, benchmarkConfig, terminal, tagFilter)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal, strings.TrimSpace(*resumeID))
+	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal, strings.TrimSpace(*resumeID), tagFilter)
 }
 
 type stringList []string

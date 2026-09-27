@@ -9,7 +9,6 @@ import (
 
 const maxErrorBodyBytes = 8 << 10
 
-// HTTPError reports a non-successful response from llama-server.
 type HTTPError struct {
 	StatusCode int
 	Status     string

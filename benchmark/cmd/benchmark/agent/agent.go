@@ -29,7 +29,6 @@ const (
 	Skill    Name = "skill"
 )
 
-// ConfiguredLlamaParallelism returns the effective llama.cpp slot count.
 func ConfiguredLlamaParallelism() (int, error) {
 	value := strings.TrimSpace(os.Getenv(envLlamaParallel))
 	if value == "" {

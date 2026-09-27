@@ -42,6 +42,25 @@ func TestRollupAgentsAggregatesAcrossRuns(t *testing.T) {
 	assert.Equal(t, 2, agent.Scenarios["task-a"].Attempts)
 }
 
+func TestRollupAgentsWhereSkipsAgentsWithoutIncludedScenarios(t *testing.T) {
+	runs := []RunRef{
+		{Summary: &RunSummary{ByCondition: map[string]ConditionSummary{
+			"skill": {
+				AttemptCount: 1, FullSuccessCount: 1, MeanScore: 1,
+				Scenarios: map[string]ScenarioSummary{"task-a": {AttemptCount: 1, FullSuccessCount: 1, MeanScore: 1}},
+			},
+			"baseline": {
+				AttemptCount: 1, FullSuccessCount: 1, MeanScore: 1,
+				Scenarios: map[string]ScenarioSummary{"task-b": {AttemptCount: 1, FullSuccessCount: 1, MeanScore: 1}},
+			},
+		}}},
+	}
+
+	rollups := RollupAgentsWhere(runs, func(scenarioID string) bool { return scenarioID == "task-a" })
+	require.Len(t, rollups, 1)
+	assert.Equal(t, "skill", rollups[0].Agent)
+}
+
 func TestRollupTasksAggregatesAcrossRunsAndAgents(t *testing.T) {
 	runs := []RunRef{
 		{Summary: &RunSummary{ByCondition: map[string]ConditionSummary{

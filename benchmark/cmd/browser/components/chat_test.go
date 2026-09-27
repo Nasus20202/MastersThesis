@@ -47,11 +47,3 @@ func TestBuildRendersReasoningBeforeContent(t *testing.T) {
 	require.Len(t, layout.CardSpans, 2)
 	assert.Contains(t, strings.Join(layout.Lines, "\n"), "reasoning")
 }
-
-func TestRenderCardProducesBorderedBox(t *testing.T) {
-	item := card{title: "bash", body: []string{"kubectl get pods"}, border: ui.Green, titleStyle: ui.Warning}
-	lines := renderCard(item, 40, false)
-	require.GreaterOrEqual(t, len(lines), 3)
-	assert.Contains(t, lines[0], "bash")
-	assert.Contains(t, lines[len(lines)-1], "╰")
-}

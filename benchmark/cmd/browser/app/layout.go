@@ -13,7 +13,6 @@ const (
 	footerHeight = 1
 )
 
-// View implements tea.Model.
 func (m *Model) View() tea.View {
 	view := tea.NewView("")
 	view.AltScreen = true
@@ -24,6 +23,10 @@ func (m *Model) View() tea.View {
 	}
 	if m.showHelp {
 		view.SetContent(m.renderHelp())
+		return view
+	}
+	if m.filterOpen {
+		view.SetContent(m.renderFilter())
 		return view
 	}
 	view.SetContent(m.renderScreen())

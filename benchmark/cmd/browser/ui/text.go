@@ -1,5 +1,3 @@
-// Small string and layout helpers shared by the browser
-// components: padding, truncation, wrapping and line windowing.
 package ui
 
 import (
@@ -52,7 +50,6 @@ func TruncatePlain(value string, width int) string {
 	return string(runes[:width-1]) + "…"
 }
 
-// LineCount returns the number of lines in value.
 func LineCount(value string) int {
 	if value == "" {
 		return 0
@@ -83,13 +80,11 @@ func Window(lines []string, offset, height int) string {
 	return strings.Join(lines[offset:end], "\n")
 }
 
-// ClampOffset clamps a scroll offset to the valid range for count lines.
 func ClampOffset(offset, count, visible int) int {
 	maxOffset := max(0, count-visible)
 	return max(0, min(offset, maxOffset))
 }
 
-// JoinSides places right at the end of a width-wide line.
 func JoinSides(left, right string, width int) string {
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
@@ -148,12 +143,10 @@ func Time(value time.Time) string {
 	return value.Local().Format("2006-01-02 15:04")
 }
 
-// Float trims trailing zeros from a float.
 func Float(value float64) string {
 	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", value), "0"), ".")
 }
 
-// FirstLine returns the first line of value.
 func FirstLine(value string) string {
 	if index := strings.IndexByte(value, '\n'); index >= 0 {
 		return value[:index]
@@ -161,7 +154,6 @@ func FirstLine(value string) string {
 	return value
 }
 
-// ShortRevision abbreviates a git revision.
 func ShortRevision(revision string) string {
 	if len(revision) > 8 {
 		return revision[:8]
@@ -172,7 +164,6 @@ func ShortRevision(revision string) string {
 	return revision
 }
 
-// YesNo renders a boolean as yes/no.
 func YesNo(value bool) string {
 	if value {
 		return "yes"
