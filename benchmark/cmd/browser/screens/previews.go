@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
@@ -40,11 +41,7 @@ func (v *View) runComparison(width int) string {
 	runs := v.store.Runs()
 	ranks := make([]ui.Rank, 0, len(runs))
 	for _, run := range runs {
-		value := 0.0
-		if run.Summary != nil {
-			value = overallRate(run.Summary)
-		}
-		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: value})
+		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, "", ""))})
 	}
 	return ui.Ranked(ranks, width, 0)
 }
@@ -103,6 +100,7 @@ func (v *View) taskPreview(route *Route, width int) string {
 		ui.Ranked(ranks, width, 0),
 		"",
 		components.Section(width, "Selected task"),
+		ui.MutedStyle.Render("tags: " + tagsText(v.store.ScenarioTags(task.ScenarioID))),
 		components.CardRow(v.vitals(metrics), width),
 		"",
 		v.dashboardView(metrics, width),
@@ -113,6 +111,22 @@ func (v *View) taskPreview(route *Route, width int) string {
 		criteriaMatrix(model.TaskCriteria(v.store, task.ScenarioID), width),
 	}
 	return strings.Join(lines, "\n")
+}
+
+func tagsText(tags map[string]string) string {
+	if len(tags) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(tags))
+	for key := range tags {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+tags[key])
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (v *View) attemptPreview(route *Route, width int) string {

@@ -1,6 +1,3 @@
-// The store is the browser's read model: it loads and caches the persisted
-// run history and the scenario catalogue, and answers the aggregate queries the
-// screens and dashboards are built from.
 package model
 
 import (
@@ -13,7 +10,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
-// Config locates the read model's inputs.
 type StoreConfig struct {
 	ResultsRoot   string
 	ScenariosRoot string
@@ -25,6 +21,7 @@ type Store struct {
 	resultsRoot   string
 	scenariosRoot string
 	catalog       map[string]scenario.Definition
+	selector      scenario.TagFilter
 
 	runs     []results.RunRef
 	agents   []results.AgentRollup
@@ -56,8 +53,8 @@ func (s *Store) Reload() error {
 		return err
 	}
 	s.runs = runs
-	s.agents = results.RollupAgents(runs)
-	s.tasks = results.RollupTasks(runs)
+	s.agents = results.RollupAgentsWhere(runs, s.matchesTags)
+	s.tasks = results.RollupTasksWhere(runs, s.matchesTags)
 	s.snapshot = make(map[string]results.RunSnapshot)
 	s.attempts = make(map[string]attemptEntry)
 	return nil
@@ -66,16 +63,56 @@ func (s *Store) Reload() error {
 // Runs returns every discovered run, newest first.
 func (s *Store) Runs() []results.RunRef { return s.runs }
 
-// Agents returns the cross-run condition rollups.
 func (s *Store) Agents() []results.AgentRollup { return s.agents }
 
-// Tasks returns the cross-run scenario rollups.
 func (s *Store) Tasks() []results.TaskRollup { return s.tasks }
 
-// Catalog returns the scenario definitions keyed by ID.
+// SetTagFilter sets the active filter and recomputes the rollups.
+func (s *Store) SetTagFilter(filter scenario.TagFilter) {
+	s.selector = filter
+	s.agents = results.RollupAgentsWhere(s.runs, s.matchesTags)
+	s.tasks = results.RollupTasksWhere(s.runs, s.matchesTags)
+}
+
+func (s *Store) TagFilter() scenario.TagFilter { return s.selector }
+
+// TagOptions returns every catalogue tag key with its sorted, unique values.
+func (s *Store) TagOptions() map[string][]string {
+	values := make(map[string]map[string]struct{})
+	for _, definition := range s.catalog {
+		for key, value := range definition.Tags {
+			if values[key] == nil {
+				values[key] = make(map[string]struct{})
+			}
+			values[key][value] = struct{}{}
+		}
+	}
+	options := make(map[string][]string, len(values))
+	for key, set := range values {
+		keyValues := make([]string, 0, len(set))
+		for value := range set {
+			keyValues = append(keyValues, value)
+		}
+		sort.Strings(keyValues)
+		options[key] = keyValues
+	}
+	return options
+}
+
+// ScenarioTags returns a scenario's tags, or nil when it is unknown.
+func (s *Store) ScenarioTags(scenarioID string) map[string]string {
+	if definition, ok := s.catalog[scenarioID]; ok {
+		return definition.Tags
+	}
+	return nil
+}
+
+func (s *Store) matchesTags(scenarioID string) bool {
+	return s.selector.Matches(s.ScenarioTags(scenarioID))
+}
+
 func (s *Store) Catalog() map[string]scenario.Definition { return s.catalog }
 
-// ScenarioTitle resolves a scenario ID to its human title.
 func (s *Store) ScenarioTitle(scenarioID string) string {
 	if definition, ok := s.catalog[scenarioID]; ok && definition.Title != "" {
 		return definition.Title
@@ -83,7 +120,6 @@ func (s *Store) ScenarioTitle(scenarioID string) string {
 	return scenarioID
 }
 
-// Snapshot returns a loaded run snapshot.
 func (s *Store) Snapshot(runID string) (results.RunSnapshot, bool) {
 	snapshot, ok := s.snapshot[runID]
 	return snapshot, ok
@@ -116,7 +152,6 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 	return attempt, err
 }
 
-// RunsForAgent returns the runs that contain attempts for an agent.
 func (s *Store) RunsForAgent(agent string) []results.RunRef {
 	var runs []results.RunRef
 	for _, run := range s.runs {
@@ -130,7 +165,6 @@ func (s *Store) RunsForAgent(agent string) []results.RunRef {
 	return runs
 }
 
-// RunsForTask returns the runs that contain attempts for a scenario.
 func (s *Store) RunsForTask(task string) []results.RunRef {
 	var runs []results.RunRef
 	for _, run := range s.runs {
@@ -187,6 +221,9 @@ func (s *Store) ScenarioRows(runID, filterAgent, filterTask string) []ScenarioRo
 	var rows []ScenarioRow
 	for _, scenarioID := range snapshot.Metadata.Scenarios {
 		if filterTask != "" && scenarioID != filterTask {
+			continue
+		}
+		if !s.selector.Empty() && !s.matchesTags(scenarioID) {
 			continue
 		}
 		row := ScenarioRow{ID: scenarioID}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
@@ -18,11 +19,7 @@ func (m *Model) renderHeader() string {
 	if m.canGoBack() {
 		title += "  " + m.backLabel()
 	}
-	right := ui.MutedStyle.Render(fmt.Sprintf("%d runs · %d agents · %d tasks",
-		len(m.store.Runs()), len(m.store.Agents()), len(m.store.Tasks())))
-	if m.hasRunning() {
-		right = ui.BadgeRunning.Render("LIVE") + " " + right
-	}
+	right, _, _ := m.headerRight()
 
 	tabs := make([]string, 0, screens.ModeCount)
 	for current := screens.Mode(0); current < screens.ModeCount; current++ {
@@ -33,36 +30,53 @@ func (m *Model) renderHeader() string {
 		}
 		tabs = append(tabs, ui.TabIdle.Render(label))
 	}
-	hint := "tab next tab"
-	switch {
-	case m.current().Kind == screens.Attempt:
-		hint = "c conversation"
-	case screens.IsList(m.current().Kind) && screens.TwoColumn(m.width) && m.current().Focus == screens.FocusSecondary:
-		hint = "dashboard pane · v back to list"
-	case screens.IsList(m.current().Kind) && screens.TwoColumn(m.width):
-		hint = "v dashboard"
-	}
-	if m.canGoBack() {
-		hint = "esc back · " + hint
-	}
-	hint += " · ? help · q quit"
 	rule := ui.Rule.Render(strings.Repeat("─", max(1, m.width)))
 	return ui.JoinSides(title, right, m.width) + "\n" +
-		ui.JoinSides(strings.Join(tabs, " "), ui.FaintStyle.Render(hint), m.width) + "\n" + rule
+		strings.Join(tabs, " ") + "\n" + rule
 }
 
 func (m *Model) renderFooter() string {
-	footer := help.New()
-	footer.SetWidth(max(1, m.width-4))
-	line := footer.ShortHelpView(ui.DefaultKeyMap.ShortHelp())
+	line := shortHelp(ui.DefaultKeyMap.ShortHelp(), max(1, m.width-2))
 	if m.err != nil {
 		line = ui.Danger.Render("error: "+m.err.Error()) + "  " + line
 	}
 	return ui.Footer.Width(max(1, m.width)).Render(" " + line)
 }
 
+// shortHelp styles every segment with the footer background so the bar stays a
+// single colour.
+func shortHelp(bindings []key.Binding, limit int) string {
+	keyStyle := lipgloss.NewStyle().Foreground(ui.Accent).Background(ui.Bar)
+	descStyle := lipgloss.NewStyle().Foreground(ui.Muted).Background(ui.Bar)
+	sepStyle := lipgloss.NewStyle().Foreground(ui.Faint).Background(ui.Bar)
+	var builder strings.Builder
+	width := 0
+	for _, binding := range bindings {
+		if !binding.Enabled() {
+			continue
+		}
+		item := keyStyle.Render(binding.Help().Key) + descStyle.Render(" "+binding.Help().Desc)
+		if width > 0 {
+			item = sepStyle.Render(" • ") + item
+		}
+		itemWidth := lipgloss.Width(item)
+		if width > 0 && width+itemWidth > limit {
+			break
+		}
+		width += itemWidth
+		builder.WriteString(item)
+	}
+	return builder.String()
+}
+
 func (m *Model) renderHelp() string {
 	footer := help.New()
+	footer.Styles.ShortKey = lipgloss.NewStyle().Foreground(ui.Accent)
+	footer.Styles.ShortDesc = lipgloss.NewStyle().Foreground(ui.Muted)
+	footer.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(ui.Faint)
+	footer.Styles.FullKey = lipgloss.NewStyle().Foreground(ui.Text)
+	footer.Styles.FullDesc = ui.MutedStyle
+	footer.Styles.FullSeparator = ui.FaintStyle
 	footer.ShowAll = true
 	footer.SetWidth(m.width)
 	groups := footer.FullHelpView(ui.DefaultKeyMap.FullHelp())
@@ -90,6 +104,33 @@ func (m *Model) headerTitle() string {
 		title += "  " + ui.MutedStyle.Render(crumbs)
 	}
 	return title
+}
+
+// headerRight returns the header's right side and the filter control's range.
+func (m *Model) headerRight() (text string, filterStart, filterEnd int) {
+	control := m.filterControlLabel()
+	counts := ui.MutedStyle.Render(fmt.Sprintf("%d runs · %d agents · %d tasks",
+		len(m.store.Runs()), len(m.store.Agents()), len(m.store.Tasks())))
+	if m.hasRunning() {
+		counts = ui.BadgeRunning.Render("LIVE") + " " + counts
+	}
+	text = control + "  " + counts
+	filterStart = m.width - lipgloss.Width(text)
+	filterEnd = filterStart + lipgloss.Width(control)
+	return text, filterStart, filterEnd
+}
+
+func (m *Model) filterControlLabel() string {
+	filter := m.view.Store().TagFilter()
+	if filter.Empty() {
+		return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("⌕ filter") + ui.TabIdle.Render("]")
+	}
+	return ui.TabActive.Render(" ⌕ " + ui.Truncate(filter.String(), 44) + " ")
+}
+
+func (m *Model) filterControlAt(x int) bool {
+	_, start, end := m.headerRight()
+	return end > start && x >= start && x < end
 }
 
 func (m *Model) canGoBack() bool { return len(m.stack) > 1 }

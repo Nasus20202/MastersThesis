@@ -9,6 +9,9 @@ import (
 )
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.filterOpen {
+		return m.handleFilterKey(msg)
+	}
 	key := msg.String()
 	if key == "ctrl+c" {
 		return m, tea.Quit
@@ -115,11 +118,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if current.Kind == screens.Attempt {
 			m.setFocus(screens.FocusSecondary)
 		}
+	case "/":
+		m.openFilter()
 	}
 	return m, nil
 }
 
 func (m *Model) handleWheel(msg tea.MouseWheelMsg) {
+	if m.filterOpen {
+		m.filterWheel(msg)
+		return
+	}
 	mouse := msg.Mouse()
 	var delta int
 	switch mouse.Button {
@@ -149,6 +158,10 @@ func (m *Model) handleWheel(msg tea.MouseWheelMsg) {
 }
 
 func (m *Model) handleClick(msg tea.MouseClickMsg) {
+	if m.filterOpen {
+		m.filterClick(msg)
+		return
+	}
 	if msg.Button != tea.MouseLeft {
 		return
 	}
@@ -159,6 +172,10 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) {
 	mouse := msg.Mouse()
 	if m.backAt(mouse) {
 		m.goBack()
+		return
+	}
+	if mouse.Y == 0 && m.filterControlAt(mouse.X) {
+		m.openFilter()
 		return
 	}
 	if mode, ok := m.tabAt(mouse); ok {
@@ -199,7 +216,6 @@ func (m *Model) handleClick(msg tea.MouseClickMsg) {
 	m.scrollCursorIntoView(current)
 }
 
-// backAt reports whether a click landed on the header back button.
 func (m *Model) backAt(mouse tea.Mouse) bool {
 	if mouse.Y != 0 {
 		return false

@@ -11,7 +11,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 )
 
-// Config configures a browser model.
 type Config struct {
 	ResultsRoot   string
 	ScenariosRoot string
@@ -28,6 +27,11 @@ type Model struct {
 
 	showHelp bool
 	err      error
+
+	filterOpen    bool
+	filterOptions []filterOption
+	filterCursor  int
+	filterOffset  int
 }
 
 // New loads the run history and scenario catalogue and returns the browser
@@ -47,10 +51,8 @@ func New(config Config) *Model {
 	return model
 }
 
-// Init implements tea.Model.
 func (m *Model) Init() tea.Cmd { return nil }
 
-// Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
