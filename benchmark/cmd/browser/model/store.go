@@ -24,6 +24,7 @@ type Store struct {
 	selector      scenario.TagFilter
 
 	runs     []results.RunRef
+	visible  []results.RunRef
 	agents   []results.AgentRollup
 	tasks    []results.TaskRollup
 	snapshot map[string]results.RunSnapshot
@@ -53,25 +54,30 @@ func (s *Store) Reload() error {
 		return err
 	}
 	s.runs = runs
-	s.agents = results.RollupAgentsWhere(runs, s.matchesTags)
-	s.tasks = results.RollupTasksWhere(runs, s.matchesTags)
 	s.snapshot = make(map[string]results.RunSnapshot)
 	s.attempts = make(map[string]attemptEntry)
+	s.recompute()
 	return nil
 }
 
-// Runs returns every discovered run, newest first.
-func (s *Store) Runs() []results.RunRef { return s.runs }
+// recompute rebuilds the tag-filtered views from the full run list.
+func (s *Store) recompute() {
+	s.visible = s.filterRuns(s.runs)
+	s.agents = results.RollupAgentsWhere(s.runs, s.matchesTags)
+	s.tasks = results.RollupTasksWhere(s.runs, s.matchesTags)
+}
+
+// Runs returns every discovered run that matches the active tag filter, newest first.
+func (s *Store) Runs() []results.RunRef { return s.visible }
 
 func (s *Store) Agents() []results.AgentRollup { return s.agents }
 
 func (s *Store) Tasks() []results.TaskRollup { return s.tasks }
 
-// SetTagFilter sets the active filter and recomputes the rollups.
+// SetTagFilter sets the active filter and recomputes the filtered views.
 func (s *Store) SetTagFilter(filter scenario.TagFilter) {
 	s.selector = filter
-	s.agents = results.RollupAgentsWhere(s.runs, s.matchesTags)
-	s.tasks = results.RollupTasksWhere(s.runs, s.matchesTags)
+	s.recompute()
 }
 
 func (s *Store) TagFilter() scenario.TagFilter { return s.selector }
@@ -109,6 +115,47 @@ func (s *Store) ScenarioTags(scenarioID string) map[string]string {
 
 func (s *Store) matchesTags(scenarioID string) bool {
 	return s.selector.Matches(s.ScenarioTags(scenarioID))
+}
+
+// filterRuns keeps the runs that have attempts for a matching scenario. A run
+// without a summary cannot be evaluated and stays visible.
+func (s *Store) filterRuns(runs []results.RunRef) []results.RunRef {
+	if s.selector.Empty() {
+		return runs
+	}
+	filtered := make([]results.RunRef, 0, len(runs))
+	for _, run := range runs {
+		if s.runMatchesTags(run) {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered
+}
+
+func (s *Store) runMatchesTags(run results.RunRef) bool {
+	if run.Summary == nil {
+		return true
+	}
+	for _, condition := range run.Summary.ByCondition {
+		if s.conditionMatches(condition) {
+			return true
+		}
+	}
+	return false
+}
+
+// conditionMatches reports whether a condition has attempts from matching
+// scenarios; a summary without per-scenario detail falls back to its total.
+func (s *Store) conditionMatches(condition results.ConditionSummary) bool {
+	if len(condition.Scenarios) == 0 {
+		return condition.AttemptCount > 0
+	}
+	for scenarioID, scenario := range condition.Scenarios {
+		if scenario.AttemptCount > 0 && s.matchesTags(scenarioID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) Catalog() map[string]scenario.Definition { return s.catalog }
@@ -154,11 +201,12 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 
 func (s *Store) RunsForAgent(agent string) []results.RunRef {
 	var runs []results.RunRef
-	for _, run := range s.runs {
+	for _, run := range s.visible {
 		if run.Summary == nil {
 			continue
 		}
-		if condition, ok := run.Summary.ByCondition[agent]; ok && condition.AttemptCount > 0 {
+		condition, ok := run.Summary.ByCondition[agent]
+		if ok && s.conditionMatches(condition) {
 			runs = append(runs, run)
 		}
 	}
@@ -166,8 +214,11 @@ func (s *Store) RunsForAgent(agent string) []results.RunRef {
 }
 
 func (s *Store) RunsForTask(task string) []results.RunRef {
+	if !s.matchesTags(task) {
+		return nil
+	}
 	var runs []results.RunRef
-	for _, run := range s.runs {
+	for _, run := range s.visible {
 		if run.Summary == nil {
 			continue
 		}

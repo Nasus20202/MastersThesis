@@ -76,22 +76,23 @@ func RollupAgentsWhere(runs []RunRef, include func(string) bool) []AgentRollup {
 			continue
 		}
 		for agent, condition := range run.Summary.ByCondition {
-			accumulator := accumulators[agent]
-			if accumulator == nil {
-				accumulator = &rollupAccumulator{}
-				accumulators[agent] = accumulator
-			}
-			counted := false
+			var accumulator *rollupAccumulator
 			for scenarioID, scenario := range condition.Scenarios {
 				if scenario.AttemptCount == 0 || !included(include, scenarioID) {
 					continue
 				}
+				if accumulator == nil {
+					accumulator = accumulators[agent]
+					if accumulator == nil {
+						accumulator = &rollupAccumulator{}
+						accumulators[agent] = accumulator
+					}
+				}
 				scoreTotal := scenario.MeanScore * float64(scenario.AttemptCount)
 				accumulator.add(scenario.FullSuccessCount, scenario.AttemptCount, scoreTotal)
 				accumulator.child(scenarioID).add(scenario.FullSuccessCount, scenario.AttemptCount, scoreTotal)
-				counted = true
 			}
-			if counted {
+			if accumulator != nil {
 				runCounts[agent]++
 			}
 		}

@@ -21,9 +21,14 @@ func (v *View) runsTable(runs []results.RunRef, route *Route, width, height int)
 		components.Column{Title: "SUCCESS", Min: 7, Max: 7},
 	)
 	rows := make([][]string, len(runs))
+	filtered := !v.store.TagFilter().Empty()
 	for index, run := range runs {
 		attempts, success := "0", "–"
-		if run.Summary != nil {
+		if filtered {
+			metrics := model.RunMetrics(v.store, run.RunID, route.Agent, route.Task)
+			attempts = fmt.Sprintf("%d", metrics.Attempts)
+			success = ui.Rate(model.OutcomeRate(metrics))
+		} else if run.Summary != nil {
 			attempts = fmt.Sprintf("%d/%d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts)
 			success = ui.Rate(overallRate(run.Summary))
 		}

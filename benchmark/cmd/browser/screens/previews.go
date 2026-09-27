@@ -21,13 +21,13 @@ func (v *View) runsPreview(route *Route, width int) string {
 	default:
 		runs = v.store.Runs()
 	}
-	lines := []string{components.Section(width, "Across runs"), v.runComparison(width)}
+	lines := []string{components.Section(width, "Across runs"), v.runComparison(route, width)}
 	if route.Cursor < len(runs) {
 		run := runs[route.Cursor]
 		metrics := model.RunMetrics(v.store, run.RunID, route.Agent, route.Task)
 		lines = append(lines,
 			components.Section(width, "Selected run"),
-			v.runPreview(run, width),
+			v.runPreview(run, metrics, width),
 			"",
 			components.CardRow(v.vitals(metrics), width),
 			"",
@@ -37,16 +37,16 @@ func (v *View) runsPreview(route *Route, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (v *View) runComparison(width int) string {
+func (v *View) runComparison(route *Route, width int) string {
 	runs := v.store.Runs()
 	ranks := make([]ui.Rank, 0, len(runs))
 	for _, run := range runs {
-		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, "", ""))})
+		ranks = append(ranks, ui.Rank{Label: runLabel(run), Value: model.OutcomeRate(model.RunMetrics(v.store, run.RunID, route.Agent, route.Task))})
 	}
 	return ui.Ranked(ranks, width, 0)
 }
 
-func (v *View) runPreview(run results.RunRef, width int) string {
+func (v *View) runPreview(run results.RunRef, metrics model.Metrics, width int) string {
 	body := []string{
 		ui.Header.Render(run.RunID) + "  " + ui.StateBadge(string(run.Metadata.State)),
 		ui.MutedStyle.Render(fmt.Sprintf("type %s · agents %s · repeat %d · parallel %d",
@@ -56,7 +56,7 @@ func (v *View) runPreview(run results.RunRef, width int) string {
 	if run.Summary != nil {
 		body = append(body,
 			fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount),
-			fmt.Sprintf("full success %s · mean %s", ui.Rate(overallRate(run.Summary)), ui.Rate(runMean(run.Summary))),
+			fmt.Sprintf("full success %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.MeanScore)),
 		)
 	}
 	return components.Panel("", strings.Join(body, "\n"), width, ui.Border)
