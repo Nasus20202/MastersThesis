@@ -25,6 +25,7 @@ All experiment conditions that use the common corpus must use this exact revisio
 Each scenario should record the following fields in a small, human-readable form:
 
 - a stable scenario identifier and title,
+- optional evaluator-only tags used to filter and group scenarios,
 - a known-good Kubernetes environment,
 - an application, workload or starting environment with expected behaviour,
 - a task description visible to the model,
