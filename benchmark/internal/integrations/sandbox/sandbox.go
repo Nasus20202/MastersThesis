@@ -10,7 +10,6 @@ import (
 
 // Sandbox is the lifecycle capability required by orchestration.
 type Sandbox interface {
-	Build(context.Context) error
 	Start(context.Context) error
 	Stop(context.Context) error
 }

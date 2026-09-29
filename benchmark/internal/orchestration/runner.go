@@ -136,7 +136,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, conditi
 		if err != nil {
 			return result, err
 		}
-		if err := startSandbox(ctx, setup, r.SetupImageBuilder, "setup", logger); err != nil {
+		if err := startSandbox(ctx, setup, "setup", logger); err != nil {
 			result.Failure = newFailureEvidence("start setup", err)
 			return result, err
 		}
@@ -159,7 +159,7 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, conditi
 		if err != nil {
 			return result, err
 		}
-		if err := startSandbox(ctx, sandbox, r.SandboxImageBuilder, "sandbox", logger); err != nil {
+		if err := startSandbox(ctx, sandbox, "sandbox", logger); err != nil {
 			result.Failure = newFailureEvidence("start sandbox", err)
 			return result, err
 		}
@@ -228,15 +228,7 @@ func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cl
 	return nil
 }
 
-// startSandbox builds the sandbox image when no shared image builder is set,
-// then starts the sandbox.
-func startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, imageBuilder sandboxintegration.ImageBuilder, label string, logger *slog.Logger) error {
-	if imageBuilder == nil {
-		if err := sandbox.Build(ctx); err != nil {
-			logger.Error(label+" image build failed", "error", err)
-			return fmt.Errorf("build %s image: %w", label, err)
-		}
-	}
+func startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, label string, logger *slog.Logger) error {
 	if err := sandbox.Start(ctx); err != nil {
 		logger.Error(label+" start failed", "error", err)
 		return fmt.Errorf("start %s: %w", label, err)
