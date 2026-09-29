@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -108,7 +109,7 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	metadata := inference.Metadata{}
 	if provider, ok := client.(inference.MetadataProvider); ok {
 		metadata = provider.Metadata()
-		metadata.RuntimeSettings = cloneRuntimeSettings(metadata.RuntimeSettings)
+		metadata.RuntimeSettings = maps.Clone(metadata.RuntimeSettings)
 	}
 	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config, metadata: metadata}, nil
 }
@@ -147,34 +148,8 @@ type Result struct {
 	DurationSeconds float64             `json:"duration_seconds"`
 }
 
-// RunAgent guards a condition's Run preconditions (initialized receiver,
-// non-blank task), calls run, and stamps condition/task onto the result.
-// Shared by the benchmark conditions, e.g. baseline, prompt, and skill.
-func RunAgent(initialized bool, name, condition, task string, run func() (Result, error)) (Result, error) {
-	if !initialized {
-		return Result{}, fmt.Errorf("%s agent is not initialized", name)
-	}
-	if strings.TrimSpace(task) == "" {
-		return Result{}, errors.New("agent task is required")
-	}
-	result, err := run()
-	result.Condition = condition
-	result.Task = task
-	return result, err
-}
-
 func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
 	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
-}
-
-func (l *Loop) RunWithSystemPrompt(ctx context.Context, task, systemPrompt string) (Result, error) {
-	if strings.TrimSpace(systemPrompt) == "" {
-		return Result{}, errors.New("agent system prompt is required")
-	}
-	return l.run(ctx, task, []inference.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: task},
-	})
 }
 
 func (l *Loop) run(ctx context.Context, task string, initialMessages []inference.Message) (result Result, err error) {
@@ -397,17 +372,6 @@ func cloneMessages(messages []inference.Message) []inference.Message {
 	copy(cloned, messages)
 	for index := range cloned {
 		cloned[index].ToolCalls = slices.Clone(cloned[index].ToolCalls)
-	}
-	return cloned
-}
-
-func cloneRuntimeSettings(settings map[string]string) map[string]string {
-	if settings == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(settings))
-	for key, value := range settings {
-		cloned[key] = value
 	}
 	return cloned
 }

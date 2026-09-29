@@ -63,10 +63,6 @@ func (t Table) Render(width, height int, rows [][]string, cursor, offset int, st
 	return builder.String()
 }
 
-func VisibleRows(height int) int {
-	return max(1, height-1)
-}
-
 func formatRow(cells []string, widths []int) string {
 	parts := make([]string, len(widths))
 	for index := range widths {

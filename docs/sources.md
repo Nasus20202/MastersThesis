@@ -4,7 +4,7 @@
 
 This file records the websites, documentation and papers used to support research and technical decisions.
 
-Sources should be recorded with a stable URL and, when applicable, a version, revision, release or location. Exact revisions will be added when the corresponding benchmark or implementation choice is frozen.
+Sources should be recorded with a stable URL and, when applicable, a version, revision, release or location.
 
 ## Source-recording rules
 

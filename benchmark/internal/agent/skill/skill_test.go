@@ -38,7 +38,7 @@ func (skillTestShell) Exec(context.Context, command.Spec) (command.Result, error
 
 func TestRunUsesRoutingPromptAndSkillLoader(t *testing.T) {
 	client := &skillTestClient{}
-	agent, err := New(client, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
+	agent, err := New(client, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "", nil)
 	require.NoError(t, err)
 
 	result, err := agent.Run(context.Background(), "Restore the application.")
@@ -49,7 +49,7 @@ func TestRunUsesRoutingPromptAndSkillLoader(t *testing.T) {
 	require.Len(t, client.requests, 1)
 	require.Len(t, client.requests[0], 2)
 	assert.Equal(t, "system", client.requests[0][0].Role)
-	routingPrompt, err := routingSystemPrompt()
+	routingPrompt, err := routingSystemPrompt(defaultSystemPrompt, defaultSkillFiles)
 	require.NoError(t, err)
 	assert.Equal(t, routingPrompt, client.requests[0][0].Content)
 	assert.Contains(t, client.requests[0][0].Content, "Use Bash to inspect the sandbox")
@@ -70,16 +70,15 @@ func TestRunUsesRoutingPromptAndSkillLoader(t *testing.T) {
 	assert.Equal(t, loadReferenceToolName, client.tools[2].Name)
 }
 
-func TestNewWithConfigUsesConfiguredPromptAndSkillDirectory(t *testing.T) {
+func TestNewUsesConfiguredPromptAndSkillDirectory(t *testing.T) {
 	directory := t.TempDir()
 	skillsDirectory := filepath.Join(directory, "skills")
 	customSkillDirectory := filepath.Join(skillsDirectory, "custom")
 	require.NoError(t, os.MkdirAll(customSkillDirectory, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(directory, "prompt.md"), []byte("custom routing instructions"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(customSkillDirectory, "SKILL.md"), []byte("---\nname: custom\ndescription: Custom guidance\n---\n# Custom\n"), 0o600))
 
 	client := &skillTestClient{}
-	agent, err := NewWithConfig(client, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, filepath.Join(directory, "prompt.md"), skillsDirectory)
+	agent, err := New(client, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "custom routing instructions", os.DirFS(skillsDirectory))
 	require.NoError(t, err)
 	_, err = agent.Run(context.Background(), "task")
 	require.NoError(t, err)
@@ -105,7 +104,7 @@ func TestRunLoadsSkillThenReferenceAcrossTurns(t *testing.T) {
 		},
 		{Message: inference.Message{Role: "assistant", Content: "Done."}, FinishReason: "stop"},
 	}}
-	agent, err := New(client, skillTestShell{}, common.Config{MaxTurns: 3, MaxToolCalls: 2})
+	agent, err := New(client, skillTestShell{}, common.Config{MaxTurns: 3, MaxToolCalls: 2}, "", nil)
 	require.NoError(t, err)
 
 	result, err := agent.Run(context.Background(), "Restore the application.")
@@ -120,15 +119,8 @@ func TestRunLoadsSkillThenReferenceAcrossTurns(t *testing.T) {
 	assert.Equal(t, common.TerminationCompleted, result.Termination)
 }
 
-func TestNewAndRunRejectInvalidSkillAgent(t *testing.T) {
-	var nilAgent *Agent
-	_, err := nilAgent.Run(context.Background(), "task")
-	assert.EqualError(t, err, "skill agent is not initialized")
-
-	_, err = NewWithSystemPrompt(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, " ")
-	assert.EqualError(t, err, "skill system prompt is required")
-
-	agent, err := New(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
+func TestRunRejectsBlankTask(t *testing.T) {
+	agent, err := New(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "", nil)
 	require.NoError(t, err)
 	_, err = agent.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")

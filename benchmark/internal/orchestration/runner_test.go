@@ -94,11 +94,11 @@ func TestRunnerRunsPhasesThroughSetupSandbox(t *testing.T) {
 	assert.Empty(t, host.specs)
 	assert.Equal(t, "setup-factory", events[1])
 	assert.Equal(t, 5, strings.Count(strings.Join(events, ","), "sandbox-exec"))
-	assert.Equal(t, []string{"create", "setup-factory", "sandbox-build", "sandbox-start"}, events[:4])
+	assert.Equal(t, []string{"create", "setup-factory", "sandbox-start"}, events[:3])
 	assert.Equal(t, []string{"sandbox-stop", "delete"}, events[len(events)-2:])
 }
 
-func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
+func TestRunnerStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
@@ -126,7 +126,7 @@ func TestRunnerBuildsStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	_, err := runner.RunWithRepair(context.Background(), testDefinition(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"factory", "create", "sandbox-factory", "sandbox-build", "sandbox-start",
+		"factory", "create", "sandbox-factory", "sandbox-start",
 		"kubectl", "verify-clean", "inject-fault", "verify-fault", "verify-restored",
 		"sandbox-stop", "delete",
 	}, events)
@@ -193,7 +193,7 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 	assert.Equal(t, testDefinition().Task, result.Agent.Task)
 	assert.Equal(t, "prompt", result.Condition)
 	assert.Equal(t, []string{
-		"create", "sandbox-build", "sandbox-start", "agent-factory", "kubectl", "verify-clean",
+		"create", "sandbox-start", "agent-factory", "kubectl", "verify-clean",
 		"inject-fault", "verify-fault", "agent", "verify-restored", "sandbox-stop", "delete",
 	}, events)
 }
@@ -221,7 +221,7 @@ func TestRunnerPreservesAgentFailureAndStillCleansUp(t *testing.T) {
 	require.NotNil(t, result.Agent)
 	assert.Equal(t, common.TerminationCompleted, result.Agent.Termination)
 	assert.Equal(t, []string{
-		"create", "sandbox-build", "sandbox-start", "kubectl", "verify-clean", "inject-fault", "verify-fault",
+		"create", "sandbox-start", "kubectl", "verify-clean", "inject-fault", "verify-fault",
 		"agent", "verify-restored", "sandbox-stop", "delete",
 	}, events)
 }
@@ -245,7 +245,7 @@ func TestRunnerRequiresSandboxExecutorForAgent(t *testing.T) {
 
 	_, err := runner.Run(context.Background(), testDefinition())
 	assert.ErrorContains(t, err, "does not provide command execution")
-	assert.Equal(t, []string{"create", "sandbox-build", "sandbox-start", "sandbox-stop", "delete"}, events)
+	assert.Equal(t, []string{"create", "sandbox-start", "sandbox-stop", "delete"}, events)
 }
 
 func TestRunnerRejectsInvalidAgentFactoryResults(t *testing.T) {

@@ -81,7 +81,7 @@ help:
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
-		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 8).' \
+		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).' \
 		'BROWSER_RESULTS=PATH' 'Results directory for the browser (default: results).' \
 		'BROWSER_SCENARIOS=PATH' 'Scenario corpus for browser task titles (default: scenarios).'
 

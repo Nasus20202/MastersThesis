@@ -30,7 +30,7 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 		{name: "invalid agent", args: []string{"--scenario", "scenario.yaml", "--agent", "unknown"}, want: "unsupported agent"},
 		{name: "agent with validation", args: []string{"--validate", "validation.yaml", "--agent", "prompt"}, want: "only supported with scenario runs"},
 		{name: "unexpected argument", args: []string{"--scenario", "scenario.yaml", "unexpected"}, want: "unexpected arguments"},
-		{name: "blank path", args: []string{"--scenario", ""}, want: "path must not be blank"},
+		{name: "blank path", args: []string{"--scenario", ""}, want: "value must not be blank"},
 	}
 
 	for _, test := range tests {
@@ -58,28 +58,18 @@ func TestRunHelpListsModesAndParameters(t *testing.T) {
 }
 
 func TestStringList(t *testing.T) {
-	var paths stringList
-	require.NoError(t, paths.Set("first"))
-	require.NoError(t, paths.Set("second"))
+	var values stringList
+	require.NoError(t, values.Set("first"))
+	require.NoError(t, values.Set("second"))
 
-	assert.Equal(t, "first,second", paths.String())
-	assert.ErrorContains(t, paths.Set(" "), "path must not be blank")
-}
-
-func TestAgentList(t *testing.T) {
-	var agents agentList
-	require.NoError(t, agents.Set("baseline"))
-	require.NoError(t, agents.Set("prompt"))
-	require.NoError(t, agents.Set("skill"))
-
-	assert.Equal(t, "baseline,prompt,skill", agents.String())
-	assert.ErrorContains(t, agents.Set(" "), "agent must not be blank")
+	assert.Equal(t, "first,second", values.String())
+	assert.ErrorContains(t, values.Set(" "), "value must not be blank")
 }
 
 func TestExplicitAllAgentSelection(t *testing.T) {
-	assert.True(t, explicitAllAgentSelection(agentList{" all "}))
-	assert.False(t, explicitAllAgentSelection(agentList{"baseline,prompt"}))
-	assert.False(t, explicitAllAgentSelection(agentList{"all", "all"}))
+	assert.True(t, explicitAllAgentSelection(stringList{" all "}))
+	assert.False(t, explicitAllAgentSelection(stringList{"baseline,prompt"}))
+	assert.False(t, explicitAllAgentSelection(stringList{"all", "all"}))
 }
 
 func TestNewLoggerRejectsInvalidConfig(t *testing.T) {

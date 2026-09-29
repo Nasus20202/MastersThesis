@@ -63,7 +63,7 @@ type SkillAgentConfig struct {
 // files override earlier files. Agent file paths in a config file are
 // resolved relative to that file.
 func Load(paths ...string) (Config, error) {
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 	for _, path := range paths {
 		fileValues, err := read(path)
 		if err != nil {
@@ -84,18 +84,18 @@ func Load(paths ...string) (Config, error) {
 	return result, nil
 }
 
-func read(path string) (map[string]interface{}, error) {
+func read(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read benchmark config %q: %w", path, err)
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 	if err := decoder.Decode(&values); err != nil {
 		return nil, fmt.Errorf("invalid benchmark config %q: %s", path, yaml.FormatError(err, false, true))
 	}
-	var extraDocument interface{}
+	var extraDocument any
 	if err := decoder.Decode(&extraDocument); err == nil {
 		return nil, fmt.Errorf("benchmark config %q must contain exactly one document", path)
 	} else if !errors.Is(err, io.EOF) {
@@ -106,10 +106,10 @@ func read(path string) (map[string]interface{}, error) {
 	return values, nil
 }
 
-func merge(destination, source map[string]interface{}) {
+func merge(destination, source map[string]any) {
 	for key, value := range source {
-		sourceMap, sourceIsMap := value.(map[string]interface{})
-		destinationMap, destinationIsMap := destination[key].(map[string]interface{})
+		sourceMap, sourceIsMap := value.(map[string]any)
+		destinationMap, destinationIsMap := destination[key].(map[string]any)
 		if sourceIsMap && destinationIsMap {
 			merge(destinationMap, sourceMap)
 			continue
@@ -118,8 +118,8 @@ func merge(destination, source map[string]interface{}) {
 	}
 }
 
-func resolveAgentPaths(values map[string]interface{}, configPath string) {
-	agents, ok := values["agents"].(map[string]interface{})
+func resolveAgentPaths(values map[string]any, configPath string) {
+	agents, ok := values["agents"].(map[string]any)
 	if !ok {
 		return
 	}
@@ -127,7 +127,7 @@ func resolveAgentPaths(values map[string]interface{}, configPath string) {
 		"prompt": {"system_prompt_file"},
 		"skill":  {"system_prompt_file", "skills_dir"},
 	} {
-		agent, ok := agents[agentName].(map[string]interface{})
+		agent, ok := agents[agentName].(map[string]any)
 		if !ok {
 			continue
 		}
@@ -137,7 +137,7 @@ func resolveAgentPaths(values map[string]interface{}, configPath string) {
 	}
 }
 
-func resolveAgentPath(agent map[string]interface{}, field, configPath string) {
+func resolveAgentPath(agent map[string]any, field, configPath string) {
 	path, ok := agent[field].(string)
 	if !ok || path == "" || filepath.IsAbs(path) {
 		return
@@ -145,13 +145,13 @@ func resolveAgentPath(agent map[string]interface{}, field, configPath string) {
 	agent[field] = filepath.Join(filepath.Dir(configPath), path)
 }
 
-func resolveContainerPaths(values map[string]interface{}, configPath string) {
-	containers, ok := values["containers"].(map[string]interface{})
+func resolveContainerPaths(values map[string]any, configPath string) {
+	containers, ok := values["containers"].(map[string]any)
 	if !ok {
 		return
 	}
 	for _, name := range []string{"sandbox", "setup"} {
-		container, ok := containers[name].(map[string]interface{})
+		container, ok := containers[name].(map[string]any)
 		if !ok {
 			continue
 		}

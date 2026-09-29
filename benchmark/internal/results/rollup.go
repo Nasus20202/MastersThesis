@@ -62,13 +62,9 @@ func (a *rollupAccumulator) rollup() Rollup {
 	return result
 }
 
-func RollupAgents(runs []RunRef) []AgentRollup {
-	return RollupAgentsWhere(runs, nil)
-}
-
-// RollupAgentsWhere is RollupAgents restricted to scenarios for which include
-// returns true; a nil include keeps all.
-func RollupAgentsWhere(runs []RunRef, include func(string) bool) []AgentRollup {
+// RollupAgents aggregates each condition across runs, counting only scenarios
+// for which include returns true. A nil include keeps all.
+func RollupAgents(runs []RunRef, include func(string) bool) []AgentRollup {
 	accumulators := make(map[string]*rollupAccumulator)
 	runCounts := make(map[string]int)
 	for _, run := range runs {
@@ -109,13 +105,9 @@ func RollupAgentsWhere(runs []RunRef, include func(string) bool) []AgentRollup {
 	return rollups
 }
 
-func RollupTasks(runs []RunRef) []TaskRollup {
-	return RollupTasksWhere(runs, nil)
-}
-
-// RollupTasksWhere is RollupTasks restricted to scenarios for which include
-// returns true; a nil include keeps all.
-func RollupTasksWhere(runs []RunRef, include func(string) bool) []TaskRollup {
+// RollupTasks aggregates each scenario across runs, keeping only scenarios for
+// which include returns true. A nil include keeps all.
+func RollupTasks(runs []RunRef, include func(string) bool) []TaskRollup {
 	accumulators := make(map[string]*rollupAccumulator)
 	runCounts := make(map[string]int)
 	for _, run := range runs {

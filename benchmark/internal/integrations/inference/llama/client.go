@@ -1,5 +1,4 @@
-// Package llama provides the small HTTP boundary used to communicate with
-// llama-server.
+// Package llama is an HTTP client for llama-server.
 package llama
 
 import (
@@ -9,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -83,24 +83,13 @@ func clientMetadata(cfg Config) inference.Metadata {
 	if metadata.Model == "" {
 		metadata.Model = cfg.Model
 	}
-	metadata.RuntimeSettings = cloneSettings(metadata.RuntimeSettings)
+	metadata.RuntimeSettings = maps.Clone(metadata.RuntimeSettings)
 	return metadata
-}
-
-func cloneSettings(settings map[string]string) map[string]string {
-	if settings == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(settings))
-	for key, value := range settings {
-		cloned[key] = value
-	}
-	return cloned
 }
 
 func (c *Client) Metadata() inference.Metadata {
 	metadata := c.metadata
-	metadata.RuntimeSettings = cloneSettings(metadata.RuntimeSettings)
+	metadata.RuntimeSettings = maps.Clone(metadata.RuntimeSettings)
 	return metadata
 }
 

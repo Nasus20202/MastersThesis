@@ -94,14 +94,15 @@ func expectedAttemptCount(metadata RunMetadata) int {
 	return len(metadata.Scenarios) * metadata.RepeatCount * conditionCount
 }
 
-func runType(metadata RunMetadata) string {
+// runType falls back to the agent list for runs recorded before run_type existed.
+func runType(metadata RunMetadata) RunType {
 	if metadata.RunType != "" {
 		return metadata.RunType
 	}
 	if len(metadata.Agents) > 0 {
-		return "benchmark"
+		return RunTypeBenchmark
 	}
-	return "validation"
+	return RunTypeValidation
 }
 
 func newSummaryAccumulator(metadata RunMetadata) *summaryAccumulator {
@@ -111,7 +112,7 @@ func newSummaryAccumulator(metadata RunMetadata) *summaryAccumulator {
 		byCondition: make(map[string]*conditionAccumulator),
 	}
 	conditions := metadata.Agents
-	if runType(metadata) == "validation" {
+	if runType(metadata) == RunTypeValidation {
 		conditions = []string{"validation"}
 	}
 	for _, condition := range conditions {
@@ -125,7 +126,7 @@ func (a *summaryAccumulator) condition(name string) *conditionAccumulator {
 		return condition
 	}
 	expected := a.metadata.RepeatCount * len(a.metadata.Scenarios)
-	if runType(a.metadata) == "validation" {
+	if runType(a.metadata) == RunTypeValidation {
 		expected = a.metadata.ExpectedAttempts
 	}
 	condition := &conditionAccumulator{
@@ -171,10 +172,18 @@ func (a *summaryAccumulator) add(conditionID, scenarioID string, fullSuccess boo
 	}
 }
 
-// addThroughput records the decoding timings of one agent attempt. Validation
-// attempts run no model and pass a nil result.
-func (a *summaryAccumulator) addThroughput(conditionID string, result *common.Result) {
-	a.condition(conditionID).throughput.add(result)
+// addAttempt records one decoded attempt. Only benchmark attempts carry
+// decoding timings; validation attempts run no model.
+func (a *summaryAccumulator) addAttempt(attempt Attempt) {
+	if artifact := attempt.Validation; artifact != nil {
+		passed := artifact.Passed
+		a.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, &passed)
+		return
+	}
+	if artifact := attempt.Benchmark; artifact != nil {
+		a.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
+		a.condition(artifact.Condition).throughput.add(artifact.Agent)
+	}
 }
 
 func (a *summaryAccumulator) summary(state RunState, completedAt *time.Time) RunSummary {
@@ -194,7 +203,7 @@ func (a *summaryAccumulator) summary(state RunState, completedAt *time.Time) Run
 	return result
 }
 
-func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) ConditionSummary {
+func (a *conditionAccumulator) summary(kind RunType, metadata RunMetadata) ConditionSummary {
 	result := ConditionSummary{
 		ExpectedAttempts:      a.expectedAttempts,
 		AttemptCount:          a.attemptCount,
@@ -214,7 +223,7 @@ func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) Condit
 	}
 	for scenarioID, accumulator := range a.scenarios {
 		expected := 0
-		if kind == "benchmark" {
+		if kind == RunTypeBenchmark {
 			expected = metadata.RepeatCount
 		}
 		scenario := ScenarioSummary{
@@ -228,7 +237,7 @@ func (a *conditionAccumulator) summary(kind string, metadata RunMetadata) Condit
 		}
 		result.Scenarios[scenarioID] = scenario
 	}
-	if kind == "benchmark" && a.expectedAttempts > 0 && a.attemptCount == a.expectedAttempts && len(a.scenarios) == len(metadata.Scenarios) {
+	if kind == RunTypeBenchmark && a.expectedAttempts > 0 && a.attemptCount == a.expectedAttempts && len(a.scenarios) == len(metadata.Scenarios) {
 		var macroScore float64
 		complete := true
 		for _, scenarioID := range metadata.Scenarios {

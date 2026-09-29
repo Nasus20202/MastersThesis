@@ -19,15 +19,6 @@ func TestNewRejectsMissingDependencies(t *testing.T) {
 	assert.EqualError(t, err, "agent llama client is required")
 }
 
-func TestRunRejectsUninitializedAgent(t *testing.T) {
-	var nilAgent *Agent
-	_, err := nilAgent.Run(context.Background(), "task")
-	assert.EqualError(t, err, "baseline agent is not initialized")
-
-	_, err = (&Agent{}).Run(context.Background(), "task")
-	assert.EqualError(t, err, "baseline agent is not initialized")
-}
-
 func TestRunRejectsBlankTask(t *testing.T) {
 	agent, err := New(&fakeChatClient{}, baselineTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
 	require.NoError(t, err)

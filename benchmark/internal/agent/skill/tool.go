@@ -34,19 +34,7 @@ type skillMetadata struct {
 	Description string `yaml:"description"`
 }
 
-func newSkillTool(fileSystems ...fs.FS) common.Tool {
-	return skillTool{files: configuredFiles(fileSystems...)}
-}
-
-func newReferenceTool(fileSystems ...fs.FS) common.Tool {
-	return referenceTool{files: configuredFiles(fileSystems...)}
-}
-
-func routingSystemPrompt() (string, error) {
-	return routingSystemPromptFor(systemPrompt, skillFiles)
-}
-
-func routingSystemPromptFor(basePrompt string, files fs.FS) (string, error) {
+func routingSystemPrompt(basePrompt string, files fs.FS) (string, error) {
 	if strings.TrimSpace(basePrompt) == "" {
 		return "", errors.New("skill system prompt is required")
 	}
@@ -64,13 +52,6 @@ func routingSystemPromptFor(basePrompt string, files fs.FS) (string, error) {
 		entries = append(entries, entry)
 	}
 	return fmt.Sprintf(routingPromptFormat, basePrompt, strings.Join(entries, "\n")), nil
-}
-
-func configuredFiles(fileSystems ...fs.FS) fs.FS {
-	if len(fileSystems) > 0 && fileSystems[0] != nil {
-		return fileSystems[0]
-	}
-	return skillFiles
 }
 
 func (skillTool) Definition() inference.Tool {
