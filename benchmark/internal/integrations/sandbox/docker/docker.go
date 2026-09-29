@@ -52,8 +52,6 @@ func DefaultImageLayout() ImageLayout {
 type Config struct {
 	Name           string
 	Image          string
-	DockerfilePath string
-	BuildContext   string
 	KubeconfigPath string
 	Network        string
 	NetworkTarget  string
@@ -132,12 +130,6 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	if strings.TrimSpace(config.Image) == "" {
 		return nil, errors.New("sandbox image is required")
 	}
-	if strings.TrimSpace(config.DockerfilePath) == "" {
-		return nil, errors.New("sandbox Dockerfile path is required")
-	}
-	if strings.TrimSpace(config.BuildContext) == "" {
-		return nil, errors.New("sandbox build context is required")
-	}
 	if strings.TrimSpace(config.KubeconfigPath) != "" && !filepath.IsAbs(config.KubeconfigPath) {
 		return nil, errors.New("sandbox kubeconfig path must be absolute")
 	}
@@ -168,14 +160,6 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 		}
 	}
 	return &Sandbox{executor: executor, config: config}, nil
-}
-
-func (s *Sandbox) Build(ctx context.Context) error {
-	return buildImage(ctx, s.executor, ImageConfig{
-		Image:          s.config.Image,
-		DockerfilePath: s.config.DockerfilePath,
-		BuildContext:   s.config.BuildContext,
-	})
 }
 
 func buildImage(ctx context.Context, executor command.Executor, config ImageConfig) error {

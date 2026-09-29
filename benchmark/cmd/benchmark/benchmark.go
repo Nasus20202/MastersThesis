@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
-	"time"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
@@ -52,57 +50,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	agentSlots := make(chan struct{}, llamaParallelism)
 	totalTasks := len(definitions) * repeat * len(agentNames)
 
-	var store *results.Store
-	if resumeID != "" {
-		store, err = results.Resume("results", resumeID)
-		if err == nil {
-			if err := validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions)); err != nil {
-				return err
-			}
-		}
-	} else {
-		startedAt := time.Now().UTC()
-		revision, workingTreeDirty := repositoryProvenance(ctx)
-		metadata := results.RunMetadata{
-			RunID:              runID(startedAt),
-			RunType:            "benchmark",
-			StartedAt:          startedAt,
-			RepositoryRevision: revision,
-			WorkingTreeDirty:   workingTreeDirty,
-			ExpectedAttempts:   totalTasks,
-			Agents:             agentNamesToStrings(agentNames),
-			Parallelism:        parallelism,
-			RepeatCount:        repeat,
-			Scenarios:          scenarioIDs(definitions),
-			TagSelector:        tagFilter.String(),
-		}
-		store, err = results.New("results", metadata)
-	}
-	if err != nil {
-		return err
-	}
-	metadata := store.Metadata()
-	logger := slog.Default()
-	finalized := false
-	defer func() {
-		if finalized {
-			return
-		}
-		if err := store.Finalize(time.Now().UTC()); err != nil {
-			logger.Error("benchmark result finalization failed", "run_id", metadata.RunID, "error", err)
-		}
-	}()
-	logger.Info("benchmark runner started",
-		"run_id", metadata.RunID,
-		"agents", metadata.Agents,
-		"scenarios", len(definitions),
-		"parallelism", parallelism,
-		"repeat_count", repeat,
-		"total_tasks", totalTasks,
-	)
-
-	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
-	deps, err := newRunnerDeps(commandExecutor, benchmarkConfig.Containers)
+	deps, err := newRunnerDeps(command.LocalExecutor{Environment: os.Environ()}, benchmarkConfig.Containers)
 	if err != nil {
 		return err
 	}
@@ -114,6 +62,38 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		}
 		agentFactories[agentName] = agentFactory
 	}
+
+	var store *results.Store
+	if resumeID != "" {
+		store, err = results.Resume(resultsDir, resumeID)
+		if err == nil {
+			err = validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions))
+		}
+	} else {
+		store, err = startRun(ctx, results.RunMetadata{
+			RunType:          results.RunTypeBenchmark,
+			ExpectedAttempts: totalTasks,
+			Agents:           agentNamesToStrings(agentNames),
+			Parallelism:      parallelism,
+			RepeatCount:      repeat,
+			Scenarios:        scenarioIDs(definitions),
+			TagSelector:      tagFilter.String(),
+		})
+	}
+	if err != nil {
+		return err
+	}
+	metadata := store.Metadata()
+	logger := slog.Default()
+	logger.Info("benchmark runner started",
+		"run_id", metadata.RunID,
+		"agents", metadata.Agents,
+		"scenarios", len(definitions),
+		"parallelism", parallelism,
+		"repeat_count", repeat,
+		"total_tasks", totalTasks,
+	)
+
 	tasks := make([]executor.Task, 0, totalTasks)
 	for _, agentName := range agentNames {
 		agentFactory := agentFactories[agentName]
@@ -133,28 +113,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			}
 		}
 	}
-	if len(tasks) == 0 {
-		finalizeErr := store.Finalize(time.Now().UTC())
-		if finalizeErr == nil {
-			finalized = true
-		}
-		return finalizeErr
-	}
-	progress, err := terminal.NewProgress(len(tasks), parallelism)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := progress.Finish(); err != nil {
-			logger.Error("benchmark progress display failed", "error", err)
-		}
-	}()
-	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
-	var writeErr error
-	for outcome := range outcomes {
-		if err := progress.Update(ui.Outcome{Success: outcome.Err == nil && outcome.Result.Grading.FullSuccess}); err != nil {
-			logger.Error("benchmark progress display failed", "error", err)
-		}
+	return executeRun(ctx, store, terminal, tasks, parallelism, func(outcome executor.Outcome) (bool, error) {
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
@@ -163,13 +122,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 				"attempt", outcome.Attempt,
 				"error", outcome.Err,
 			)
-			if err := store.WriteAttemptFailure(outcome.Attempt, outcome.ScenarioID, outcome.Agent, outcome.Result, outcome.Err); err != nil {
-				writeErr = errors.Join(writeErr, err)
-			}
-			continue
-		}
-		if err := store.WriteAttempt(outcome.Attempt, outcome.Agent, outcome.Result); err != nil {
-			writeErr = errors.Join(writeErr, err)
+			return false, store.WriteAttemptFailure(outcome.Attempt, outcome.ScenarioID, outcome.Agent, outcome.Result, outcome.Err)
 		}
 		logger.Info("benchmark attempt completed",
 			"run_id", metadata.RunID,
@@ -179,20 +132,12 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			"score", outcome.Result.Grading.Score,
 			"full_success", outcome.Result.Grading.FullSuccess,
 		)
-	}
-	runErr := <-executeErrors
-	finalizeErr := store.Finalize(time.Now().UTC())
-	if finalizeErr == nil {
-		finalized = true
-	}
-	if writeErr != nil || finalizeErr != nil {
-		return errors.Join(writeErr, finalizeErr)
-	}
-	return runErr
+		return outcome.Result.Grading.FullSuccess, store.WriteAttempt(outcome.Attempt, outcome.Agent, outcome.Result)
+	})
 }
 
 func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string) error {
-	if metadata.RunType != "benchmark" {
+	if metadata.RunType != results.RunTypeBenchmark {
 		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
 	}
 	wantAgents := agentNamesToStrings(agents)
@@ -206,11 +151,6 @@ func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.
 		return fmt.Errorf("resume scenarios %v do not match run scenarios %v", scenarios, metadata.Scenarios)
 	}
 	return nil
-}
-
-func runID(startedAt time.Time) string {
-	timestamp := startedAt.UTC().Format("2006-01-02-15-04-05.000Z")
-	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
 type runnerDeps struct {
@@ -250,8 +190,6 @@ func newRunnerDeps(executor command.Executor, containers benchmarkconfig.Contain
 			return docker.New(executor, docker.Config{
 				Name:           name + sandboxNameSuffix,
 				Image:          containers.Sandbox.Image,
-				DockerfilePath: containers.Sandbox.DockerfilePath,
-				BuildContext:   containers.Sandbox.BuildContext,
 				KubeconfigPath: kubeconfigPath,
 				Network:        name + sandboxNameSuffix + networkSuffix,
 				NetworkTarget:  name + controlPlaneSuffix,
@@ -266,13 +204,11 @@ func newRunnerDeps(executor command.Executor, containers benchmarkconfig.Contain
 		setupFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
 			kubeconfigDir := filepath.Dir(kubeconfigPath)
 			return docker.New(executor, docker.Config{
-				Name:           name + setupNameSuffix,
-				Image:          containers.Setup.Image,
-				DockerfilePath: containers.Setup.DockerfilePath,
-				BuildContext:   containers.Setup.BuildContext,
-				Network:        containers.Setup.Network,
-				Layout:         docker.ImageLayout{User: "root", Workdir: "/workspace"},
-				Env:            map[string]string{"KUBECONFIG": kubeconfigPath},
+				Name:    name + setupNameSuffix,
+				Image:   containers.Setup.Image,
+				Network: containers.Setup.Network,
+				Layout:  docker.ImageLayout{User: "root", Workdir: "/workspace"},
+				Env:     map[string]string{"KUBECONFIG": kubeconfigPath},
 				Mounts: []docker.Mount{
 					{Source: repoRoot, Target: repoRoot, ReadOnly: true},
 					{Source: kubeconfigDir, Target: kubeconfigDir},

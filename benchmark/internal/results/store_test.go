@@ -294,7 +294,7 @@ func TestStoreOmitsThroughputForValidationRuns(t *testing.T) {
 	root := t.TempDir()
 	store, err := New(root, RunMetadata{
 		RunID:       "run-validation",
-		RunType:     "validation",
+		RunType:     RunTypeValidation,
 		Parallelism: 1,
 		RepeatCount: 1,
 		Scenarios:   []string{"scenario"},

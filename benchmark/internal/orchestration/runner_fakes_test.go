@@ -43,7 +43,6 @@ func (c *fakeCluster) KubeconfigContext() string {
 
 type fakeSandbox struct {
 	events   *[]string
-	buildErr error
 	startErr error
 	stopErr  error
 }
@@ -56,11 +55,6 @@ type fakeImageBuilder struct {
 func (b *fakeImageBuilder) Build(context.Context) error {
 	*b.events = append(*b.events, "sandbox-image-build")
 	return b.buildErr
-}
-
-func (s *fakeSandbox) Build(context.Context) error {
-	*s.events = append(*s.events, "sandbox-build")
-	return s.buildErr
 }
 
 func (s *fakeSandbox) Start(context.Context) error {
@@ -80,11 +74,6 @@ func (s *fakeSandbox) Exec(context.Context, command.Spec) (command.Result, error
 
 type lifecycleOnlySandbox struct {
 	events *[]string
-}
-
-func (s *lifecycleOnlySandbox) Build(context.Context) error {
-	*s.events = append(*s.events, "sandbox-build")
-	return nil
 }
 
 func (s *lifecycleOnlySandbox) Start(context.Context) error {

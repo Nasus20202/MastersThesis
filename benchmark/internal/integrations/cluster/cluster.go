@@ -1,11 +1,9 @@
-// Package cluster contains the provider-neutral cluster contract used by the
-// benchmark orchestration layer.
+// Package cluster defines the cluster contract used by orchestration.
 package cluster
 
 import "context"
 
-// Cluster is the lifecycle and kubeconfig capability required by the
-// benchmark. Provider-specific details remain in adapter packages.
+// Cluster is a disposable Kubernetes cluster and its kubeconfig.
 type Cluster interface {
 	Create(context.Context) error
 	Delete(context.Context) error
@@ -14,5 +12,5 @@ type Cluster interface {
 	KubeconfigContext() string
 }
 
-// Factory constructs a provider-neutral cluster implementation.
+// Factory creates a cluster with the given name.
 type Factory func(string) (Cluster, error)
