@@ -58,7 +58,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	flags.Var(&validationPaths, "validate", "path to a validation YAML file or directory; may be repeated")
 	var configPaths stringList
 	flags.Var(&configPaths, "config", "load benchmark YAML configuration; may be repeated in overlay order")
-	var agentValues agentList
+	var agentValues stringList
 	flags.Var(&agentValues, "agent", "benchmark agent(s): all, baseline, prompt, or skill; may be repeated or comma-separated (default: all)")
 	var tagValues stringList
 	flags.Var(&tagValues, "tag", "filter scenarios by tag, e.g. difficulty=hard or area=networking; may be repeated or comma-separated")
@@ -139,27 +139,13 @@ func (s *stringList) String() string {
 
 func (s *stringList) Set(value string) error {
 	if strings.TrimSpace(value) == "" {
-		return errors.New("path must not be blank")
+		return errors.New("value must not be blank")
 	}
 	*s = append(*s, value)
 	return nil
 }
 
-type agentList []string
-
-func (a *agentList) String() string {
-	return strings.Join(*a, ",")
-}
-
-func (a *agentList) Set(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return errors.New("agent must not be blank")
-	}
-	*a = append(*a, value)
-	return nil
-}
-
-func explicitAllAgentSelection(values agentList) bool {
+func explicitAllAgentSelection(values stringList) bool {
 	return len(values) == 1 && strings.EqualFold(strings.TrimSpace(values[0]), string(commandagent.All))
 }
 

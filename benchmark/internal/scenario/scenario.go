@@ -29,14 +29,10 @@ func (c Command) Spec() command.Spec {
 
 type Step []Command
 
-func (s Step) setDir(dir string) {
+func (s Step) SetDir(dir string) {
 	for index := range s {
 		s[index].dir = dir
 	}
-}
-
-func (s Step) SetDir(dir string) {
-	s.setDir(dir)
 }
 
 func (s Step) Specs() []command.Spec {
@@ -68,10 +64,10 @@ type Definition struct {
 
 func (d *Definition) setDir(dir string) {
 	d.Cluster.setDir(dir)
-	d.Prepare.setDir(dir)
-	d.VerifyClean.setDir(dir)
-	d.InjectFault.setDir(dir)
-	d.VerifyFault.setDir(dir)
+	d.Prepare.SetDir(dir)
+	d.VerifyClean.SetDir(dir)
+	d.InjectFault.SetDir(dir)
+	d.VerifyFault.SetDir(dir)
 	for index := range d.Grading {
 		d.Grading[index].Check.dir = dir
 	}

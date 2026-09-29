@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -108,7 +109,7 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	metadata := inference.Metadata{}
 	if provider, ok := client.(inference.MetadataProvider); ok {
 		metadata = provider.Metadata()
-		metadata.RuntimeSettings = cloneRuntimeSettings(metadata.RuntimeSettings)
+		metadata.RuntimeSettings = maps.Clone(metadata.RuntimeSettings)
 	}
 	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config, metadata: metadata}, nil
 }
@@ -397,17 +398,6 @@ func cloneMessages(messages []inference.Message) []inference.Message {
 	copy(cloned, messages)
 	for index := range cloned {
 		cloned[index].ToolCalls = slices.Clone(cloned[index].ToolCalls)
-	}
-	return cloned
-}
-
-func cloneRuntimeSettings(settings map[string]string) map[string]string {
-	if settings == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(settings))
-	for key, value := range settings {
-		cloned[key] = value
 	}
 	return cloned
 }
