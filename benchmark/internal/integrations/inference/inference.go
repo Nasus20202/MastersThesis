@@ -1,19 +1,17 @@
-// Package inference contains provider-neutral inference boundaries used by
-// benchmark agents.
+// Package inference defines the chat-completion interface used by agents.
 package inference
 
 import (
 	"context"
 )
 
-// Client is the chat-completion boundary consumed by agents. Provider
-// adapters, such as llama.Adapter, implement this interface.
+// Client sends chat-completion requests. llama.Adapter implements it.
 type Client interface {
 	Chat(context.Context, []Message, []Tool, Options) (Result, error)
 }
 
-// MetadataProvider optionally exposes provider and model metadata without
-// making it part of the chat-call contract.
+// MetadataProvider is implemented by clients that can report provider and
+// model metadata for the attempt record.
 type MetadataProvider interface {
 	Metadata() Metadata
 }

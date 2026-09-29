@@ -1,9 +1,5 @@
 package results
 
-// This file holds read-only views over the on-disk result tree. Nothing here
-// writes; the loader only decodes artifacts written by the benchmark runner so
-// tools such as the browser can inspect history without mutating it.
-
 import (
 	"encoding/json"
 	"fmt"
