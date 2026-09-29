@@ -49,7 +49,7 @@ func TestRunUsesRoutingPromptAndSkillLoader(t *testing.T) {
 	require.Len(t, client.requests, 1)
 	require.Len(t, client.requests[0], 2)
 	assert.Equal(t, "system", client.requests[0][0].Role)
-	routingPrompt, err := routingSystemPrompt()
+	routingPrompt, err := routingSystemPromptFor(systemPrompt, skillFiles)
 	require.NoError(t, err)
 	assert.Equal(t, routingPrompt, client.requests[0][0].Content)
 	assert.Contains(t, client.requests[0][0].Content, "Use Bash to inspect the sandbox")
@@ -125,7 +125,7 @@ func TestNewAndRunRejectInvalidSkillAgent(t *testing.T) {
 	_, err := nilAgent.Run(context.Background(), "task")
 	assert.EqualError(t, err, "skill agent is not initialized")
 
-	_, err = NewWithSystemPrompt(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, " ")
+	_, err = NewWithSystemPromptAndFiles(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, " ", skillFiles)
 	assert.EqualError(t, err, "skill system prompt is required")
 
 	agent, err := New(&skillTestClient{}, skillTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})

@@ -42,23 +42,11 @@ func (m *Model) SetOffset(offset int) {
 	m.inner.SetYOffset(offset)
 }
 
-func (m *Model) Scroll(delta int) {
-	if delta >= 0 {
-		m.inner.ScrollDown(delta)
-		return
-	}
-	m.inner.ScrollUp(-delta)
-}
-
 func (m *Model) Offset() int { return m.inner.YOffset() }
 
 func (m *Model) Total() int { return m.inner.TotalLineCount() }
 
 func (m *Model) Visible() int { return m.height }
-
-func (m *Model) MaxOffset() int {
-	return max(0, m.Total()-m.Visible())
-}
 
 // View renders the visible slice with a scrollbar column.
 func (m *Model) View() string {

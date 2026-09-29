@@ -42,10 +42,6 @@ func newReferenceTool(fileSystems ...fs.FS) common.Tool {
 	return referenceTool{files: configuredFiles(fileSystems...)}
 }
 
-func routingSystemPrompt() (string, error) {
-	return routingSystemPromptFor(systemPrompt, skillFiles)
-}
-
 func routingSystemPromptFor(basePrompt string, files fs.FS) (string, error) {
 	if strings.TrimSpace(basePrompt) == "" {
 		return "", errors.New("skill system prompt is required")

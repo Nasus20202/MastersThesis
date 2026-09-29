@@ -63,8 +63,8 @@ func (s *Store) Reload() error {
 // recompute rebuilds the tag-filtered views from the full run list.
 func (s *Store) recompute() {
 	s.visible = s.filterRuns(s.runs)
-	s.agents = results.RollupAgentsWhere(s.runs, s.matchesTags)
-	s.tasks = results.RollupTasksWhere(s.runs, s.matchesTags)
+	s.agents = results.RollupAgents(s.runs, s.matchesTags)
+	s.tasks = results.RollupTasks(s.runs, s.matchesTags)
 }
 
 // Runs returns every discovered run that matches the active tag filter, newest first.

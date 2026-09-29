@@ -163,10 +163,6 @@ func loadPromptSystemPrompt(path string) (string, error) {
 	return prompt, nil
 }
 
-func NewBaselineFactory(benchmarkConfig benchmarkconfig.Config) (rootagent.Factory, error) {
-	return NewFactory(Baseline, benchmarkConfig)
-}
-
 func newInferenceClient() (inference.Client, error) {
 	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
 	if model == "" {

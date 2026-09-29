@@ -57,10 +57,6 @@ func newAgent(client inference.Client, shell common.Shell, config common.Config,
 	return NewWithSystemPromptAndFiles(client, shell, config, prompt, files)
 }
 
-func NewWithSystemPrompt(client inference.Client, shell common.Shell, config common.Config, systemPrompt string) (*Agent, error) {
-	return NewWithSystemPromptAndFiles(client, shell, config, systemPrompt, skillFiles)
-}
-
 func NewWithSystemPromptAndFiles(client inference.Client, shell common.Shell, config common.Config, systemPrompt string, files fs.FS) (*Agent, error) {
 	if strings.TrimSpace(systemPrompt) == "" {
 		return nil, errors.New("skill system prompt is required")

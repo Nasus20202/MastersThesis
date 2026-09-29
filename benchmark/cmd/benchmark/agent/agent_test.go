@@ -50,10 +50,10 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-func TestNewBaselineFactoryRequiresModel(t *testing.T) {
+func TestNewFactoryRequiresModel(t *testing.T) {
 	t.Setenv(envLlamaModelName, "")
 
-	factory, err := NewBaselineFactory(benchmarkconfig.Config{})
+	factory, err := NewFactory(Baseline, benchmarkconfig.Config{})
 	assert.Nil(t, factory)
 	assert.EqualError(t, err, envLlamaModelName+" is required")
 }

@@ -33,7 +33,7 @@ func TestSkillFilesAreEmbedded(t *testing.T) {
 }
 
 func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
-	prompt, err := routingSystemPrompt()
+	prompt, err := routingSystemPromptFor(systemPrompt, skillFiles)
 	require.NoError(t, err)
 	for _, entry := range []string{
 		"- authorization: Repairing RBAC and ServiceAccount faults",
