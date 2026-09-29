@@ -10,6 +10,12 @@ const (
 	envLlamaModelFile       = "LLAMA_MODEL_FILE"
 	envLlamaModelQuant      = "LLAMA_MODEL_QUANTIZATION"
 	envLlamaModelSHA256     = "LLAMA_MODEL_SHA256"
+	envLlamaDraftRepository = "LLAMA_MODEL_DRAFT_REPOSITORY"
+	envLlamaDraftRevision   = "LLAMA_MODEL_DRAFT_REVISION"
+	envLlamaDraftFile       = "LLAMA_MODEL_DRAFT_FILE"
+	envLlamaDraftSHA256     = "LLAMA_MODEL_DRAFT_SHA256"
+	envLlamaSpecType        = "LLAMA_SPEC_TYPE"
+	envLlamaSpecDraftNMax   = "LLAMA_SPEC_DRAFT_N_MAX"
 	envLlamaKVUnified       = "LLAMA_KV_UNIFIED_PER_SLOT"
 	envLlamaGPULayers       = "LLAMA_GPU_LAYERS"
 	envLlamaVulkanDevice    = "LLAMA_VULKAN_DEVICE"
@@ -36,4 +42,10 @@ var llamaRuntimeEnvNames = [...]string{
 	envLlamaHost,
 	envLlamaPort,
 	envLlamaClientHost,
+	envLlamaSpecType,
+	envLlamaSpecDraftNMax,
+	envLlamaDraftRepository,
+	envLlamaDraftRevision,
+	envLlamaDraftFile,
+	envLlamaDraftSHA256,
 }
