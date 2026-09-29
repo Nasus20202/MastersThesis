@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
@@ -101,38 +100,20 @@ func Resume(root, runID string) (*Store, error) {
 		summary:  newSummaryAccumulator(metadata),
 		recorded: make(map[string]struct{}),
 	}
-	attemptPaths, err := filepath.Glob(filepath.Join(runDir, "*", "*", "*.json"))
+	refs, err := listAttempts(runDir)
 	if err != nil {
-		return nil, fmt.Errorf("find run attempts: %w", err)
+		return nil, err
 	}
-	for _, path := range attemptPaths {
-		data, err := os.ReadFile(path)
+	for _, ref := range refs {
+		attempt, err := LoadAttempt(ref, metadata.RunType)
 		if err != nil {
-			return nil, fmt.Errorf("read run attempt %q: %w", path, err)
+			return nil, err
 		}
-		if metadata.RunType == "validation" {
-			var artifact ValidationAttemptResult
-			if err := json.Unmarshal(data, &artifact); err != nil {
-				return nil, fmt.Errorf("decode run attempt %q: %w", path, err)
-			}
-			if artifact.RunID != metadata.RunID {
-				return nil, fmt.Errorf("run attempt %q belongs to %q", path, artifact.RunID)
-			}
-			store.recorded[attemptKey(artifact.ScenarioID, artifact.CaseID, artifact.Attempt)] = struct{}{}
-			passed := artifact.Passed
-			store.summary.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, &passed)
-			continue
+		if attempt.runID() != metadata.RunID {
+			return nil, fmt.Errorf("run attempt %q belongs to %q", ref.Path, attempt.runID())
 		}
-		var artifact AttemptResult
-		if err := json.Unmarshal(data, &artifact); err != nil {
-			return nil, fmt.Errorf("decode run attempt %q: %w", path, err)
-		}
-		if artifact.RunID != metadata.RunID {
-			return nil, fmt.Errorf("run attempt %q belongs to %q", path, artifact.RunID)
-		}
-		store.recorded[attemptKey(artifact.ScenarioID, artifact.Condition, artifact.Attempt)] = struct{}{}
-		store.summary.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
-		store.summary.addThroughput(artifact.Condition, artifact.Agent)
+		store.recorded[attempt.key()] = struct{}{}
+		store.summary.addAttempt(attempt)
 	}
 	if err := store.writeRunMetadata(); err != nil {
 		return nil, err
@@ -207,7 +188,7 @@ func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orche
 	if runErr != nil {
 		artifact.Error = runErr.Error()
 	}
-	return s.recordAttempt(path, artifact, condition, condition, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, nil)
+	return s.recordAttempt(path, Attempt{Benchmark: &artifact})
 }
 
 func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, expectedScore float64, expectedFullSuccess bool, result orchestration.RunResult, validationErr error) error {
@@ -244,50 +225,30 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	if validationErr != nil {
 		artifact.Error = validationErr.Error()
 	}
-	passed := artifact.Passed
 	path := filepath.Join(caseDir, fmt.Sprintf("%03d.json", attempt))
-	return s.recordAttempt(path, artifact, condition, caseID, scenarioID, result.Grading.FullSuccess, result.Grading.Score, artifact.Error, &passed)
+	return s.recordAttempt(path, Attempt{Validation: &artifact})
 }
 
-func (s *Store) recordAttempt(path string, artifact any, condition, recordKey, scenarioID string, fullSuccess bool, score float64, errorText string, validationPassed *bool) error {
+func (s *Store) recordAttempt(path string, attempt Attempt) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.metadata.State != RunStateRunning {
 		return errors.New("cannot write attempt result after run finalization")
 	}
-	if _, exists := s.recorded[attemptKey(scenarioID, recordKey, artifactAttempt(artifact))]; exists {
+	key := attempt.key()
+	if _, exists := s.recorded[key]; exists {
 		return fmt.Errorf("attempt result already recorded: %s", path)
+	}
+	var artifact any = attempt.Benchmark
+	if attempt.Validation != nil {
+		artifact = attempt.Validation
 	}
 	if err := writeJSON(path, artifact); err != nil {
 		return fmt.Errorf("write attempt result: %w", err)
 	}
-	s.recorded[attemptKey(scenarioID, recordKey, artifactAttempt(artifact))] = struct{}{}
-	s.summary.add(condition, scenarioID, fullSuccess, score, errorText, validationPassed)
-	s.summary.addThroughput(condition, artifactAgent(artifact))
-	if err := s.writeSummary(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func artifactAttempt(artifact any) int {
-	switch value := artifact.(type) {
-	case AttemptResult:
-		return value.Attempt
-	case ValidationAttemptResult:
-		return value.Attempt
-	default:
-		return 0
-	}
-}
-
-// artifactAgent returns the model-loop evidence of an attempt, or nil for
-// validation attempts, which run no model.
-func artifactAgent(artifact any) *common.Result {
-	if value, ok := artifact.(AttemptResult); ok {
-		return value.Agent
-	}
-	return nil
+	s.recorded[key] = struct{}{}
+	s.summary.addAttempt(attempt)
+	return s.writeSummary()
 }
 
 func (s *Store) Finalize(completedAt time.Time) error {

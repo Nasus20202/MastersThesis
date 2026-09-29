@@ -65,7 +65,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		revision, workingTreeDirty := repositoryProvenance(ctx)
 		metadata := results.RunMetadata{
 			RunID:              runID(startedAt),
-			RunType:            "benchmark",
+			RunType:            results.RunTypeBenchmark,
 			StartedAt:          startedAt,
 			RepositoryRevision: revision,
 			WorkingTreeDirty:   workingTreeDirty,
@@ -192,7 +192,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 }
 
 func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string) error {
-	if metadata.RunType != "benchmark" {
+	if metadata.RunType != results.RunTypeBenchmark {
 		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
 	}
 	wantAgents := agentNamesToStrings(agents)

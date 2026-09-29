@@ -133,13 +133,13 @@ func LoadRun(root, runID string) (RunSnapshot, error) {
 	}, nil
 }
 
-func LoadAttempt(ref AttemptRef, runType string) (Attempt, error) {
+func LoadAttempt(ref AttemptRef, runType RunType) (Attempt, error) {
 	data, err := os.ReadFile(ref.Path)
 	if err != nil {
 		return Attempt{}, fmt.Errorf("read attempt %q: %w", ref.Path, err)
 	}
 	attempt := Attempt{Ref: ref}
-	if runType == "validation" {
+	if runType == RunTypeValidation {
 		var artifact ValidationAttemptResult
 		if err := json.Unmarshal(data, &artifact); err != nil {
 			return Attempt{}, fmt.Errorf("decode attempt %q: %w", ref.Path, err)
@@ -153,6 +153,28 @@ func LoadAttempt(ref AttemptRef, runType string) (Attempt, error) {
 	}
 	attempt.Benchmark = &artifact
 	return attempt, nil
+}
+
+// key identifies the attempt within its run: benchmark attempts by condition,
+// validation attempts by case.
+func (a Attempt) key() string {
+	if a.Validation != nil {
+		return attemptKey(a.Validation.ScenarioID, a.Validation.CaseID, a.Validation.Attempt)
+	}
+	if a.Benchmark != nil {
+		return attemptKey(a.Benchmark.ScenarioID, a.Benchmark.Condition, a.Benchmark.Attempt)
+	}
+	return ""
+}
+
+func (a Attempt) runID() string {
+	if a.Validation != nil {
+		return a.Validation.RunID
+	}
+	if a.Benchmark != nil {
+		return a.Benchmark.RunID
+	}
+	return ""
 }
 
 // Grading returns the grading outcome of whichever artifact is set.
@@ -262,25 +284,11 @@ func parseAttemptPath(runDir, path string) (AttemptRef, error) {
 func deriveSummary(metadata RunMetadata, attempts []AttemptRef) (*RunSummary, error) {
 	accumulator := newSummaryAccumulator(metadata)
 	for _, ref := range attempts {
-		data, err := os.ReadFile(ref.Path)
+		attempt, err := LoadAttempt(ref, runType(metadata))
 		if err != nil {
-			return nil, fmt.Errorf("read attempt %q: %w", ref.Path, err)
+			return nil, err
 		}
-		if runType(metadata) == "validation" {
-			var artifact ValidationAttemptResult
-			if err := json.Unmarshal(data, &artifact); err != nil {
-				return nil, fmt.Errorf("decode attempt %q: %w", ref.Path, err)
-			}
-			passed := artifact.Passed
-			accumulator.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, &passed)
-			continue
-		}
-		var artifact AttemptResult
-		if err := json.Unmarshal(data, &artifact); err != nil {
-			return nil, fmt.Errorf("decode attempt %q: %w", ref.Path, err)
-		}
-		accumulator.add(artifact.Condition, artifact.ScenarioID, artifact.Grading.FullSuccess, artifact.Grading.Score, artifact.Error, nil)
-		accumulator.addThroughput(artifact.Condition, artifact.Agent)
+		accumulator.addAttempt(attempt)
 	}
 	state := metadata.State
 	if state == "" {

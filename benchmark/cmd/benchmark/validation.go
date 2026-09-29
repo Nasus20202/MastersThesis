@@ -31,7 +31,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	revision, workingTreeDirty := repositoryProvenance(ctx)
 	metadata := results.RunMetadata{
 		RunID:              runID(startedAt),
-		RunType:            "validation",
+		RunType:            results.RunTypeValidation,
 		StartedAt:          startedAt,
 		RepositoryRevision: revision,
 		WorkingTreeDirty:   workingTreeDirty,
