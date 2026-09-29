@@ -102,10 +102,9 @@ func isYAMLExtension(extension string) bool {
 	return extension == ".yaml" || extension == ".yml"
 }
 
-// LoadInputs walks inputs, which may be individual files or directories.
-// Directories are scanned with discover; every resulting path (or, for a
-// file input, the input itself) is loaded with load and handed to
-// appendResult. kind names the input type for error messages.
+// LoadInputs loads each input file, or every file discover finds in an input
+// directory, and passes the loaded value to appendResult. kind names the input
+// type for error messages.
 func LoadInputs[T any](
 	inputs []string,
 	kind string,

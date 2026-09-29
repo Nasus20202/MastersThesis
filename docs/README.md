@@ -1,7 +1,5 @@
 # Project documentation
 
-This directory contains the research design, benchmark definition, technology choices, decisions and sources for the project.
-
 ## Documents
 
 - [Research design](research-design.md) — research goal, questions, scope and comparison principles.
