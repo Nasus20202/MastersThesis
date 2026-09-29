@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
@@ -27,34 +26,23 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	if len(cases) == 0 {
 		return fmt.Errorf("no validation cases match tag filter %q", tagFilter.String())
 	}
-	startedAt := time.Now().UTC()
-	revision, workingTreeDirty := repositoryProvenance(ctx)
-	metadata := results.RunMetadata{
-		RunID:              runID(startedAt),
-		RunType:            results.RunTypeValidation,
-		StartedAt:          startedAt,
-		RepositoryRevision: revision,
-		WorkingTreeDirty:   workingTreeDirty,
-		ExpectedAttempts:   len(cases) * repeat,
-		Parallelism:        parallelism,
-		RepeatCount:        repeat,
-		Scenarios:          validationScenarioIDs(cases),
-		TagSelector:        tagFilter.String(),
-	}
-	store, err := results.New("results", metadata)
+	deps, err := newRunnerDeps(command.LocalExecutor{Environment: os.Environ()}, benchmarkConfig.Containers)
 	if err != nil {
 		return err
 	}
+	store, err := startRun(ctx, results.RunMetadata{
+		RunType:          results.RunTypeValidation,
+		ExpectedAttempts: len(cases) * repeat,
+		Parallelism:      parallelism,
+		RepeatCount:      repeat,
+		Scenarios:        validationScenarioIDs(cases),
+		TagSelector:      tagFilter.String(),
+	})
+	if err != nil {
+		return err
+	}
+	metadata := store.Metadata()
 	logger := slog.Default()
-	finalized := false
-	defer func() {
-		if finalized {
-			return
-		}
-		if err := store.Finalize(time.Now().UTC()); err != nil {
-			logger.Error("validation result finalization failed", "run_id", metadata.RunID, "error", err)
-		}
-	}()
 	logger.Info("validation runner started",
 		"run_id", metadata.RunID,
 		"cases", len(cases),
@@ -63,11 +51,6 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		"total_tasks", len(cases)*repeat,
 	)
 
-	commandExecutor := command.LocalExecutor{Environment: os.Environ()}
-	deps, err := newRunnerDeps(commandExecutor, benchmarkConfig.Containers)
-	if err != nil {
-		return err
-	}
 	runCase := func(ctx context.Context, definition scenario.Definition, repair scenario.Step) (orchestration.RunResult, error) {
 		return newOrchestrationRunner(deps, definition, "", nil, nil).RunWithRepair(ctx, definition, repair)
 	}
@@ -78,41 +61,22 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			tasks = append(tasks, task)
 		}
 	}
-	progress, err := terminal.NewProgress(len(tasks), parallelism)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := progress.Finish(); err != nil {
-			logger.Error("validation progress display failed", "error", err)
-		}
-	}()
-	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
 	caseByKey := make(map[string]validation.ValidationCase, len(cases))
 	for _, item := range cases {
 		caseByKey[item.Scenario.ID+"/"+item.ID] = item
 	}
-	validationErrors := make([]error, 0)
-	var writeErr error
-	for outcome := range outcomes {
+	var validationErrors []error
+	runErr := executeRun(ctx, store, terminal, tasks, parallelism, func(outcome executor.Outcome) (bool, error) {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
-			if err := progress.Update(ui.Outcome{}); err != nil {
-				logger.Error("validation progress display failed", "error", err)
-			}
 			validationErrors = append(validationErrors, fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID))
-			continue
+			return false, nil
 		}
 		caseErr := outcome.Err
 		if caseErr == nil {
 			caseErr = validation.Check(item, outcome.Result)
 		}
-		if err := store.WriteValidationAttempt(outcome.Attempt, item.Scenario.ID, item.ID, item.ExpectedScore, item.ExpectedFullSuccess, outcome.Result, caseErr); err != nil {
-			writeErr = errors.Join(writeErr, err)
-		}
-		if err := progress.Update(ui.Outcome{Success: caseErr == nil}); err != nil {
-			logger.Error("validation progress display failed", "error", err)
-		}
+		writeErr := store.WriteValidationAttempt(outcome.Attempt, item.Scenario.ID, item.ID, item.ExpectedScore, item.ExpectedFullSuccess, outcome.Result, caseErr)
 		if caseErr != nil {
 			logger.Error("validation case failed",
 				"run_id", metadata.RunID,
@@ -124,7 +88,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 				"error", caseErr,
 			)
 			validationErrors = append(validationErrors, fmt.Errorf("%s/%s: %w", item.Scenario.ID, item.ID, caseErr))
-			continue
+			return false, writeErr
 		}
 		logger.Info("validation case passed",
 			"run_id", metadata.RunID,
@@ -134,20 +98,9 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 			"score", outcome.Result.Grading.Score,
 			"full_success", outcome.Result.Grading.FullSuccess,
 		)
-	}
-	runErr := <-executeErrors
-	finalizeErr := store.Finalize(time.Now().UTC())
-	if finalizeErr == nil {
-		finalized = true
-	}
-	if writeErr != nil || finalizeErr != nil {
-		return errors.Join(writeErr, finalizeErr)
-	}
-	// runErr is nil unless the executor hit a dispatch/config error or
-	// context cancellation; per-case failures are already in
-	// validationErrors above, so this only adds the errors that would
-	// otherwise be silently dropped, matching runBenchmark's behavior.
-	return errors.Join(errors.Join(validationErrors...), runErr)
+		return true, writeErr
+	})
+	return errors.Join(runErr, errors.Join(validationErrors...))
 }
 
 func validationScenarioIDs(cases []validation.ValidationCase) []string {

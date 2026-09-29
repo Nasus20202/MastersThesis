@@ -39,8 +39,6 @@ func newSandbox(t *testing.T, executor command.Executor) *Sandbox {
 	sandbox, err := New(executor, Config{
 		Name:           "benchmark-sandbox",
 		Image:          "masters-thesis-sandbox:increment-1",
-		DockerfilePath: "/tmp/Dockerfile",
-		BuildContext:   "/tmp/context",
 		KubeconfigPath: "/tmp/benchmark.kubeconfig",
 		Network:        "benchmark-sandbox-network",
 		NetworkTarget:  "benchmark-control-plane",
@@ -66,26 +64,6 @@ func TestNewValidatesConfiguration(t *testing.T) {
 	assert.Error(t, err)
 	_, err = New(executor, Config{Name: "name", Image: "image", KubeconfigPath: "/tmp/config"})
 	assert.Error(t, err)
-	_, err = New(executor, Config{Name: "name", Image: "image", DockerfilePath: "/tmp/Dockerfile", KubeconfigPath: "/tmp/config"})
-	assert.Error(t, err)
-	_, err = New(executor, Config{Name: "name", Image: "image", BuildContext: "/tmp/context", KubeconfigPath: "/tmp/config"})
-	assert.Error(t, err)
-}
-
-func TestBuildUsesHostDockerCommand(t *testing.T) {
-	executor := &fakeExecutor{}
-	sandbox := newSandbox(t, executor)
-
-	assert.NoError(t, sandbox.Build(context.Background()))
-
-	require.Len(t, executor.specs, 1)
-	assert.Equal(t, command.Spec{
-		Program: dockerProgram,
-		Args: []string{
-			"build", "--file", "/tmp/Dockerfile",
-			"--tag", "masters-thesis-sandbox:increment-1", "/tmp/context",
-		},
-	}, executor.specs[0])
 }
 
 func TestImageBuilderBuildsImageOnce(t *testing.T) {
@@ -243,9 +221,6 @@ func TestSandboxReturnsDockerErrors(t *testing.T) {
 	sandbox := newSandbox(t, &fakeExecutor{err: wantErr})
 
 	err := sandbox.Start(context.Background())
-	assert.ErrorIs(t, err, wantErr)
-
-	err = sandbox.Build(context.Background())
 	assert.ErrorIs(t, err, wantErr)
 
 	_, err = sandbox.Exec(context.Background(), command.Spec{Program: "pwd"})

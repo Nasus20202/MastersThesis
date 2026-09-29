@@ -63,10 +63,8 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 	return store, nil
 }
 
-// Resume reopens an existing incomplete run and rebuilds its in-memory summary
-// from the attempt artifacts already written to disk. Completed attempts are
-// retained and can be skipped by the runner; only missing task keys need to be
-// scheduled again.
+// Resume reopens an incomplete run and rebuilds its summary from the attempts
+// already on disk, so the runner only schedules the missing ones.
 func Resume(root, runID string) (*Store, error) {
 	if strings.TrimSpace(runID) == "" {
 		return nil, errors.New("result run ID is required")
