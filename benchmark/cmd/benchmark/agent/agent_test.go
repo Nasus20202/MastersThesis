@@ -179,12 +179,24 @@ func TestModelArtifactAndRuntimeSettings(t *testing.T) {
 	t.Setenv(envLlamaKVUnified, "32768")
 	t.Setenv(envLlamaFlashAttention, "auto")
 	t.Setenv(envLlamaReasoning, "on")
+	t.Setenv(envLlamaSpecType, "draft-mtp")
+	t.Setenv(envLlamaSpecDraftNMax, "3")
+	t.Setenv(envLlamaDraftRepository, "unsloth/gemma")
+	t.Setenv(envLlamaDraftRevision, "draft-revision")
+	t.Setenv(envLlamaDraftFile, "MTP/drafter.gguf")
+	t.Setenv(envLlamaDraftSHA256, "draft-hash")
 
 	assert.Equal(t, "google/gemma@revision/gemma.gguf", modelArtifact())
 	settings := runtimeSettings()
 	assert.Equal(t, "32768", settings[envLlamaKVUnified])
 	assert.Equal(t, "on", settings[envLlamaReasoning])
 	assert.Equal(t, "auto", settings[envLlamaFlashAttention])
+	assert.Equal(t, "draft-mtp", settings[envLlamaSpecType])
+	assert.Equal(t, "3", settings[envLlamaSpecDraftNMax])
+	assert.Equal(t, "unsloth/gemma", settings[envLlamaDraftRepository])
+	assert.Equal(t, "draft-revision", settings[envLlamaDraftRevision])
+	assert.Equal(t, "MTP/drafter.gguf", settings[envLlamaDraftFile])
+	assert.Equal(t, "draft-hash", settings[envLlamaDraftSHA256])
 }
 
 type baselineTestExecutor struct{}
