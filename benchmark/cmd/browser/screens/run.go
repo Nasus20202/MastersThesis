@@ -15,7 +15,7 @@ func (v *View) runSummary(route *Route, width int) string {
 		return ui.MutedStyle.Render("loading run…")
 	}
 	metadata := snapshot.Metadata
-	title := ui.Title.Render(metadata.RunID) + "  " + ui.StateBadge(string(metadata.State)) + "  " + ui.MutedStyle.Render(metadata.RunType)
+	title := ui.Title.Render(metadata.RunID) + "  " + ui.StateBadge(string(metadata.State)) + "  " + ui.MutedStyle.Render(string(metadata.RunType))
 
 	attempts := "0"
 	errors := "0"

@@ -558,3 +558,15 @@ func TestLoopTimesOutIndividualToolCallAndContinues(t *testing.T) {
 	assert.ErrorContains(t, errors.New(result.ToolCalls[0].Error), context.DeadlineExceeded.Error())
 	assert.Less(t, time.Since(started), time.Second)
 }
+
+func TestConditionRejectsUninitializedAgentAndBlankTask(t *testing.T) {
+	var condition *Condition
+	_, err := condition.Run(context.Background(), "task")
+	assert.EqualError(t, err, "agent is not initialized")
+
+	tool := &loopTool{definition: inference.Tool{Name: "bash"}}
+	condition, err = NewCondition("test", &loopClient{}, []Tool{tool}, Config{MaxTurns: 1, MaxToolCalls: 1}, "", nil)
+	require.NoError(t, err)
+	_, err = condition.Run(context.Background(), " ")
+	assert.EqualError(t, err, "agent task is required")
+}

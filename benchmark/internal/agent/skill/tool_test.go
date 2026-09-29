@@ -14,26 +14,26 @@ import (
 )
 
 func TestSkillFilesAreEmbedded(t *testing.T) {
-	skills, err := discoverSkillPaths(skillFiles)
+	skills, err := discoverSkillPaths(defaultSkillFiles)
 	require.NoError(t, err)
 	assert.NotEmpty(t, skills)
 	for _, path := range skills {
-		data, err := fs.ReadFile(skillFiles, path)
+		data, err := fs.ReadFile(defaultSkillFiles, path)
 		require.NoError(t, err)
 		assert.NotEmpty(t, data)
 	}
-	references, err := discoverReferences(skillFiles, "kubernetes")
+	references, err := discoverReferences(defaultSkillFiles, "kubernetes")
 	require.NoError(t, err)
 	assert.Len(t, references, 18)
 	for _, path := range references {
-		data, err := fs.ReadFile(skillFiles, path)
+		data, err := fs.ReadFile(defaultSkillFiles, path)
 		require.NoError(t, err)
 		assert.NotEmpty(t, data)
 	}
 }
 
 func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
-	prompt, err := routingSystemPromptFor(systemPrompt, skillFiles)
+	prompt, err := routingSystemPrompt(defaultSystemPrompt, defaultSkillFiles)
 	require.NoError(t, err)
 	for _, entry := range []string{
 		"- authorization: Repairing RBAC and ServiceAccount faults",
@@ -64,10 +64,10 @@ func TestRoutingPromptListsSkillManifestsWithoutReferences(t *testing.T) {
 }
 
 func TestKubernetesReferencesDoNotContainTroubleshootingPlaybooks(t *testing.T) {
-	references, err := discoverReferences(skillFiles, "kubernetes")
+	references, err := discoverReferences(defaultSkillFiles, "kubernetes")
 	require.NoError(t, err)
 	for name, path := range references {
-		data, err := fs.ReadFile(skillFiles, path)
+		data, err := fs.ReadFile(defaultSkillFiles, path)
 		require.NoError(t, err)
 		content := strings.ToLower(string(data))
 		assert.NotContains(t, content, "## troubleshooting", name)
@@ -76,7 +76,7 @@ func TestKubernetesReferencesDoNotContainTroubleshootingPlaybooks(t *testing.T) 
 }
 
 func TestSkillToolSuggestsReferenceForReferenceName(t *testing.T) {
-	tool := newSkillTool()
+	tool := skillTool{files: defaultSkillFiles}
 
 	for _, name := range []string{"api", "api.md"} {
 		result := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"name":"` + name + `"}`})
@@ -94,13 +94,13 @@ func TestSkillToolSuggestsReferenceForReferenceName(t *testing.T) {
 }
 
 func TestSkillToolDefinition(t *testing.T) {
-	definition := newSkillTool().Definition()
+	definition := skillTool{files: defaultSkillFiles}.Definition()
 	assert.Equal(t, loadSkillToolName, definition.Name)
 	assert.JSONEq(t, `{"type":"object","properties":{"name":{"type":"string","description":"Skill name to load"}},"required":["name"],"additionalProperties":false}`, string(definition.Parameters))
 }
 
 func TestSkillToolLoadsSkill(t *testing.T) {
-	tool := newSkillTool()
+	tool := skillTool{files: defaultSkillFiles}
 
 	skillResult := tool.Execute(context.Background(), inference.ToolCall{Arguments: `{"name":"workloads"}`})
 	require.NoError(t, skillResult.Error)
@@ -111,13 +111,13 @@ func TestSkillToolLoadsSkill(t *testing.T) {
 }
 
 func TestReferenceToolDefinition(t *testing.T) {
-	definition := newReferenceTool().Definition()
+	definition := referenceTool{files: defaultSkillFiles}.Definition()
 	assert.Equal(t, loadReferenceToolName, definition.Name)
 	assert.JSONEq(t, `{"type":"object","properties":{"skill":{"type":"string","description":"Skill that owns the reference"},"reference":{"type":"string","description":"Exact reference filename from the skill's reference list"}},"required":["skill","reference"],"additionalProperties":false}`, string(definition.Parameters))
 }
 
 func TestReferenceToolLoadsReference(t *testing.T) {
-	result := newReferenceTool().Execute(context.Background(), inference.ToolCall{Arguments: `{"skill":"kubernetes","reference":"workloads.md"}`})
+	result := referenceTool{files: defaultSkillFiles}.Execute(context.Background(), inference.ToolCall{Arguments: `{"skill":"kubernetes","reference":"workloads.md"}`})
 	require.NoError(t, result.Error)
 	assert.Contains(t, result.Content, "# Kubernetes Workloads")
 	assert.Equal(t, skillEvidence{Skill: "kubernetes", Reference: "workloads.md"}, result.Details)
@@ -134,7 +134,7 @@ func TestSkillToolRejectsInvalidRequests(t *testing.T) {
 		{name: "unknown skill", arguments: `{"name":"unknown"}`, want: `skill "unknown" is not available`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result := newSkillTool().Execute(context.Background(), inference.ToolCall{Arguments: test.arguments})
+			result := skillTool{files: defaultSkillFiles}.Execute(context.Background(), inference.ToolCall{Arguments: test.arguments})
 			assert.ErrorContains(t, result.Error, test.want)
 			assert.Contains(t, result.Content, test.want)
 		})
@@ -155,7 +155,7 @@ func TestReferenceToolRejectsInvalidRequests(t *testing.T) {
 		{name: "unknown reference", arguments: `{"skill":"kubernetes","reference":"missing.md"}`, want: `reference "missing.md" is not available`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result := newReferenceTool().Execute(context.Background(), inference.ToolCall{Arguments: test.arguments})
+			result := referenceTool{files: defaultSkillFiles}.Execute(context.Background(), inference.ToolCall{Arguments: test.arguments})
 			assert.ErrorContains(t, result.Error, test.want)
 			assert.Contains(t, result.Content, test.want)
 		})
@@ -163,11 +163,11 @@ func TestReferenceToolRejectsInvalidRequests(t *testing.T) {
 }
 
 func TestSkillToolUsesOnlyAllowlistedEmbeddedPaths(t *testing.T) {
-	result := newReferenceTool().Execute(context.Background(), inference.ToolCall{Arguments: `{"skill":"kubernetes","reference":"../bash.md"}`})
+	result := referenceTool{files: defaultSkillFiles}.Execute(context.Background(), inference.ToolCall{Arguments: `{"skill":"kubernetes","reference":"../bash.md"}`})
 	assert.Error(t, result.Error)
 	assert.Contains(t, result.Content, "reference")
 
-	assert.Equal(t, json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"Skill name to load"}},"required":["name"],"additionalProperties":false}`), newSkillTool().Definition().Parameters)
+	assert.Equal(t, json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"Skill name to load"}},"required":["name"],"additionalProperties":false}`), skillTool{files: defaultSkillFiles}.Definition().Parameters)
 }
 
 func TestSkillToolDiscoversReferencesFromTheEmbeddedFilesystem(t *testing.T) {

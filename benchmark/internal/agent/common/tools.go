@@ -7,8 +7,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
-// Tool is one capability exposed to the model. Tool-specific argument
-// validation and execution remain with the implementation.
+// Tool is one capability exposed to the model.
 type Tool interface {
 	Definition() inference.Tool
 	Execute(context.Context, inference.ToolCall) ToolResult

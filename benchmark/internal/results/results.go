@@ -11,7 +11,7 @@ import (
 
 type RunMetadata struct {
 	RunID              string     `json:"run_id"`
-	RunType            string     `json:"run_type,omitempty"`
+	RunType            RunType    `json:"run_type,omitempty"`
 	State              RunState   `json:"state"`
 	StartedAt          time.Time  `json:"started_at"`
 	CompletedAt        *time.Time `json:"completed_at,omitempty"`
@@ -24,6 +24,13 @@ type RunMetadata struct {
 	Scenarios          []string   `json:"scenarios"`
 	TagSelector        string     `json:"tag_selector,omitempty"`
 }
+
+type RunType string
+
+const (
+	RunTypeBenchmark  RunType = "benchmark"
+	RunTypeValidation RunType = "validation"
+)
 
 type RunState string
 

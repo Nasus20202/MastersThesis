@@ -108,7 +108,7 @@ func TestLoadRunLoadsValidationAttempts(t *testing.T) {
 
 	snapshot, err := LoadRun(root, "run-validation")
 	require.NoError(t, err)
-	assert.Equal(t, "validation", snapshot.Metadata.RunType)
+	assert.Equal(t, RunTypeValidation, snapshot.Metadata.RunType)
 	require.Len(t, snapshot.Attempts, 1)
 	assert.Equal(t, "repaired", snapshot.Attempts[0].Group)
 

@@ -190,7 +190,7 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 	if entry, ok := s.attempts[ref.Path]; ok {
 		return entry.attempt, entry.err
 	}
-	runType := ""
+	var runType results.RunType
 	if snapshot, ok := s.snapshot[runID]; ok {
 		runType = snapshot.Metadata.RunType
 	}
