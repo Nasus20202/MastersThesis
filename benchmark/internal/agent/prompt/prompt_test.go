@@ -31,7 +31,7 @@ func (promptTestShell) Exec(context.Context, command.Spec) (command.Result, erro
 
 func TestRunUsesDetailedSystemPrompt(t *testing.T) {
 	client := &promptTestClient{}
-	agent, err := New(client, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
+	agent, err := New(client, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "")
 	require.NoError(t, err)
 
 	result, err := agent.Run(context.Background(), "Restore the application.")
@@ -41,26 +41,22 @@ func TestRunUsesDetailedSystemPrompt(t *testing.T) {
 	assert.Equal(t, "Restore the application.", result.Task)
 	require.Len(t, client.messages, 2)
 	assert.Equal(t, "system", client.messages[0].Role)
-	assert.Equal(t, systemPrompt, client.messages[0].Content)
+	assert.Equal(t, defaultSystemPrompt, client.messages[0].Content)
 	assert.Contains(t, client.messages[0].Content, "Identify the requested outcome and limits")
 	assert.Equal(t, "user", client.messages[1].Role)
 	assert.Equal(t, "Restore the application.", client.messages[1].Content)
 }
 
-func TestRunRejectsInvalidAgentAndTask(t *testing.T) {
-	var nilAgent *Agent
-	_, err := nilAgent.Run(context.Background(), "task")
-	assert.EqualError(t, err, "prompt agent is not initialized")
-
-	agent, err := New(&promptTestClient{}, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1})
+func TestRunRejectsBlankTask(t *testing.T) {
+	agent, err := New(&promptTestClient{}, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "")
 	require.NoError(t, err)
 	_, err = agent.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")
 }
 
-func TestNewWithSystemPromptUsesConfiguredPrompt(t *testing.T) {
+func TestNewUsesConfiguredPrompt(t *testing.T) {
 	client := &promptTestClient{}
-	agent, err := NewWithSystemPrompt(client, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "custom instructions")
+	agent, err := New(client, promptTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "custom instructions")
 	require.NoError(t, err)
 
 	_, err = agent.Run(context.Background(), "Restore the application.")

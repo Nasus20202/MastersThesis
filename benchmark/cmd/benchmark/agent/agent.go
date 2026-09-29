@@ -5,6 +5,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
@@ -83,39 +84,42 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 	if err != nil {
 		return nil, err
 	}
-	var customPrompt string
-	var skillConfig benchmarkconfig.SkillAgentConfig
-	if name == Prompt {
-		customPrompt, err = loadPromptSystemPrompt(benchmarkConfig.Agents.Prompt.SystemPromptFile)
+	var newAgent func(inference.Client, sandboxintegration.Executor) (rootagent.Agent, error)
+	switch name {
+	case Baseline:
+		newAgent = func(client inference.Client, shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return baseline.New(client, shell, loopConfig)
+		}
+	case Prompt:
+		systemPrompt, err := readSystemPrompt(benchmarkConfig.Agents.Prompt.SystemPromptFile)
 		if err != nil {
 			return nil, err
 		}
-	} else if name == Skill {
-		skillConfig = benchmarkConfig.Agents.Skill
+		newAgent = func(client inference.Client, shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return promptagent.New(client, shell, loopConfig, systemPrompt)
+		}
+	case Skill:
+		systemPrompt, err := readSystemPrompt(benchmarkConfig.Agents.Skill.SystemPromptFile)
+		if err != nil {
+			return nil, err
+		}
+		var files fs.FS
+		if dir := strings.TrimSpace(benchmarkConfig.Agents.Skill.SkillsDir); dir != "" {
+			files = os.DirFS(dir)
+		}
+		newAgent = func(client inference.Client, shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return skillagent.New(client, shell, loopConfig, systemPrompt, files)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported agent %q", name)
 	}
 	inferenceClient, err := newInferenceClient()
 	if err != nil {
 		return nil, err
 	}
-	switch name {
-	case Baseline:
-		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
-			return baseline.New(inferenceClient, shell, loopConfig)
-		}, nil
-	case Prompt:
-		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
-			if customPrompt != "" {
-				return promptagent.NewWithSystemPrompt(inferenceClient, shell, loopConfig, customPrompt)
-			}
-			return promptagent.New(inferenceClient, shell, loopConfig)
-		}, nil
-	case Skill:
-		return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
-			return skillagent.NewWithConfig(inferenceClient, shell, loopConfig, skillConfig.SystemPromptFile, skillConfig.SkillsDir)
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported agent %q", name)
-	}
+	return func(shell sandboxintegration.Executor) (rootagent.Agent, error) {
+		return newAgent(inferenceClient, shell)
+	}, nil
 }
 
 func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, error) {
@@ -147,20 +151,21 @@ func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, err
 	return result, nil
 }
 
-func loadPromptSystemPrompt(path string) (string, error) {
+// readSystemPrompt reads a configured system prompt file. An empty path returns
+// an empty prompt, which selects the condition's embedded default.
+func readSystemPrompt(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read prompt system prompt %q: %w", path, err)
+		return "", fmt.Errorf("read system prompt %q: %w", path, err)
 	}
-	prompt := string(data)
-	if strings.TrimSpace(prompt) == "" {
-		return "", fmt.Errorf("prompt system prompt file must not be blank")
+	if strings.TrimSpace(string(data)) == "" {
+		return "", fmt.Errorf("system prompt file %q must not be blank", path)
 	}
-	return prompt, nil
+	return string(data), nil
 }
 
 func newInferenceClient() (inference.Client, error) {

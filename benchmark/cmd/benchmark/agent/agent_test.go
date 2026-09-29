@@ -151,27 +151,23 @@ func TestConfiguredLoopConfigRejectsNonpositiveValues(t *testing.T) {
 	}
 }
 
-func TestLoadPromptSystemPrompt(t *testing.T) {
+func TestReadSystemPrompt(t *testing.T) {
+	prompt, err := readSystemPrompt(" ")
+	require.NoError(t, err)
+	assert.Empty(t, prompt)
+
 	path := t.TempDir() + "/prompt.md"
 	require.NoError(t, os.WriteFile(path, []byte("custom instructions\n"), 0o600))
-	prompt, err := loadPromptSystemPrompt(path)
+	prompt, err = readSystemPrompt(path)
 	require.NoError(t, err)
 	assert.Equal(t, "custom instructions\n", prompt)
-}
 
-func TestLoadPromptSystemPromptRejectsMissingAndBlankFiles(t *testing.T) {
-	t.Run("missing", func(t *testing.T) {
-		path := t.TempDir() + "/missing.md"
-		_, err := loadPromptSystemPrompt(path)
-		assert.ErrorContains(t, err, "read prompt system prompt")
-	})
+	_, err = readSystemPrompt(t.TempDir() + "/missing.md")
+	assert.ErrorContains(t, err, "read system prompt")
 
-	t.Run("blank", func(t *testing.T) {
-		path := t.TempDir() + "/prompt.md"
-		require.NoError(t, os.WriteFile(path, []byte(" \n"), 0o600))
-		_, err := loadPromptSystemPrompt(path)
-		assert.ErrorContains(t, err, "prompt system prompt file must not be blank")
-	})
+	require.NoError(t, os.WriteFile(path, []byte(" \n"), 0o600))
+	_, err = readSystemPrompt(path)
+	assert.ErrorContains(t, err, "must not be blank")
 }
 
 func TestModelArtifactAndRuntimeSettings(t *testing.T) {
