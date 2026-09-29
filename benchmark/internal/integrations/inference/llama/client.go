@@ -1,5 +1,4 @@
-// Package llama provides the small HTTP boundary used to communicate with
-// llama-server.
+// Package llama is an HTTP client for llama-server.
 package llama
 
 import (

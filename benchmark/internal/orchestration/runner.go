@@ -60,37 +60,34 @@ func (e sandboxCommandExecutor) Run(ctx context.Context, spec command.Spec) (com
 	return e.executor.Exec(ctx, spec)
 }
 
-func (r Runner) Run(ctx context.Context, definition scenario.Definition) (result RunResult, runErr error) {
-	return r.run(ctx, definition, nil, true)
+func (r Runner) Run(ctx context.Context, definition scenario.Definition) (RunResult, error) {
+	condition := r.agentCondition()
+	if r.AgentFactory == nil {
+		return RunResult{Condition: condition}, fmt.Errorf("%s run requires a model agent factory", condition)
+	}
+	if r.SandboxFactory == nil {
+		return RunResult{Condition: condition}, errors.New("model agent requires an orchestration sandbox")
+	}
+	return r.run(ctx, definition, condition, nil)
 }
 
 // RunWithRepair runs a scenario with a validation-only repair step after
 // setup and optional fault verification, before grading. The repair is supplied
 // by validation data, not by the scenario definition used for benchmark execution.
 func (r Runner) RunWithRepair(ctx context.Context, definition scenario.Definition, repair scenario.Step) (RunResult, error) {
-	return r.run(ctx, definition, repair, false)
+	if r.AgentFactory != nil {
+		return RunResult{Condition: "validation"}, errors.New("validation run cannot use a model agent")
+	}
+	return r.run(ctx, definition, "validation", repair)
 }
 
-func (r Runner) run(ctx context.Context, definition scenario.Definition, repair scenario.Step, useAgent bool) (result RunResult, runErr error) {
-	if useAgent {
-		result.Condition = r.agentCondition()
-	} else {
-		result.Condition = "validation"
-	}
+func (r Runner) run(ctx context.Context, definition scenario.Definition, condition string, repair scenario.Step) (result RunResult, runErr error) {
+	result.Condition = condition
 	if r.ClusterFactory == nil {
 		return result, errors.New("orchestration cluster factory is required")
 	}
 	if r.Executor == nil {
 		return result, errors.New("orchestration command executor is required")
-	}
-	if !useAgent && r.AgentFactory != nil {
-		return result, errors.New("validation run cannot use a model agent")
-	}
-	if useAgent && r.AgentFactory == nil {
-		return result, fmt.Errorf("%s run requires a model agent factory", result.Condition)
-	}
-	if useAgent && r.SandboxFactory == nil {
-		return result, errors.New("model agent requires an orchestration sandbox")
 	}
 	if err := definition.Validate(); err != nil {
 		return result, err
@@ -113,7 +110,9 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 			return result, fmt.Errorf("build setup image: %w", err)
 		}
 	}
-	cluster, err := r.newCluster(clusterName, logger)
+	cluster, err := create(logger, "cluster", func() (clusterintegration.Cluster, error) {
+		return r.ClusterFactory(clusterName)
+	})
 	if err != nil {
 		return result, err
 	}
@@ -128,13 +127,16 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 		result.Failure = newFailureEvidence("create cluster", err)
 		return result, err
 	}
+	kubeconfigPath := cluster.InternalKubeconfigPath()
 	phaseExecutor := r.Executor
 	if r.SetupFactory != nil {
-		setup, err := r.newSetup(clusterName, cluster.InternalKubeconfigPath(), logger)
+		setup, err := create(logger, "setup", func() (sandboxintegration.Sandbox, error) {
+			return r.SetupFactory(clusterName, kubeconfigPath)
+		})
 		if err != nil {
 			return result, err
 		}
-		if err := r.startSetup(ctx, setup, logger); err != nil {
+		if err := startSandbox(ctx, setup, "setup", logger); err != nil {
 			result.Failure = newFailureEvidence("start setup", err)
 			return result, err
 		}
@@ -151,11 +153,13 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 	}
 	var modelAgent rootagent.Agent
 	if r.SandboxFactory != nil {
-		sandbox, err := r.newSandbox(clusterName, cluster.InternalKubeconfigPath(), logger)
+		sandbox, err := create(logger, "sandbox", func() (sandboxintegration.Sandbox, error) {
+			return r.SandboxFactory(clusterName, kubeconfigPath)
+		})
 		if err != nil {
 			return result, err
 		}
-		if err := r.startSandbox(ctx, sandbox, logger); err != nil {
+		if err := startSandbox(ctx, sandbox, "sandbox", logger); err != nil {
 			result.Failure = newFailureEvidence("start sandbox", err)
 			return result, err
 		}
@@ -164,18 +168,20 @@ func (r Runner) run(ctx context.Context, definition scenario.Definition, repair 
 				joinCleanupError(&runErr, &result.Failure, "cleanup sandbox", err)
 			}
 		}()
-		if useAgent && r.AgentFactory != nil {
+		if r.AgentFactory != nil {
 			executor, ok := sandbox.(sandboxintegration.Executor)
 			if !ok {
 				return result, errors.New("orchestration sandbox does not provide command execution")
 			}
-			modelAgent, err = r.newAgent(executor, logger)
+			modelAgent, err = create(logger, "model agent", func() (rootagent.Agent, error) {
+				return r.AgentFactory(executor)
+			})
 			if err != nil {
 				return result, err
 			}
 		}
 	}
-	grading, agentResult, err := r.runPhases(ctx, definition, repair, modelAgent, cluster.InternalKubeconfigPath(), phaseExecutor, logger)
+	grading, agentResult, err := r.runPhases(ctx, definition, repair, modelAgent, kubeconfigPath, phaseExecutor, logger)
 	result.Agent = agentResult
 	result.Grading = grading
 	if err != nil && result.Failure == nil {
@@ -200,30 +206,17 @@ func (r Runner) agentCondition() string {
 	return "baseline"
 }
 
-// wrapFactory logs and wraps a factory's error under errLabel and turns a
-// nil result into an error, so callers below only need to name their labels.
-func wrapFactory[T any](logger *slog.Logger, logLabel, errLabel string, call func() (T, error)) (T, error) {
-	value, err := call()
+// create calls a factory, wrapping its error and rejecting a nil result.
+func create[T any](logger *slog.Logger, label string, factory func() (T, error)) (T, error) {
+	value, err := factory()
 	if err != nil {
-		logger.Error(logLabel+" factory failed", "error", err)
-		return value, fmt.Errorf("create %s: %w", errLabel, err)
+		logger.Error(label+" factory failed", "error", err)
+		return value, fmt.Errorf("create %s: %w", label, err)
 	}
 	if any(value) == nil {
-		return value, fmt.Errorf("create %s: factory returned a nil %s", errLabel, errLabel)
+		return value, fmt.Errorf("create %s: factory returned a nil %s", label, label)
 	}
 	return value, nil
-}
-
-func (r Runner) newAgent(executor sandboxintegration.Executor, logger *slog.Logger) (rootagent.Agent, error) {
-	return wrapFactory(logger, "agent", "model agent", func() (rootagent.Agent, error) {
-		return r.AgentFactory(executor)
-	})
-}
-
-func (r Runner) newCluster(name string, logger *slog.Logger) (clusterintegration.Cluster, error) {
-	return wrapFactory(logger, "cluster", "cluster", func() (clusterintegration.Cluster, error) {
-		return r.ClusterFactory(name)
-	})
 }
 
 func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cluster, name string, logger *slog.Logger) error {
@@ -235,41 +228,13 @@ func (r Runner) createCluster(ctx context.Context, cluster clusterintegration.Cl
 	return nil
 }
 
-func (r Runner) newSandbox(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
-	return wrapFactory(logger, "sandbox", "sandbox", func() (sandboxintegration.Sandbox, error) {
-		return r.SandboxFactory(name, kubeconfigPath)
-	})
-}
-
-func (r Runner) newSetup(name, kubeconfigPath string, logger *slog.Logger) (sandboxintegration.Sandbox, error) {
-	return wrapFactory(logger, "setup", "setup", func() (sandboxintegration.Sandbox, error) {
-		return r.SetupFactory(name, kubeconfigPath)
-	})
-}
-
-// startSandboxLike builds sandbox's image if no imageBuilder pre-built one,
-// then starts it, logging under label. Shared by startSetup and startSandbox.
-func startSandboxLike(ctx context.Context, sandbox sandboxintegration.Sandbox, imageBuilder sandboxintegration.ImageBuilder, label string, logger *slog.Logger) error {
-	if imageBuilder == nil {
-		if err := sandbox.Build(ctx); err != nil {
-			logger.Error(label+" image build failed", "error", err)
-			return fmt.Errorf("build %s image: %w", label, err)
-		}
-	}
+func startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, label string, logger *slog.Logger) error {
 	if err := sandbox.Start(ctx); err != nil {
 		logger.Error(label+" start failed", "error", err)
 		return fmt.Errorf("start %s: %w", label, err)
 	}
 	logger.Info(label + " started")
 	return nil
-}
-
-func (r Runner) startSetup(ctx context.Context, setup sandboxintegration.Sandbox, logger *slog.Logger) error {
-	return startSandboxLike(ctx, setup, r.SetupImageBuilder, "setup", logger)
-}
-
-func (r Runner) startSandbox(ctx context.Context, sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
-	return startSandboxLike(ctx, sandbox, r.SandboxImageBuilder, "sandbox", logger)
 }
 
 func (r Runner) cleanupSandbox(sandbox sandboxintegration.Sandbox, logger *slog.Logger) error {
@@ -297,23 +262,21 @@ func (r Runner) cleanupCluster(cluster clusterintegration.Cluster, logger *slog.
 }
 
 func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, repair scenario.Step, modelAgent rootagent.Agent, kubeconfigPath string, phaseExecutor command.Executor, logger *slog.Logger) (GradingResult, *common.Result, error) {
-	beforeAgent := []phase{
+	phases := []phase{
 		{name: phasePrepare, step: definition.Prepare},
 		{name: phaseVerifyClean, step: definition.VerifyClean},
 	}
 	if len(definition.InjectFault) > 0 {
-		beforeAgent = append(beforeAgent, phase{name: phaseInjectFault, step: definition.InjectFault})
+		phases = append(phases, phase{name: phaseInjectFault, step: definition.InjectFault})
 	}
 	if len(definition.VerifyFault) > 0 {
-		beforeAgent = append(beforeAgent, phase{name: phaseVerifyFault, step: definition.VerifyFault})
-	}
-	if err := r.runPhaseSteps(ctx, beforeAgent, kubeconfigPath, phaseExecutor, logger); err != nil {
-		return GradingResult{}, nil, err
+		phases = append(phases, phase{name: phaseVerifyFault, step: definition.VerifyFault})
 	}
 	if len(repair) > 0 {
-		if err := r.runPhaseSteps(ctx, []phase{{name: phaseRepair, step: repair}}, kubeconfigPath, phaseExecutor, logger); err != nil {
-			return GradingResult{}, nil, err
-		}
+		phases = append(phases, phase{name: phaseRepair, step: repair})
+	}
+	if err := r.runPhaseSteps(ctx, phases, kubeconfigPath, phaseExecutor, logger); err != nil {
+		return GradingResult{}, nil, err
 	}
 
 	var agentResult *common.Result
@@ -338,10 +301,7 @@ func (r Runner) runPhases(ctx context.Context, definition scenario.Definition, r
 		logger.Info("scenario grading completed", "score", result.Score, "full_success", result.FullSuccess)
 	}
 
-	if runErr := errors.Join(agentErr, gradingErr); runErr != nil {
-		return result, agentResult, runErr
-	}
-	return result, agentResult, nil
+	return result, agentResult, errors.Join(agentErr, gradingErr)
 }
 
 func (r Runner) runModelAgent(ctx context.Context, modelAgent rootagent.Agent, task string) (common.Result, error) {

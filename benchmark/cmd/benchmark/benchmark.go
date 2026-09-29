@@ -190,8 +190,6 @@ func newRunnerDeps(executor command.Executor, containers benchmarkconfig.Contain
 			return docker.New(executor, docker.Config{
 				Name:           name + sandboxNameSuffix,
 				Image:          containers.Sandbox.Image,
-				DockerfilePath: containers.Sandbox.DockerfilePath,
-				BuildContext:   containers.Sandbox.BuildContext,
 				KubeconfigPath: kubeconfigPath,
 				Network:        name + sandboxNameSuffix + networkSuffix,
 				NetworkTarget:  name + controlPlaneSuffix,
@@ -206,13 +204,11 @@ func newRunnerDeps(executor command.Executor, containers benchmarkconfig.Contain
 		setupFactory: func(name, kubeconfigPath string) (sandboxintegration.Sandbox, error) {
 			kubeconfigDir := filepath.Dir(kubeconfigPath)
 			return docker.New(executor, docker.Config{
-				Name:           name + setupNameSuffix,
-				Image:          containers.Setup.Image,
-				DockerfilePath: containers.Setup.DockerfilePath,
-				BuildContext:   containers.Setup.BuildContext,
-				Network:        containers.Setup.Network,
-				Layout:         docker.ImageLayout{User: "root", Workdir: "/workspace"},
-				Env:            map[string]string{"KUBECONFIG": kubeconfigPath},
+				Name:    name + setupNameSuffix,
+				Image:   containers.Setup.Image,
+				Network: containers.Setup.Network,
+				Layout:  docker.ImageLayout{User: "root", Workdir: "/workspace"},
+				Env:     map[string]string{"KUBECONFIG": kubeconfigPath},
 				Mounts: []docker.Mount{
 					{Source: repoRoot, Target: repoRoot, ReadOnly: true},
 					{Source: kubeconfigDir, Target: kubeconfigDir},
