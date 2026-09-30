@@ -60,8 +60,7 @@ type SkillAgentConfig struct {
 }
 
 // Load reads benchmark-specific YAML configuration files in order. Later
-// files override earlier files. Agent file paths in a config file are
-// resolved relative to that file.
+// files override earlier files.
 func Load(paths ...string) (Config, error) {
 	values := make(map[string]any)
 	for _, path := range paths {
@@ -101,8 +100,7 @@ func read(path string) (map[string]any, error) {
 	} else if !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("invalid benchmark config %q: %s", path, yaml.FormatError(err, false, true))
 	}
-	resolveAgentPaths(values, path)
-	resolveContainerPaths(values, path)
+	resolvePaths(values, path)
 	return values, nil
 }
 
@@ -118,45 +116,32 @@ func merge(destination, source map[string]any) {
 	}
 }
 
-func resolveAgentPaths(values map[string]any, configPath string) {
-	agents, ok := values["agents"].(map[string]any)
-	if !ok {
-		return
-	}
-	for agentName, fields := range map[string][]string{
-		"prompt": {"system_prompt_file"},
-		"skill":  {"system_prompt_file", "skills_dir"},
-	} {
-		agent, ok := agents[agentName].(map[string]any)
+// pathFields are the settings holding file system paths. A relative path is
+// resolved against the directory of the config file that sets it.
+var pathFields = [][]string{
+	{"agents", "prompt", "system_prompt_file"},
+	{"agents", "skill", "system_prompt_file"},
+	{"agents", "skill", "skills_dir"},
+	{"containers", "sandbox", "dockerfile"},
+	{"containers", "sandbox", "context"},
+	{"containers", "setup", "dockerfile"},
+	{"containers", "setup", "context"},
+}
+
+func resolvePaths(values map[string]any, configPath string) {
+	for _, field := range pathFields {
+		section, ok := values, true
+		for _, key := range field[:len(field)-1] {
+			if section, ok = section[key].(map[string]any); !ok {
+				break
+			}
+		}
 		if !ok {
 			continue
 		}
-		for _, field := range fields {
-			resolveAgentPath(agent, field, configPath)
-		}
-	}
-}
-
-func resolveAgentPath(agent map[string]any, field, configPath string) {
-	path, ok := agent[field].(string)
-	if !ok || path == "" || filepath.IsAbs(path) {
-		return
-	}
-	agent[field] = filepath.Join(filepath.Dir(configPath), path)
-}
-
-func resolveContainerPaths(values map[string]any, configPath string) {
-	containers, ok := values["containers"].(map[string]any)
-	if !ok {
-		return
-	}
-	for _, name := range []string{"sandbox", "setup"} {
-		container, ok := containers[name].(map[string]any)
-		if !ok {
-			continue
-		}
-		for _, field := range []string{"dockerfile", "context"} {
-			resolveAgentPath(container, field, configPath)
+		key := field[len(field)-1]
+		if path, ok := section[key].(string); ok && path != "" && !filepath.IsAbs(path) {
+			section[key] = filepath.Join(filepath.Dir(configPath), path)
 		}
 	}
 }
