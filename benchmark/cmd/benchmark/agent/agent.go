@@ -113,7 +113,7 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)
 	}
-	inferenceClient, err := newInferenceClient()
+	inferenceClient, err := NewInferenceClient()
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,9 @@ func readSystemPrompt(path string) (string, error) {
 	return string(data), nil
 }
 
-func newInferenceClient() (inference.Client, error) {
+// NewInferenceClient creates the chat client for the model selected by the
+// LLAMA_* environment of the model profile.
+func NewInferenceClient() (inference.Client, error) {
 	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
 	if model == "" {
 		return nil, fmt.Errorf("%s is required", envLlamaModelName)

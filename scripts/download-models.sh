@@ -87,3 +87,32 @@ if [[ -n "$draft_repository" ]]; then
 
   printf '[download-models] draft download complete; SHA-256 verified\n'
 fi
+
+# The retrieval embedding model is independent of the selected chat profile.
+if [[ -n "${EMBEDDING_MODEL_REPOSITORY:-}" ]]; then
+  : "${EMBEDDING_MODEL_REVISION:?EMBEDDING_MODEL_REVISION is required}"
+  : "${EMBEDDING_MODEL_FILE:?EMBEDDING_MODEL_FILE is required}"
+  : "${EMBEDDING_MODEL_SHA256:?EMBEDDING_MODEL_SHA256 is required}"
+  : "${EMBEDDING_MODEL_DIR:?EMBEDDING_MODEL_DIR is required}"
+
+  printf '[download-models] embedding repository: %s\n' "$EMBEDDING_MODEL_REPOSITORY"
+  printf '[download-models] embedding revision: %s\n' "$EMBEDDING_MODEL_REVISION"
+  printf '[download-models] embedding file: %s\n' "$EMBEDDING_MODEL_FILE"
+  printf '[download-models] embedding destination: benchmark/%s\n' "$EMBEDDING_MODEL_DIR"
+
+  mkdir -p "$EMBEDDING_MODEL_DIR"
+  "$hf_command" download \
+    "$EMBEDDING_MODEL_REPOSITORY" \
+    "$EMBEDDING_MODEL_FILE" \
+    --revision "$EMBEDDING_MODEL_REVISION" \
+    --local-dir "$EMBEDDING_MODEL_DIR"
+
+  actual_embedding_sha256=$(sha256sum "$EMBEDDING_MODEL_DIR/$EMBEDDING_MODEL_FILE" | awk '{print $1}')
+  if [[ "$actual_embedding_sha256" != "$EMBEDDING_MODEL_SHA256" ]]; then
+    printf '[download-models] error: SHA-256 mismatch for %s (expected %s, got %s)\n' \
+      "$EMBEDDING_MODEL_FILE" "$EMBEDDING_MODEL_SHA256" "$actual_embedding_sha256" >&2
+    exit 1
+  fi
+
+  printf '[download-models] embedding download complete; SHA-256 verified\n'
+fi

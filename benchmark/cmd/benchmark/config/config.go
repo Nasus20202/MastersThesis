@@ -1,5 +1,5 @@
 // Package config defines and loads the benchmark CLI's YAML configuration:
-// logging, agent, and container settings.
+// logging, agent, container and retrieval settings.
 package config
 
 import (
@@ -17,6 +17,15 @@ type Config struct {
 	Logging    LoggingConfig    `yaml:"logging,omitempty"`
 	Agents     AgentsConfig     `yaml:"agents,omitempty"`
 	Containers ContainersConfig `yaml:"containers,omitempty"`
+	Retrieval  RetrievalConfig  `yaml:"retrieval,omitempty"`
+}
+
+type RetrievalConfig struct {
+	Mode     string `yaml:"mode,omitempty"`
+	Chunking string `yaml:"chunking,omitempty"`
+	TopK     *int   `yaml:"top_k,omitempty"`
+	MaxBytes *int   `yaml:"max_bytes,omitempty"`
+	IndexDir string `yaml:"index_dir,omitempty"`
 }
 
 type ContainersConfig struct {
@@ -126,6 +135,7 @@ var pathFields = [][]string{
 	{"containers", "sandbox", "context"},
 	{"containers", "setup", "dockerfile"},
 	{"containers", "setup", "context"},
+	{"retrieval", "index_dir"},
 }
 
 func resolvePaths(values map[string]any, configPath string) {

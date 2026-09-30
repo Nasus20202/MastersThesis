@@ -29,6 +29,18 @@ func TestLoadLayersFilesAndResolvesAgentPaths(t *testing.T) {
 	assert.Equal(t, filepath.Join(directory, "candidate-skills"), config.Agents.Skill.SkillsDir)
 }
 
+func TestLoadResolvesRetrievalIndexDir(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: hybrid\n  top_k: 5\n  index_dir: corpus\n"), 0o600))
+
+	config, err := Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, "hybrid", config.Retrieval.Mode)
+	assert.Equal(t, 5, *config.Retrieval.TopK)
+	assert.Equal(t, filepath.Join(directory, "corpus"), config.Retrieval.IndexDir)
+}
+
 func TestLoadUsesDefaultsWithoutFiles(t *testing.T) {
 	config, err := Load()
 	require.NoError(t, err)
