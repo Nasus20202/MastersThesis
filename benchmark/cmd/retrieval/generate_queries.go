@@ -7,7 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
-	benchmarkagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
 )
@@ -35,7 +35,7 @@ func generateQueries(ctx context.Context, probesPath, outPath string) error {
 	if err != nil {
 		return err
 	}
-	client, err := benchmarkagent.NewInferenceClient()
+	client, err := llamaenv.NewChatClient()
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -41,7 +42,7 @@ func buildIndexes(ctx context.Context, configPaths []string, chunkingValue strin
 	if err != nil {
 		return err
 	}
-	embedder, err := newEmbedder()
+	embedder, err := llamaenv.NewEmbeddingClient()
 	if err != nil {
 		return err
 	}

@@ -7,17 +7,16 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strconv"
 	"strings"
 
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	promptagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/prompt"
 	skillagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/skill"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/llama"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 )
 
@@ -29,18 +28,6 @@ const (
 	Prompt   Name = "prompt"
 	Skill    Name = "skill"
 )
-
-func ConfiguredLlamaParallelism() (int, error) {
-	value := strings.TrimSpace(os.Getenv(envLlamaParallel))
-	if value == "" {
-		value = "1"
-	}
-	parallelism, err := strconv.Atoi(value)
-	if err != nil || parallelism < 1 {
-		return 0, fmt.Errorf("%s must be a positive integer, got %q", envLlamaParallel, value)
-	}
-	return parallelism, nil
-}
 
 func Select(values ...string) ([]Name, error) {
 	if len(values) == 0 {
@@ -113,7 +100,7 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)
 	}
-	inferenceClient, err := NewInferenceClient()
+	inferenceClient, err := llamaenv.NewChatClient()
 	if err != nil {
 		return nil, err
 	}
@@ -166,68 +153,4 @@ func readSystemPrompt(path string) (string, error) {
 		return "", fmt.Errorf("system prompt file %q must not be blank", path)
 	}
 	return string(data), nil
-}
-
-// NewInferenceClient creates the chat client for the model selected by the
-// LLAMA_* environment of the model profile.
-func NewInferenceClient() (inference.Client, error) {
-	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
-	if model == "" {
-		return nil, fmt.Errorf("%s is required", envLlamaModelName)
-	}
-
-	host := strings.TrimSpace(os.Getenv(envLlamaClientHost))
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port := strings.TrimSpace(os.Getenv(envLlamaPort))
-	if port == "" {
-		port = "8080"
-	}
-	client, err := llama.NewClient(llama.Config{
-		BaseURL: fmt.Sprintf("http://%s:%s", host, port),
-		Model:   model,
-		Metadata: inference.Metadata{
-			Model:           model,
-			Artifact:        modelArtifact(),
-			Quantization:    strings.TrimSpace(os.Getenv(envLlamaModelQuant)),
-			SHA256:          strings.TrimSpace(os.Getenv(envLlamaModelSHA256)),
-			RuntimeSettings: runtimeSettings(),
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create llama client: %w", err)
-	}
-	inferenceClient, err := llama.NewAdapter(client)
-	if err != nil {
-		return nil, fmt.Errorf("create inference adapter: %w", err)
-	}
-	return inferenceClient, nil
-}
-
-func modelArtifact() string {
-	repository := strings.TrimSpace(os.Getenv(envLlamaModelRepository))
-	revision := strings.TrimSpace(os.Getenv(envLlamaModelRevision))
-	file := strings.TrimSpace(os.Getenv(envLlamaModelFile))
-	artifact := repository
-	if revision != "" {
-		artifact += "@" + revision
-	}
-	if file != "" {
-		artifact += "/" + file
-	}
-	return artifact
-}
-
-func runtimeSettings() map[string]string {
-	settings := make(map[string]string)
-	for _, name := range llamaRuntimeEnvNames {
-		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-			settings[name] = value
-		}
-	}
-	if len(settings) == 0 {
-		return nil
-	}
-	return settings
 }

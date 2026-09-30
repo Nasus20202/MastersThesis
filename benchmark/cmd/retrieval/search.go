@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
@@ -58,7 +59,7 @@ func search(ctx context.Context, configPaths []string, overrides searchOverrides
 	defer index.Close()
 	var embedder inference.Embedder
 	if config.mode != retrieval.Lexical {
-		if embedder, err = newEmbedder(); err != nil {
+		if embedder, err = llamaenv.NewEmbeddingClient(); err != nil {
 			return err
 		}
 	}

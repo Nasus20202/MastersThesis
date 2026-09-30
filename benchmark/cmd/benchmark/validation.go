@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"os"
 
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"

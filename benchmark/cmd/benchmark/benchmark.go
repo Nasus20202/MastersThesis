@@ -10,8 +10,9 @@ import (
 	"slices"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
@@ -43,7 +44,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if len(agentNames) == 0 {
 		return errors.New("benchmark requires at least one agent")
 	}
-	llamaParallelism, err := commandagent.ConfiguredLlamaParallelism()
+	llamaParallelism, err := llamaenv.Parallelism()
 	if err != nil {
 		return err
 	}

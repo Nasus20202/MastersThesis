@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 	"github.com/stretchr/testify/assert"

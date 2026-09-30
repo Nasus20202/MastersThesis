@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
@@ -69,7 +70,7 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 			return err
 		}
 	}
-	embedder, err := newEmbedder()
+	embedder, err := llamaenv.NewEmbeddingClient()
 	if err != nil {
 		return err
 	}

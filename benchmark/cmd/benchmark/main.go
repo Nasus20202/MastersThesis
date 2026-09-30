@@ -15,9 +15,9 @@ import (
 	"syscall"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
-	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/logging"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 

@@ -7,9 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/config"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/llama"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -59,30 +57,4 @@ func corpusCheckout(ctx context.Context) (string, string, string, error) {
 		return "", "", "", fmt.Errorf("corpus checkout is at %s, want %s", revision, pinned)
 	}
 	return checkout, subtree, pinned, nil
-}
-
-func newEmbedder() (llama.Adapter, error) {
-	model, port := os.Getenv("EMBEDDING_MODEL_NAME"), os.Getenv("EMBEDDING_PORT")
-	if model == "" || port == "" {
-		return llama.Adapter{}, errors.New("EMBEDDING_MODEL_NAME and EMBEDDING_PORT are required")
-	}
-	host := os.Getenv("LLAMA_CLIENT_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	client, err := llama.NewClient(llama.Config{
-		BaseURL: fmt.Sprintf("http://%s:%s", host, port),
-		Model:   model,
-		Metadata: inference.Metadata{
-			Provider:     "llama.cpp",
-			Model:        model,
-			Artifact:     fmt.Sprintf("%s@%s/%s", os.Getenv("EMBEDDING_MODEL_REPOSITORY"), os.Getenv("EMBEDDING_MODEL_REVISION"), os.Getenv("EMBEDDING_MODEL_FILE")),
-			Quantization: os.Getenv("EMBEDDING_MODEL_QUANTIZATION"),
-			SHA256:       os.Getenv("EMBEDDING_MODEL_SHA256"),
-		},
-	})
-	if err != nil {
-		return llama.Adapter{}, fmt.Errorf("create embedding client: %w", err)
-	}
-	return llama.NewAdapter(client)
 }
