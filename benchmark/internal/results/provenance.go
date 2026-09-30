@@ -1,12 +1,21 @@
-package main
+package results
 
 import (
 	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
-func repositoryProvenance(ctx context.Context) (string, bool) {
+// NewRunID names a run by its UTC start time with millisecond precision.
+func NewRunID(startedAt time.Time) string {
+	timestamp := startedAt.UTC().Format("2006-01-02-15-04-05.000Z")
+	return "run-" + strings.Replace(timestamp, ".", "-", 1)
+}
+
+// RepositoryProvenance returns the current Git revision and whether the
+// working tree has uncommitted changes.
+func RepositoryProvenance(ctx context.Context) (string, bool) {
 	rootOutput, err := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", false
