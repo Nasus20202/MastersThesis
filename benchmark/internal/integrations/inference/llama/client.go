@@ -19,6 +19,7 @@ import (
 
 const (
 	chatCompletionsPath = "/v1/chat/completions"
+	embeddingsPath      = "/v1/embeddings"
 	healthPath          = "/health"
 )
 
@@ -112,6 +113,29 @@ func (c *Client) Chat(ctx context.Context, request ChatRequest) (ChatResponse, e
 		return ChatResponse{}, err
 	}
 	return response, nil
+}
+
+// Embed requests one embedding per text from a llama-server started with
+// --embeddings, returned in input order.
+func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if len(texts) == 0 {
+		return nil, errors.New("at least one text to embed is required")
+	}
+	var response embeddingResponse
+	if err := c.doJSON(ctx, http.MethodPost, embeddingsPath, embeddingRequest{Model: c.model, Input: texts}, &response); err != nil {
+		return nil, err
+	}
+	if len(response.Data) != len(texts) {
+		return nil, fmt.Errorf("llama returned %d embeddings for %d texts", len(response.Data), len(texts))
+	}
+	embeddings := make([][]float32, len(texts))
+	for _, item := range response.Data {
+		if item.Index < 0 || item.Index >= len(texts) || embeddings[item.Index] != nil {
+			return nil, fmt.Errorf("llama returned an invalid embedding index %d", item.Index)
+		}
+		embeddings[item.Index] = item.Embedding
+	}
+	return embeddings, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, payload, result any) error {

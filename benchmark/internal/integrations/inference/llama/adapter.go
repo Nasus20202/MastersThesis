@@ -13,9 +13,9 @@ type Adapter struct {
 	client *Client
 }
 
-func NewAdapter(client *Client) (inference.Client, error) {
+func NewAdapter(client *Client) (Adapter, error) {
 	if client == nil {
-		return nil, errors.New("llama client is required")
+		return Adapter{}, errors.New("llama client is required")
 	}
 	return Adapter{client: client}, nil
 }
@@ -30,6 +30,7 @@ func (a Adapter) Chat(ctx context.Context, messages []inference.Message, tools [
 		Tools:       toLlamaTools(tools),
 		Temperature: options.Temperature,
 		MaxTokens:   options.MaxTokens,
+		Seed:        options.Seed,
 	})
 	if err != nil {
 		return inference.Result{}, err
@@ -44,6 +45,10 @@ func (a Adapter) Chat(ctx context.Context, messages []inference.Message, tools [
 		Usage:        fromLlamaUsage(response.Usage),
 		Timings:      fromLlamaTimings(response.Timings),
 	}, nil
+}
+
+func (a Adapter) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return a.client.Embed(ctx, texts)
 }
 
 func toLlamaMessages(messages []inference.Message) []Message {
@@ -139,4 +144,7 @@ func fromLlamaTimings(timings *Timings) *inference.Timings {
 	}
 }
 
-var _ inference.Client = Adapter{}
+var (
+	_ inference.Client   = Adapter{}
+	_ inference.Embedder = Adapter{}
+)

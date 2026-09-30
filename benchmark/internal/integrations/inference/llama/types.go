@@ -39,6 +39,7 @@ type ChatRequest struct {
 	Messages    []Message `json:"messages"`
 	Temperature *float64  `json:"temperature,omitempty"`
 	MaxTokens   *int      `json:"max_tokens,omitempty"`
+	Seed        *int      `json:"seed,omitempty"`
 	Tools       []Tool    `json:"tools,omitempty"`
 }
 
@@ -78,4 +79,16 @@ type Timings struct {
 	PredictedPerSecond float64 `json:"predicted_per_second"`
 	DraftN             int     `json:"draft_n,omitempty"`
 	DraftNAccepted     int     `json:"draft_n_accepted,omitempty"`
+}
+
+type embeddingRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+type embeddingResponse struct {
+	Data []struct {
+		Index     int       `json:"index"`
+		Embedding []float32 `json:"embedding"`
+	} `json:"data"`
 }
