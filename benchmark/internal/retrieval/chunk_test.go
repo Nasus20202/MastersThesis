@@ -66,3 +66,14 @@ func TestSplitTextFallsBackToWordsAndRunes(t *testing.T) {
 	assert.Equal(t, []string{"alpha beta", "gamma delta", "ééééé"}, pieces)
 	assert.Equal(t, []string{"éé", "éé", "é"}, splitText("ééééé", 5))
 }
+
+func TestChunkWindowsKeepLongTokens(t *testing.T) {
+	token := strings.Repeat("x", 3*MaxChunkBytes)
+	document := Document{Path: "docs/t.md", Title: "T", Text: "intro " + token + " tail"}
+
+	covered := 0
+	for _, chunk := range ChunkDocument(document, Windows) {
+		covered += strings.Count(chunk.Body, "x")
+	}
+	assert.GreaterOrEqual(t, covered, len(token))
+}

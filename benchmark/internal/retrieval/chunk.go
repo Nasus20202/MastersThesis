@@ -21,7 +21,7 @@ func (c Chunk) Header() string {
 	return c.Path + "\n" + context
 }
 
-// Rendered is at most MaxChunkBytes long.
+// Rendered is at most MaxChunkBytes long unless the header exceeds half of it.
 func (c Chunk) Rendered() string {
 	return c.Header() + "\n" + c.Body
 }

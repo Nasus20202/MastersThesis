@@ -25,7 +25,8 @@ func windowChunks(document Document, sections []section) []Chunk {
 		if next <= start {
 			next = end
 		}
-		start = skipSpace(text, nextWord(text, next))
+		// A window cut mid-word must not let nextWord skip past its end.
+		start = skipSpace(text, min(nextWord(text, next), end))
 	}
 	return chunks
 }
