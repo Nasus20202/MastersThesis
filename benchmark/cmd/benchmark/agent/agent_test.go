@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,8 +19,9 @@ func TestSelect(t *testing.T) {
 		values []string
 		want   []Name
 	}{
-		{name: "default", want: []Name{Baseline, Prompt, Skill}},
-		{name: "all", values: []string{"all"}, want: []Name{Baseline, Prompt, Skill}},
+		{name: "default", want: []Name{Baseline, Prompt, Skill, RAG}},
+		{name: "all", values: []string{"all"}, want: []Name{Baseline, Prompt, Skill, RAG}},
+		{name: "rag", values: []string{"RAG"}, want: []Name{RAG}},
 		{name: "single", values: []string{"BASELINE"}, want: []Name{Baseline}},
 		{name: "skill", values: []string{"skill"}, want: []Name{Skill}},
 		{name: "trimmed", values: []string{" prompt "}, want: []Name{Prompt}},
@@ -53,7 +56,7 @@ func TestSelect(t *testing.T) {
 func TestNewFactoryRequiresModel(t *testing.T) {
 	t.Setenv("LLAMA_MODEL_NAME", "")
 
-	factory, err := NewFactory(Baseline, benchmarkconfig.Config{})
+	factory, err := NewFactory(Baseline, benchmarkconfig.Config{}, nil)
 	assert.Nil(t, factory)
 	assert.EqualError(t, err, "LLAMA_MODEL_NAME is required")
 }
@@ -65,7 +68,7 @@ func TestNewFactoryConstructsSupportedAgents(t *testing.T) {
 
 	for _, name := range []Name{Baseline, Prompt, Skill} {
 		t.Run(string(name), func(t *testing.T) {
-			factory, err := NewFactory(name, benchmarkconfig.Config{})
+			factory, err := NewFactory(name, benchmarkconfig.Config{}, nil)
 			require.NoError(t, err)
 			agent, err := factory(baselineTestExecutor{})
 			require.NoError(t, err)
@@ -74,10 +77,48 @@ func TestNewFactoryConstructsSupportedAgents(t *testing.T) {
 	}
 }
 
+func TestNewFactoryRAGRequiresSearch(t *testing.T) {
+	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
+
+	factory, err := NewFactory(RAG, benchmarkconfig.Config{}, nil)
+	assert.Nil(t, factory)
+	assert.EqualError(t, err, "rag agent requires an opened retrieval index")
+
+	ctx := context.Background()
+	path := retrieval.IndexPath(t.TempDir(), retrieval.Windows)
+	_, err = retrieval.BuildIndex(ctx, path, []retrieval.Document{{Path: "docs/a.md", Title: "A", Text: "Body"}},
+		retrieval.Windows, unitEmbedder{}, retrieval.IndexMetadata{})
+	require.NoError(t, err)
+	index, err := retrieval.OpenIndex(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = index.Close() })
+
+	factory, err = NewFactory(RAG, benchmarkconfig.Config{}, &ragagent.Search{Index: index, Embedder: unitEmbedder{}, Mode: retrieval.Lexical, TopK: 5, MaxBytes: 8192})
+	require.NoError(t, err)
+	agent, err := factory(baselineTestExecutor{})
+	require.NoError(t, err)
+	assert.NotNil(t, agent)
+}
+
+func TestOpenSearchValidatesSettings(t *testing.T) {
+	_, _, err := OpenSearch(context.Background(), benchmarkconfig.RetrievalConfig{})
+	assert.ErrorContains(t, err, "retrieval.top_k, retrieval.max_bytes and retrieval.index_dir are required")
+}
+
+type unitEmbedder struct{}
+
+func (unitEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, len(texts))
+	for index := range embeddings {
+		embeddings[index] = []float32{1, 0}
+	}
+	return embeddings, nil
+}
+
 func TestNewFactoryRejectsUnsupportedAgent(t *testing.T) {
 	t.Setenv("LLAMA_MODEL_NAME", "gemma-test")
 
-	factory, err := NewFactory(Name("unknown"), benchmarkconfig.Config{})
+	factory, err := NewFactory(Name("unknown"), benchmarkconfig.Config{}, nil)
 	assert.Nil(t, factory)
 	assert.ErrorContains(t, err, "unsupported agent")
 }

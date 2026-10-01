@@ -46,7 +46,7 @@ func buildIndexes(ctx context.Context, configPaths []string, chunkingValue strin
 		return err
 	}
 	for _, chunking := range chunkings {
-		path := retrieval.IndexPath(config.indexDir, chunking)
+		path := retrieval.IndexPath(config.IndexDir, chunking)
 		slog.InfoContext(ctx, "building index", "chunking", chunking, "documents", len(documents), "path", path)
 		metadata, err := retrieval.BuildIndex(ctx, path, documents, chunking, embedder,
 			retrieval.IndexMetadata{CorpusRevision: revision, Embedding: embedder.Metadata()})
