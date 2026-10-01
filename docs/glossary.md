@@ -6,11 +6,15 @@
 
 - **Benchmark scenario** — one reproducible technical incident with a known-good state, an injected fault, a repair task and verification criteria. See [benchmark.md](benchmark.md).
 
+- **Chunk** — one piece of a corpus document that the retrieval index stores and returns as a single result. See [the retrieval design study](research/retrieval-design/README.md).
+
 - **Decoding throughput** — generated tokens per second, aggregated from the llama.cpp timings recorded per response. See [tech-stack.md](tech-stack.md).
 
 - **Draft acceptance rate** — the fraction of speculatively drafted tokens accepted by the target model, recorded per condition. See [tech-stack.md](tech-stack.md).
 
 - **Draft model** — a smaller model that proposes tokens for speculative decoding, attached to one target model. See the [llama.cpp speculative decoding documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md) and [Wikipedia: Speculative decoding](https://en.wikipedia.org/wiki/Speculative_decoding).
+
+- **Embedding** — a fixed-length vector representation of text whose similarity to other vectors is used for semantic retrieval. See [tech-stack.md](tech-stack.md) and [Wikipedia: Sentence embedding](https://en.wikipedia.org/wiki/Sentence_embedding).
 
 - **Fault injection** — the controlled action that changes a known-good environment into a faulty state. See [Wikipedia: Fault injection](https://en.wikipedia.org/wiki/Fault_injection).
 
@@ -18,9 +22,13 @@
 
 - **Harness** — the operational layer that gives the model structured tools, controlled external context or additional interaction capabilities. See [tech-stack.md](tech-stack.md) and [Wikipedia: Test harness](https://en.wikipedia.org/wiki/Test_harness).
 
+- **Hit@k** — whether any of the top k retrieval results comes from a relevant document. See [the retrieval design study](research/retrieval-design/README.md).
+
 - **Incident** — an observable failure in the Kubernetes environment that the model must diagnose and repair. See [Wikipedia: Incident management](https://en.wikipedia.org/wiki/Incident_management).
 
 - **kind** — Kubernetes in Docker, used to run local Kubernetes clusters for benchmark scenarios. See the [kind documentation](https://kind.sigs.k8s.io/docs/) and [Wikipedia: Kubernetes](https://en.wikipedia.org/wiki/Kubernetes).
+
+- **Mean reciprocal rank (MRR)** — the average of 1/rank of the first relevant result, 0 when none is returned. See [Wikipedia: Mean reciprocal rank](https://en.wikipedia.org/wiki/Mean_reciprocal_rank).
 
 - **Model artifact** — the specific model files and revision used for inference or fine-tuning. See the [Gemma 4 E4B model card](https://huggingface.co/google/gemma-4-E4B-it).
 
@@ -41,6 +49,8 @@
 - **Raw shell** — direct command-line access, such as Bash, without replacing the interface with only predefined high-level tools. See the [Bash reference](https://www.gnu.org/software/bash/manual/) and [Wikipedia: Bash (Unix shell)](https://en.wikipedia.org/wiki/Bash_%28Unix_shell%29).
 
 - **Reasoning content** — the model's thinking output, retained on assistant messages between tool calls within an attempt. See [benchmark.md](benchmark.md).
+
+- **Reciprocal rank fusion (RRF)** — combining rankings by summing 1/(k + rank) for each result across them. See [the RRF paper](https://dl.acm.org/doi/10.1145/1571941.1572114).
 
 - **Repeated run** — one independent execution of the same scenario and condition, used to measure stochastic variation. See [Towards Reproducible LLM Evaluation](https://arxiv.org/abs/2410.03492) and [Wikipedia: Reproducibility](https://en.wikipedia.org/wiki/Reproducibility).
 

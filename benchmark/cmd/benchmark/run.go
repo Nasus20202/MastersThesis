@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
@@ -18,15 +17,10 @@ const resultsDir = "results"
 // creates its result store.
 func startRun(ctx context.Context, metadata results.RunMetadata) (*results.Store, error) {
 	startedAt := time.Now().UTC()
-	metadata.RunID = runID(startedAt)
+	metadata.RunID = results.NewRunID(startedAt)
 	metadata.StartedAt = startedAt
-	metadata.RepositoryRevision, metadata.WorkingTreeDirty = repositoryProvenance(ctx)
+	metadata.RepositoryRevision, metadata.WorkingTreeDirty = results.RepositoryProvenance(ctx, ".")
 	return results.New(resultsDir, metadata)
-}
-
-func runID(startedAt time.Time) string {
-	timestamp := startedAt.UTC().Format("2006-01-02-15-04-05.000Z")
-	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
 // executeRun runs tasks behind a progress bar, passes each outcome to record and

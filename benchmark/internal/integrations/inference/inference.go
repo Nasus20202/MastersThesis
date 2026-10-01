@@ -1,4 +1,5 @@
-// Package inference defines the chat-completion interface used by agents.
+// Package inference defines the chat-completion and embedding interfaces used
+// by agents and retrieval.
 package inference
 
 import (
@@ -16,7 +17,13 @@ type MetadataProvider interface {
 	Metadata() Metadata
 }
 
+// Embedder turns texts into embedding vectors, one per input in order.
+type Embedder interface {
+	Embed(context.Context, []string) ([][]float32, error)
+}
+
 type Options struct {
 	Temperature *float64
 	MaxTokens   *int
+	Seed        *int
 }

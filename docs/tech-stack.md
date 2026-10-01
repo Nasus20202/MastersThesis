@@ -28,6 +28,12 @@ Qwen 3.5 artifacts carry the prediction layer inside the target file. Gemma 4 pu
 
 Decoding throughput and draft acceptance are recorded per condition, because acceptance depends on the model and on how repetitive a condition's output is.
 
+## Retrieval
+
+The RAG condition searches the frozen corpus through SQLite indexes built by `benchmark/cmd/retrieval`: FTS5 for lexical (BM25) search and sqlite-vec for exact vector search, combined by reciprocal rank fusion in hybrid mode. SQLite is accessed through `mattn/go-sqlite3` built with the `sqlite_fts5` tag; sqlite-vec is linked through its cgo bindings.
+
+Embeddings are produced by EmbeddingGemma 300M, served by a separate `llama-embedding` llama.cpp service (port 8081, same pinned image as the model router), so embedding does not occupy a model-router slot. The model, revision and hash are pinned in `benchmark/retrieval.env`. Indexes are gitignored, rebuilt with `make retrieval-index`, and record the corpus revision and embedding artifact they were built from. The selected configuration is described in [the retrieval design study](research/retrieval-design/README.md).
+
 ## Primary model
 
 Gemma 4 E4B is the primary model for the current experiment.

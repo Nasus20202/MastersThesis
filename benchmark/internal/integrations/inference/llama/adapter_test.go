@@ -25,6 +25,7 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 			assert.Equal(t, "Inspect", payload.Messages[0].Content)
 			assert.Equal(t, "bash", payload.Tools[0].Function.Name)
 			assert.Equal(t, 64, *payload.MaxTokens)
+			assert.Equal(t, 42, *payload.Seed)
 			return testResponse(http.StatusOK, `{
                 "id": "chatcmpl-adapter",
                 "choices": [{
@@ -41,11 +42,11 @@ func TestAdapterTranslatesGenericChatToLlama(t *testing.T) {
 	adapter, err := NewAdapter(client)
 	require.NoError(t, err)
 
-	maxTokens := 64
+	maxTokens, seed := 64, 42
 	response, err := adapter.Chat(context.Background(), []inference.Message{{Role: "user", Content: "Inspect"}}, []inference.Tool{{
 		Name:        "bash",
 		Description: "Run shell",
-	}}, inference.Options{MaxTokens: &maxTokens})
+	}}, inference.Options{MaxTokens: &maxTokens, Seed: &seed})
 	require.NoError(t, err)
 	assert.Equal(t, "chatcmpl-adapter", response.ID)
 	assert.Equal(t, "done", response.Message.Content)
@@ -118,7 +119,7 @@ func TestAdapterPreservesReasoningContent(t *testing.T) {
 func TestNewAdapterRejectsNilClient(t *testing.T) {
 	adapter, err := NewAdapter(nil)
 	assert.Error(t, err)
-	assert.Nil(t, adapter)
+	assert.Zero(t, adapter)
 }
 
 func TestAdapterRejectsResponseWithoutChoices(t *testing.T) {

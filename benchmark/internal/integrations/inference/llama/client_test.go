@@ -141,3 +141,43 @@ func TestClientExposesInferenceMetadata(t *testing.T) {
 	metadata.RuntimeSettings["LLAMA_CONTEXT_SIZE"] = "1"
 	assert.Equal(t, "32768", client.Metadata().RuntimeSettings["LLAMA_CONTEXT_SIZE"])
 }
+
+func TestEmbedReturnsVectorsInInputOrder(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "embedding-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			assert.Equal(t, "/v1/embeddings", request.URL.Path)
+			var payload embeddingRequest
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			assert.Equal(t, embeddingRequest{Model: "embedding-test", Input: []string{"first", "second"}}, payload)
+			return testResponse(http.StatusOK, `{"data": [
+                {"index": 1, "embedding": [0, 1]},
+                {"index": 0, "embedding": [1, 0]}
+            ]}`)
+		})},
+	})
+	require.NoError(t, err)
+
+	embeddings, err := client.Embed(context.Background(), []string{"first", "second"})
+	require.NoError(t, err)
+	assert.Equal(t, [][]float32{{1, 0}, {0, 1}}, embeddings)
+}
+
+func TestEmbedRejectsIncompleteResponse(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "embedding-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return testResponse(http.StatusOK, `{"data": [{"index": 1, "embedding": [0, 1]}, {"index": 1, "embedding": [0, 1]}]}`)
+		})},
+	})
+	require.NoError(t, err)
+
+	_, err = client.Embed(context.Background(), []string{"first", "second"})
+	assert.ErrorContains(t, err, "invalid embedding index 1")
+}

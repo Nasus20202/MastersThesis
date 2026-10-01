@@ -1,4 +1,4 @@
-package agent
+package llamaenv
 
 const (
 	envLlamaModelName       = "LLAMA_MODEL_NAME"
@@ -26,6 +26,14 @@ const (
 	envLlamaReasoning       = "LLAMA_REASONING"
 	envLlamaReasoningBudget = "LLAMA_REASONING_BUDGET"
 	envLlamaHost            = "LLAMA_HOST"
+
+	envEmbeddingModelName  = "EMBEDDING_MODEL_NAME"
+	envEmbeddingPort       = "EMBEDDING_PORT"
+	envEmbeddingRepository = "EMBEDDING_MODEL_REPOSITORY"
+	envEmbeddingRevision   = "EMBEDDING_MODEL_REVISION"
+	envEmbeddingFile       = "EMBEDDING_MODEL_FILE"
+	envEmbeddingQuant      = "EMBEDDING_MODEL_QUANTIZATION"
+	envEmbeddingSHA256     = "EMBEDDING_MODEL_SHA256"
 )
 
 var llamaRuntimeEnvNames = [...]string{
