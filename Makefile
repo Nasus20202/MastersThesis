@@ -131,7 +131,7 @@ download-models:
 	./scripts/download-models.sh
 
 llama-start: kind-network
-	$(COMPOSE) up --detach llama-server
+	$(COMPOSE) up --detach --wait llama-server
 
 llama-stop:
 	$(COMPOSE) stop llama-server
@@ -143,7 +143,7 @@ corpus-download:
 	./scripts/download-corpus.sh
 
 embedding-start:
-	$(COMPOSE) up --detach llama-embedding
+	$(COMPOSE) up --detach --wait llama-embedding
 
 embedding-stop:
 	$(COMPOSE) stop llama-embedding
