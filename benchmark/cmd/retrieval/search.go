@@ -48,6 +48,9 @@ func search(ctx context.Context, configPaths []string, overrides searchOverrides
 			return err
 		}
 	}
+	if overrides.k < 0 {
+		return errors.New("--k must be positive")
+	}
 	if overrides.k > 0 {
 		config.topK = overrides.k
 	}
