@@ -13,10 +13,10 @@ func NewRunID(startedAt time.Time) string {
 	return "run-" + strings.Replace(timestamp, ".", "-", 1)
 }
 
-// RepositoryProvenance returns the current Git revision and whether the
-// working tree has uncommitted changes.
-func RepositoryProvenance(ctx context.Context) (string, bool) {
-	rootOutput, err := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel").Output()
+// RepositoryProvenance returns the Git revision of the repository containing
+// dir and whether its working tree has uncommitted changes.
+func RepositoryProvenance(ctx context.Context, dir string) (string, bool) {
+	rootOutput, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return "", false
 	}

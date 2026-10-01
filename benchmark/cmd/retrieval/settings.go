@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -42,20 +44,36 @@ func loadSettings(paths []string) (settings, error) {
 	return result, nil
 }
 
-// corpusCheckout verifies the checkout is at the pinned revision and returns
-// its files, the corpus subtree and the revision.
+// openIndex rejects an index built from another corpus revision or embedding
+// model than the current ones.
+func openIndex(ctx context.Context, path string, embedding inference.Metadata) (*retrieval.Index, error) {
+	index, err := retrieval.OpenIndex(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	built := index.Metadata()
+	if pinned := os.Getenv("CORPUS_REVISION"); built.CorpusRevision != pinned {
+		err = fmt.Errorf("index %s was built from corpus %s, want %s", path, built.CorpusRevision, pinned)
+	} else if built.Embedding.Artifact != embedding.Artifact || built.Embedding.SHA256 != embedding.SHA256 {
+		err = fmt.Errorf("index %s was embedded with %s, the embedding client uses %s", path, built.Embedding.Artifact, embedding.Artifact)
+	}
+	if err != nil {
+		_ = index.Close()
+		return nil, fmt.Errorf("%w; rebuild it with make retrieval-index", err)
+	}
+	return index, nil
+}
+
+// corpusCheckout verifies the checkout is unmodified at the pinned revision and
+// returns its files, the corpus subtree and the revision.
 func corpusCheckout(ctx context.Context) (fs.FS, string, string, error) {
 	dir, subtree, pinned := os.Getenv("CORPUS_DIR"), os.Getenv("CORPUS_SUBTREE"), os.Getenv("CORPUS_REVISION")
 	if dir == "" || subtree == "" || pinned == "" {
 		return nil, "", "", errors.New("CORPUS_DIR, CORPUS_SUBTREE and CORPUS_REVISION are required")
 	}
 	checkout := filepath.Join(dir, "website")
-	revision, err := retrieval.CheckoutRevision(ctx, checkout)
-	if err != nil {
-		return nil, "", "", fmt.Errorf("%w (run make corpus-download)", err)
-	}
-	if revision != pinned {
-		return nil, "", "", fmt.Errorf("corpus checkout is at %s, want %s", revision, pinned)
+	if revision, dirty := results.RepositoryProvenance(ctx, checkout); revision != pinned || dirty {
+		return nil, "", "", fmt.Errorf("corpus checkout %s is at %q (modified: %t), want %s unmodified; run make corpus-download", checkout, revision, dirty, pinned)
 	}
 	return os.DirFS(checkout), subtree, pinned, nil
 }

@@ -74,9 +74,7 @@ func BuildIndex(ctx context.Context, path string, documents []Document, chunking
 	}
 	metadata.Chunking = chunking
 	metadata.MaxChunkBytes = MaxChunkBytes
-	if chunking == Windows {
-		metadata.WindowOverlap = WindowOverlap
-	}
+	metadata.WindowOverlap = windowOverlap(chunking)
 	metadata.Documents = len(documents)
 	metadata.Chunks = len(chunks)
 	metadata.Dimensions = len(embeddings[0])
@@ -172,7 +170,19 @@ func OpenIndex(ctx context.Context, path string) (*Index, error) {
 		db.Close()
 		return nil, fmt.Errorf("decode retrieval index metadata from %s: %w", path, err)
 	}
+	if metadata.MaxChunkBytes != MaxChunkBytes || metadata.WindowOverlap != windowOverlap(metadata.Chunking) {
+		db.Close()
+		return nil, fmt.Errorf("retrieval index %s was built with other chunking parameters; rebuild it", path)
+	}
 	return &Index{db: db, metadata: metadata}, nil
+}
+
+// windowOverlap is recorded only for window chunking.
+func windowOverlap(chunking Chunking) int {
+	if chunking == Windows {
+		return WindowOverlap
+	}
+	return 0
 }
 
 func (i *Index) Metadata() IndexMetadata {

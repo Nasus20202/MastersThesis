@@ -50,8 +50,12 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 		Indexes:       make(map[retrieval.Chunking]retrieval.IndexMetadata),
 		IndexSHA256:   make(map[retrieval.Chunking]string),
 	}
-	metadata.RepositoryRevision, metadata.WorkingTreeDirty = results.RepositoryProvenance(ctx)
+	metadata.RepositoryRevision, metadata.WorkingTreeDirty = results.RepositoryProvenance(ctx, ".")
 
+	embedder, err := llamaenv.NewEmbeddingClient()
+	if err != nil {
+		return err
+	}
 	indexes := make(map[retrieval.Chunking]*retrieval.Index)
 	defer func() {
 		for _, index := range indexes {
@@ -60,7 +64,7 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 	}()
 	for _, chunking := range retrieval.Chunkings {
 		path := retrieval.IndexPath(config.indexDir, chunking)
-		index, err := retrieval.OpenIndex(ctx, path)
+		index, err := openIndex(ctx, path, embedder.Metadata())
 		if err != nil {
 			return err
 		}
@@ -69,10 +73,6 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 		if metadata.IndexSHA256[chunking], err = retrieval.FileSHA256(path); err != nil {
 			return err
 		}
-	}
-	embedder, err := llamaenv.NewEmbeddingClient()
-	if err != nil {
-		return err
 	}
 	report, err := evaluation.Evaluate(ctx, indexes, embedder, set.Probes, config.maxBytes)
 	if err != nil {

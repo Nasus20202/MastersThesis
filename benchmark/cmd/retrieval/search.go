@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -52,17 +51,15 @@ func search(ctx context.Context, configPaths []string, overrides searchOverrides
 	if overrides.k > 0 {
 		config.topK = overrides.k
 	}
-	index, err := retrieval.OpenIndex(ctx, retrieval.IndexPath(config.indexDir, config.chunking))
+	embedder, err := llamaenv.NewEmbeddingClient()
+	if err != nil {
+		return err
+	}
+	index, err := openIndex(ctx, retrieval.IndexPath(config.indexDir, config.chunking), embedder.Metadata())
 	if err != nil {
 		return err
 	}
 	defer index.Close()
-	var embedder inference.Embedder
-	if config.mode != retrieval.Lexical {
-		if embedder, err = llamaenv.NewEmbeddingClient(); err != nil {
-			return err
-		}
-	}
 	hits, err := index.Search(ctx, embedder, config.mode, query, config.topK)
 	if err != nil {
 		return err

@@ -120,3 +120,18 @@ func TestOpenIndexRejectsMissingFile(t *testing.T) {
 	_, err := OpenIndex(context.Background(), filepath.Join(t.TempDir(), "missing.sqlite"))
 	assert.Error(t, err)
 }
+
+func TestOpenIndexRejectsOtherChunkingParameters(t *testing.T) {
+	ctx := context.Background()
+	path := IndexPath(t.TempDir(), Sections)
+	_, err := BuildIndex(ctx, path, testDocuments, Sections, &topicEmbedder{}, IndexMetadata{})
+	require.NoError(t, err)
+	db, err := openDB(ctx, path)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE metadata SET value = json_set(value, '$.max_chunk_bytes', 1)`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, err = OpenIndex(ctx, path)
+	assert.ErrorContains(t, err, "other chunking parameters")
+}

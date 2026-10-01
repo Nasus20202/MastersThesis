@@ -19,7 +19,7 @@ func startRun(ctx context.Context, metadata results.RunMetadata) (*results.Store
 	startedAt := time.Now().UTC()
 	metadata.RunID = results.NewRunID(startedAt)
 	metadata.StartedAt = startedAt
-	metadata.RepositoryRevision, metadata.WorkingTreeDirty = results.RepositoryProvenance(ctx)
+	metadata.RepositoryRevision, metadata.WorkingTreeDirty = results.RepositoryProvenance(ctx, ".")
 	return results.New(resultsDir, metadata)
 }
 

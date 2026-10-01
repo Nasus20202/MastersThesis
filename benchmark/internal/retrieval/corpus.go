@@ -1,12 +1,10 @@
 package retrieval
 
 import (
-	"context"
 	"crypto/sha1" //nolint:gosec // Git blob identifiers are SHA-1 by definition.
 	"encoding/hex"
 	"fmt"
 	"io/fs"
-	"os/exec"
 	"path"
 	"regexp"
 	"strings"
@@ -20,14 +18,6 @@ type Document struct {
 	BlobSHA string
 	Title   string
 	Text    string
-}
-
-func CheckoutRevision(ctx context.Context, checkout string) (string, error) {
-	output, err := exec.CommandContext(ctx, "git", "-C", checkout, "rev-parse", "HEAD").Output()
-	if err != nil {
-		return "", fmt.Errorf("read corpus revision in %s: %w", checkout, err)
-	}
-	return strings.TrimSpace(string(output)), nil
 }
 
 func LoadCorpus(files fs.FS, subtree string) ([]Document, error) {
