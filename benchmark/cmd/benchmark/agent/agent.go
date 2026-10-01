@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
@@ -15,6 +16,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	promptagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/prompt"
+	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
 	skillagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/skill"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -27,11 +29,15 @@ const (
 	Baseline Name = "baseline"
 	Prompt   Name = "prompt"
 	Skill    Name = "skill"
+	RAG      Name = "rag"
 )
+
+// allAgents is the default selection and the expansion of "all".
+var allAgents = []Name{Baseline, Prompt, Skill, RAG}
 
 func Select(values ...string) ([]Name, error) {
 	if len(values) == 0 {
-		return []Name{Baseline, Prompt, Skill}, nil
+		return slices.Clone(allAgents), nil
 	}
 
 	selected := make([]Name, 0, len(values))
@@ -50,8 +56,8 @@ func Select(values ...string) ([]Name, error) {
 				allSelected = true
 				continue
 			}
-			if normalized != Baseline && normalized != Prompt && normalized != Skill {
-				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, prompt, or skill", item)
+			if !slices.Contains(allAgents, normalized) {
+				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, prompt, skill, or rag", item)
 			}
 			if _, exists := seen[normalized]; exists {
 				return nil, fmt.Errorf("agent %q was selected more than once", normalized)
@@ -61,12 +67,14 @@ func Select(values ...string) ([]Name, error) {
 		}
 	}
 	if allSelected {
-		return []Name{Baseline, Prompt, Skill}, nil
+		return slices.Clone(allAgents), nil
 	}
 	return selected, nil
 }
 
-func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Factory, error) {
+// NewFactory builds the factory for one agent. search is required only for
+// the RAG agent; see OpenSearch.
+func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config, search *ragagent.Search) (rootagent.Factory, error) {
 	loopConfig, err := configuredLoopConfig(benchmarkConfig.Agents.Loop)
 	if err != nil {
 		return nil, err
@@ -96,6 +104,17 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config) (rootagent.Fa
 		}
 		newAgent = func(client inference.Client, shell sandboxintegration.Executor) (rootagent.Agent, error) {
 			return skillagent.New(client, shell, loopConfig, systemPrompt, files)
+		}
+	case RAG:
+		if search == nil {
+			return nil, errors.New("rag agent requires an opened retrieval index")
+		}
+		systemPrompt, err := readSystemPrompt(benchmarkConfig.Agents.RAG.SystemPromptFile)
+		if err != nil {
+			return nil, err
+		}
+		newAgent = func(client inference.Client, shell sandboxintegration.Executor) (rootagent.Agent, error) {
+			return ragagent.New(client, shell, loopConfig, systemPrompt, search)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)

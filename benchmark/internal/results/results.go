@@ -23,6 +23,21 @@ type RunMetadata struct {
 	RepeatCount        int        `json:"repeat_count"`
 	Scenarios          []string   `json:"scenarios"`
 	TagSelector        string     `json:"tag_selector,omitempty"`
+	// Retrieval is recorded only for runs that include the RAG condition.
+	Retrieval *RetrievalProvenance `json:"retrieval,omitempty"`
+}
+
+// RetrievalProvenance identifies the RAG condition's search settings and the
+// index it searched.
+type RetrievalProvenance struct {
+	Mode              string `json:"mode"`
+	Chunking          string `json:"chunking"`
+	TopK              int    `json:"top_k"`
+	MaxBytes          int    `json:"max_bytes"`
+	IndexSHA256       string `json:"index_sha256"`
+	CorpusRevision    string `json:"corpus_revision"`
+	EmbeddingArtifact string `json:"embedding_artifact"`
+	EmbeddingSHA256   string `json:"embedding_sha256"`
 }
 
 type RunType string

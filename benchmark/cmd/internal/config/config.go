@@ -50,6 +50,7 @@ type AgentsConfig struct {
 	Loop   LoopConfig        `yaml:"loop,omitempty"`
 	Prompt PromptAgentConfig `yaml:"prompt,omitempty"`
 	Skill  SkillAgentConfig  `yaml:"skill,omitempty"`
+	RAG    RAGAgentConfig    `yaml:"rag,omitempty"`
 }
 
 type LoopConfig struct {
@@ -60,6 +61,10 @@ type LoopConfig struct {
 }
 
 type PromptAgentConfig struct {
+	SystemPromptFile string `yaml:"system_prompt_file,omitempty"`
+}
+
+type RAGAgentConfig struct {
 	SystemPromptFile string `yaml:"system_prompt_file,omitempty"`
 }
 
@@ -131,6 +136,7 @@ var pathFields = [][]string{
 	{"agents", "prompt", "system_prompt_file"},
 	{"agents", "skill", "system_prompt_file"},
 	{"agents", "skill", "skills_dir"},
+	{"agents", "rag", "system_prompt_file"},
 	{"containers", "sandbox", "dockerfile"},
 	{"containers", "sandbox", "context"},
 	{"containers", "setup", "dockerfile"},

@@ -59,6 +59,10 @@ endif
 BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
 BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 BENCHMARK_TAG_ARGS := $(foreach tag,$(TAG),--tag $(tag))
+# The RAG agent embeds its search queries, so start the embedding service only
+# when it is selected.
+comma := ,
+BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),embedding-start)
 
 .DEFAULT_GOAL := help
 
@@ -95,7 +99,7 @@ help:
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
 		'SCENARIO=PATH...' 'Select scenario directories/files; space-separated (default: scenarios/).' \
 		'VALIDATION=PATH...' 'Select validation directories/files; space-separated (default: scenarios/).' \
-		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, or skill benchmark agents (default: all).' \
+		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, skill, or rag benchmark agents (default: all).' \
 		'CONFIG=PATH' 'Overlay a benchmark YAML config file.' \
 		'TAG=SELECTOR' 'Filter scenarios by tag selector, e.g. difficulty=hard (default: none).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
@@ -180,7 +184,7 @@ build:
 browser:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
 
-benchmark: registry-start llama-start
+benchmark: registry-start llama-start $(BENCHMARK_EMBEDDING)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
 benchmark-validate: registry-start

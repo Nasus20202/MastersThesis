@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/retrievalenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -28,7 +29,7 @@ func TestLoadSettingsValidatesRetrievalConfig(t *testing.T) {
 
 	config, err := loadSettings([]string{path})
 	require.NoError(t, err)
-	assert.Equal(t, settings{mode: retrieval.Hybrid, chunking: retrieval.Windows, topK: 5, maxBytes: 8192, indexDir: filepath.Join(directory, "corpus")}, config)
+	assert.Equal(t, retrievalenv.Settings{Mode: retrieval.Hybrid, Chunking: retrieval.Windows, TopK: 5, MaxBytes: 8192, IndexDir: filepath.Join(directory, "corpus")}, config)
 
 	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: dense\n  chunking: windows\n  top_k: 5\n  max_bytes: 8192\n  index_dir: corpus\n"), 0o600))
 	_, err = loadSettings([]string{path})

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/retrievalenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
@@ -46,7 +47,7 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 		QueriesFile:   filepath.ToSlash(queriesPath),
 		QueriesSHA256: queriesSHA256,
 		Ks:            evaluation.Ks,
-		MaxBytes:      config.maxBytes,
+		MaxBytes:      config.MaxBytes,
 		Indexes:       make(map[retrieval.Chunking]retrieval.IndexMetadata),
 		IndexSHA256:   make(map[retrieval.Chunking]string),
 	}
@@ -63,8 +64,8 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 		}
 	}()
 	for _, chunking := range retrieval.Chunkings {
-		path := retrieval.IndexPath(config.indexDir, chunking)
-		index, err := openIndex(ctx, path, embedder.Metadata())
+		path := retrieval.IndexPath(config.IndexDir, chunking)
+		index, err := retrievalenv.OpenIndex(ctx, path, embedder.Metadata())
 		if err != nil {
 			return err
 		}
@@ -74,7 +75,7 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 			return err
 		}
 	}
-	report, err := evaluation.Evaluate(ctx, indexes, embedder, set.Probes, config.maxBytes)
+	report, err := evaluation.Evaluate(ctx, indexes, embedder, set.Probes, config.MaxBytes)
 	if err != nil {
 		return err
 	}

@@ -14,6 +14,7 @@ import (
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
+	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
@@ -55,9 +56,20 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if err != nil {
 		return err
 	}
+	var search *ragagent.Search
+	var retrievalProvenance *results.RetrievalProvenance
+	if slices.Contains(agentNames, commandagent.RAG) {
+		var provenance results.RetrievalProvenance
+		search, provenance, err = commandagent.OpenSearch(ctx, benchmarkConfig.Retrieval)
+		if err != nil {
+			return err
+		}
+		defer search.Index.Close()
+		retrievalProvenance = &provenance
+	}
 	agentFactories := make(map[commandagent.Name]rootagent.Factory, len(agentNames))
 	for _, agentName := range agentNames {
-		agentFactory, err := commandagent.NewFactory(agentName, benchmarkConfig)
+		agentFactory, err := commandagent.NewFactory(agentName, benchmarkConfig, search)
 		if err != nil {
 			return err
 		}
@@ -68,7 +80,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if resumeID != "" {
 		store, err = results.Resume(resultsDir, resumeID)
 		if err == nil {
-			err = validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions))
+			err = validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions), retrievalProvenance)
 		}
 	} else {
 		store, err = startRun(ctx, results.RunMetadata{
@@ -79,6 +91,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			RepeatCount:      repeat,
 			Scenarios:        scenarioIDs(definitions),
 			TagSelector:      tagFilter.String(),
+			Retrieval:        retrievalProvenance,
 		})
 	}
 	if err != nil {
@@ -137,7 +150,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	})
 }
 
-func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string) error {
+func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string, retrieval *results.RetrievalProvenance) error {
 	if metadata.RunType != results.RunTypeBenchmark {
 		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
 	}
@@ -151,7 +164,17 @@ func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.
 	if !slices.Equal(metadata.Scenarios, scenarios) {
 		return fmt.Errorf("resume scenarios %v do not match run scenarios %v", scenarios, metadata.Scenarios)
 	}
+	if !equalRetrieval(metadata.Retrieval, retrieval) {
+		return fmt.Errorf("resume retrieval %+v does not match run retrieval %+v", retrieval, metadata.Retrieval)
+	}
 	return nil
+}
+
+func equalRetrieval(a, b *results.RetrievalProvenance) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 type runnerDeps struct {
