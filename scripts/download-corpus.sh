@@ -24,18 +24,17 @@ printf '[download-corpus] destination: benchmark/%s\n' "$checkout"
 if [[ ! -d "$checkout/.git" ]]; then
   mkdir -p "$CORPUS_DIR"
   git clone --filter=blob:none --no-checkout --sparse "$CORPUS_REPOSITORY" "$checkout"
+elif [[ -n "$(git -C "$checkout" status --porcelain)" ]]; then
+  printf '[download-corpus] error: the corpus checkout has local changes\n' >&2
+  exit 1
 fi
 git -C "$checkout" sparse-checkout set "$CORPUS_SUBTREE"
 git -C "$checkout" fetch --depth 1 origin "$CORPUS_REVISION"
-git -C "$checkout" -c advice.detachedHead=false checkout --force "$CORPUS_REVISION"
+git -C "$checkout" -c advice.detachedHead=false checkout "$CORPUS_REVISION"
 
 actual_revision=$(git -C "$checkout" rev-parse HEAD)
 if [[ "$actual_revision" != "$CORPUS_REVISION" ]]; then
   printf '[download-corpus] error: checked out %s, expected %s\n' "$actual_revision" "$CORPUS_REVISION" >&2
-  exit 1
-fi
-if [[ -n "$(git -C "$checkout" status --porcelain)" ]]; then
-  printf '[download-corpus] error: the corpus checkout has local changes\n' >&2
   exit 1
 fi
 
