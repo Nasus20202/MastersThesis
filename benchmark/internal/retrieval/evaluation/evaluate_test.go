@@ -78,3 +78,25 @@ func TestSelectAppliesTieRule(t *testing.T) {
 	assert.Equal(t, configs[3], Select(configs, 24))
 	assert.Equal(t, configs[0], Select(configs, 100))
 }
+
+func TestCompareToSelectedBootstrapsProbeDifferences(t *testing.T) {
+	config := func(k int, hits ...float64) ConfigScore {
+		score := ConfigScore{Mode: retrieval.Hybrid, Chunking: retrieval.Windows, K: k}
+		for _, hit := range hits {
+			score.Probes = append(score.Probes, ProbeScore{Rewrite: Scores{Hit: hit}})
+		}
+		return score
+	}
+	selected := config(5, 1, 1, 0, 1)
+	constant := config(3, 0, 0, -1, 0)
+	mixed := config(8, 1, 0, 0, 1)
+
+	differences := compareToSelected(selected, []ConfigScore{selected, constant, mixed})
+	require.Len(t, differences, 2)
+	// Every probe loses one hit, so every resample has the same mean.
+	assert.Equal(t, Difference{Config: "hybrid/windows/k=3", Mean: -1, Low: -1, High: -1}, differences[0])
+	assert.InDelta(t, -0.25, differences[1].Mean, 1e-9)
+	assert.LessOrEqual(t, differences[1].Low, differences[1].Mean)
+	assert.Equal(t, 0.0, differences[1].High)
+	assert.Equal(t, differences, compareToSelected(selected, []ConfigScore{selected, constant, mixed}))
+}

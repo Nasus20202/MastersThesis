@@ -98,5 +98,12 @@ func printReport(output io.Writer, report evaluation.Report) {
 			config.AsIs.Hit, config.AsIs.RR, config.AsIs.PrimaryHit, config.Truncated)
 	}
 	_ = table.Flush()
-	fmt.Fprintf(output, "\nselected: %s\n", report.Selected.Name())
+	fmt.Fprintf(output, "\nselected: %s\n\n", report.Selected.Name())
+
+	table = tabwriter.NewWriter(output, 0, 0, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintln(table, "config\thit@k rewrite minus selected\t95% bootstrap CI\t")
+	for _, difference := range report.Differences {
+		fmt.Fprintf(table, "%s\t%+.3f\t[%+.3f, %+.3f]\t\n", difference.Config, difference.Mean, difference.Low, difference.High)
+	}
+	_ = table.Flush()
 }

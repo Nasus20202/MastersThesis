@@ -66,9 +66,10 @@ func (s ConfigScore) Name() string {
 }
 
 type Report struct {
-	Configs  []ConfigScore `json:"configs"`
-	Selected ConfigScore   `json:"selected"`
-	Results  []QueryResult `json:"-"`
+	Configs     []ConfigScore `json:"configs"`
+	Selected    ConfigScore   `json:"selected"`
+	Differences []Difference  `json:"differences"`
+	Results     []QueryResult `json:"-"`
 }
 
 func Evaluate(ctx context.Context, indexes map[retrieval.Chunking]*retrieval.Index, embedder inference.Embedder, probes []ProbeQueries, maxBytes int) (Report, error) {
@@ -99,6 +100,7 @@ func Evaluate(ctx context.Context, indexes map[retrieval.Chunking]*retrieval.Ind
 		}
 	}
 	report.Selected = Select(report.Configs, len(probes))
+	report.Differences = compareToSelected(report.Selected, report.Configs)
 	return report, nil
 }
 
