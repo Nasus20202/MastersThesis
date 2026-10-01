@@ -14,7 +14,7 @@ import (
 
 // Parallelism is the inference server capacity; the compose default is 1.
 func Parallelism() (int, error) {
-	value := strings.TrimSpace(os.Getenv(envLlamaParallel))
+	value := env(envLlamaParallel)
 	if value == "" {
 		value = "1"
 	}
@@ -25,55 +25,69 @@ func Parallelism() (int, error) {
 	return parallelism, nil
 }
 
-func NewChatClient() (inference.Client, error) {
-	model := strings.TrimSpace(os.Getenv(envLlamaModelName))
+func NewChatClient() (llama.Adapter, error) {
+	model := env(envLlamaModelName)
 	if model == "" {
-		return nil, fmt.Errorf("%s is required", envLlamaModelName)
+		return llama.Adapter{}, fmt.Errorf("%s is required", envLlamaModelName)
 	}
-
-	port := strings.TrimSpace(os.Getenv(envLlamaPort))
+	port := env(envLlamaPort)
 	if port == "" {
 		port = "8080"
 	}
-	client, err := llama.NewClient(llama.Config{
-		BaseURL: fmt.Sprintf("http://%s:%s", clientHost(), port),
-		Model:   model,
-		Metadata: inference.Metadata{
-			Model:           model,
-			Artifact:        modelArtifact(),
-			Quantization:    strings.TrimSpace(os.Getenv(envLlamaModelQuant)),
-			SHA256:          strings.TrimSpace(os.Getenv(envLlamaModelSHA256)),
-			RuntimeSettings: runtimeSettings(),
-		},
+	return newAdapter(port, inference.Metadata{
+		Model:           model,
+		Artifact:        artifact(envLlamaModelRepository, envLlamaModelRevision, envLlamaModelFile),
+		Quantization:    env(envLlamaModelQuant),
+		SHA256:          env(envLlamaModelSHA256),
+		RuntimeSettings: runtimeSettings(),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("create llama client: %w", err)
-	}
-	inferenceClient, err := llama.NewAdapter(client)
-	if err != nil {
-		return nil, fmt.Errorf("create inference adapter: %w", err)
-	}
-	return inferenceClient, nil
 }
 
-func modelArtifact() string {
-	repository := strings.TrimSpace(os.Getenv(envLlamaModelRepository))
-	revision := strings.TrimSpace(os.Getenv(envLlamaModelRevision))
-	file := strings.TrimSpace(os.Getenv(envLlamaModelFile))
-	artifact := repository
-	if revision != "" {
-		artifact += "@" + revision
+func NewEmbeddingClient() (llama.Adapter, error) {
+	model, port := env(envEmbeddingModelName), env(envEmbeddingPort)
+	if model == "" || port == "" {
+		return llama.Adapter{}, fmt.Errorf("%s and %s are required", envEmbeddingModelName, envEmbeddingPort)
 	}
-	if file != "" {
-		artifact += "/" + file
+	return newAdapter(port, inference.Metadata{
+		Model:        model,
+		Artifact:     artifact(envEmbeddingRepository, envEmbeddingRevision, envEmbeddingFile),
+		Quantization: env(envEmbeddingQuant),
+		SHA256:       env(envEmbeddingSHA256),
+	})
+}
+
+func newAdapter(port string, metadata inference.Metadata) (llama.Adapter, error) {
+	host := env(envLlamaClientHost)
+	if host == "" {
+		host = "127.0.0.1"
 	}
-	return artifact
+	client, err := llama.NewClient(llama.Config{
+		BaseURL:  fmt.Sprintf("http://%s:%s", host, port),
+		Model:    metadata.Model,
+		Metadata: metadata,
+	})
+	if err != nil {
+		return llama.Adapter{}, fmt.Errorf("create llama client for %s: %w", metadata.Model, err)
+	}
+	return llama.NewAdapter(client)
+}
+
+// artifact formats repository@revision/file, omitting unset parts.
+func artifact(repositoryEnv, revisionEnv, fileEnv string) string {
+	result := env(repositoryEnv)
+	if revision := env(revisionEnv); revision != "" {
+		result += "@" + revision
+	}
+	if file := env(fileEnv); file != "" {
+		result += "/" + file
+	}
+	return result
 }
 
 func runtimeSettings() map[string]string {
 	settings := make(map[string]string)
 	for _, name := range llamaRuntimeEnvNames {
-		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		if value := env(name); value != "" {
 			settings[name] = value
 		}
 	}
@@ -83,31 +97,6 @@ func runtimeSettings() map[string]string {
 	return settings
 }
 
-func NewEmbeddingClient() (llama.Adapter, error) {
-	model, port := os.Getenv(envEmbeddingModelName), os.Getenv(envEmbeddingPort)
-	if model == "" || port == "" {
-		return llama.Adapter{}, fmt.Errorf("%s and %s are required", envEmbeddingModelName, envEmbeddingPort)
-	}
-	client, err := llama.NewClient(llama.Config{
-		BaseURL: fmt.Sprintf("http://%s:%s", clientHost(), port),
-		Model:   model,
-		Metadata: inference.Metadata{
-			Provider:     "llama.cpp",
-			Model:        model,
-			Artifact:     fmt.Sprintf("%s@%s/%s", os.Getenv(envEmbeddingRepository), os.Getenv(envEmbeddingRevision), os.Getenv(envEmbeddingFile)),
-			Quantization: os.Getenv(envEmbeddingQuant),
-			SHA256:       os.Getenv(envEmbeddingSHA256),
-		},
-	})
-	if err != nil {
-		return llama.Adapter{}, fmt.Errorf("create embedding client: %w", err)
-	}
-	return llama.NewAdapter(client)
-}
-
-func clientHost() string {
-	if host := strings.TrimSpace(os.Getenv(envLlamaClientHost)); host != "" {
-		return host
-	}
-	return "127.0.0.1"
+func env(name string) string {
+	return strings.TrimSpace(os.Getenv(name))
 }

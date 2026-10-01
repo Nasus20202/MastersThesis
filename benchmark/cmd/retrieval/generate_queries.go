@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
 )
 
@@ -47,12 +46,10 @@ func generateQueries(ctx context.Context, probesPath, outPath string) error {
 		ProbesFile:   filepath.ToSlash(probesPath),
 		ProbesSHA256: probesSHA256,
 		Instruction:  evaluation.QueryInstruction(),
+		Model:        client.Metadata(),
 		Temperature:  queryTemperature,
 		Seed:         querySeed,
 		Probes:       generated,
-	}
-	if provider, ok := client.(inference.MetadataProvider); ok {
-		set.Model = provider.Metadata()
 	}
 	return evaluation.WriteQuerySet(outPath, set)
 }

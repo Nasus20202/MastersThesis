@@ -47,7 +47,7 @@ func TestModelArtifactAndRuntimeSettings(t *testing.T) {
 	t.Setenv(envLlamaDraftFile, "MTP/drafter.gguf")
 	t.Setenv(envLlamaDraftSHA256, "draft-hash")
 
-	assert.Equal(t, "google/gemma@revision/gemma.gguf", modelArtifact())
+	assert.Equal(t, "google/gemma@revision/gemma.gguf", artifact(envLlamaModelRepository, envLlamaModelRevision, envLlamaModelFile))
 	settings := runtimeSettings()
 	assert.Equal(t, "32768", settings[envLlamaKVUnified])
 	assert.Equal(t, "on", settings[envLlamaReasoning])
