@@ -19,4 +19,5 @@
 - [Prompt selection](research/prompt-selection/README.md) — six troubleshooting prompts and two follow-up combinations compared on the development scenarios, with attempt-level evidence.
 - [Skills development evaluation](research/skills-development-evaluation/README.md) — first baseline/prompt/skill comparison and the skill-only follow-up iterations, with raw evidence and configuration snapshots.
 - [Multi-token prediction draft-length tuning](research/speculative-decoding/README.md) — throughput and draft-acceptance sweep over MTP off and draft lengths 1–4 for the four served models, selecting a per-model `--spec-draft-n-max`.
+- [Retrieval design](research/retrieval-design/README.md) — lexical, semantic and hybrid search × two chunkings × top-k on the knowledge-check probes, selecting the RAG retrieval configuration, with frozen queries and raw evidence.
 - [Skills optimization](research/skills-optimization/README.md) — pruning unused skills and adding procedural subsystem skills, compared across a stratified 18-scenario subset and full 46-scenario runs to freeze the best observed skill configuration.
