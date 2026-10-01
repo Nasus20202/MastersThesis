@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
@@ -34,11 +33,11 @@ func buildIndexes(ctx context.Context, configPaths []string, chunkingValue strin
 		}
 		chunkings = []retrieval.Chunking{chunking}
 	}
-	checkout, subtree, revision, err := corpusCheckout(ctx)
+	files, subtree, revision, err := corpusCheckout(ctx)
 	if err != nil {
 		return err
 	}
-	documents, err := retrieval.LoadCorpus(os.DirFS(checkout), subtree)
+	documents, err := retrieval.LoadCorpus(files, subtree)
 	if err != nil {
 		return err
 	}

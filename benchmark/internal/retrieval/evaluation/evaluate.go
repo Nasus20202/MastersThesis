@@ -28,31 +28,37 @@ type QueryResult struct {
 	Hits       []retrieval.Hit    `json:"hits"`
 }
 
+// Scores are hit@k, reciprocal rank and hit@k on the probe's own sources.
+// Averaged over queries or probes, RR becomes MRR.
+type Scores struct {
+	Hit        float64 `json:"hit"`
+	RR         float64 `json:"rr"`
+	PrimaryHit float64 `json:"primary_hit"`
+}
+
+func (s *Scores) addScaled(other Scores, weight float64) {
+	s.Hit += other.Hit * weight
+	s.RR += other.RR * weight
+	s.PrimaryHit += other.PrimaryHit * weight
+}
+
 // Rewrite scores are means over the probe's rewritten queries.
 type ProbeScore struct {
-	ProbeID           string  `json:"probe_id"`
-	HitAsIs           float64 `json:"hit_as_is"`
-	RRAsIs            float64 `json:"rr_as_is"`
-	PrimaryHitAsIs    float64 `json:"primary_hit_as_is"`
-	HitRewrite        float64 `json:"hit_rewrite"`
-	RRRewrite         float64 `json:"rr_rewrite"`
-	PrimaryHitRewrite float64 `json:"primary_hit_rewrite"`
+	ProbeID string `json:"probe_id"`
+	AsIs    Scores `json:"as_is"`
+	Rewrite Scores `json:"rewrite"`
 }
 
 // ConfigScore averages ProbeScore over probes. Truncated counts results the
 // model-visible cap would have cut.
 type ConfigScore struct {
-	Mode              retrieval.Mode     `json:"mode"`
-	Chunking          retrieval.Chunking `json:"chunking"`
-	K                 int                `json:"k"`
-	HitAsIs           float64            `json:"hit_as_is"`
-	MRRAsIs           float64            `json:"mrr_as_is"`
-	PrimaryHitAsIs    float64            `json:"primary_hit_as_is"`
-	HitRewrite        float64            `json:"hit_rewrite"`
-	MRRRewrite        float64            `json:"mrr_rewrite"`
-	PrimaryHitRewrite float64            `json:"primary_hit_rewrite"`
-	Truncated         int                `json:"truncated"`
-	Probes            []ProbeScore       `json:"probes"`
+	Mode      retrieval.Mode     `json:"mode"`
+	Chunking  retrieval.Chunking `json:"chunking"`
+	K         int                `json:"k"`
+	AsIs      Scores             `json:"as_is"`
+	Rewrite   Scores             `json:"rewrite"`
+	Truncated int                `json:"truncated"`
+	Probes    []ProbeScore       `json:"probes"`
 }
 
 func (s ConfigScore) Name() string {
@@ -108,7 +114,7 @@ func scoreConfig(mode retrieval.Mode, chunking retrieval.Chunking, k int, probes
 	score := ConfigScore{Mode: mode, Chunking: chunking, K: k}
 	for _, probe := range probes {
 		probeScore := ProbeScore{ProbeID: probe.ID}
-		rewrites := 0
+		var rewrites []Scores
 		for _, result := range results {
 			if result.ProbeID != probe.ID {
 				continue
@@ -118,31 +124,21 @@ func scoreConfig(mode retrieval.Mode, chunking retrieval.Chunking, k int, probes
 				score.Truncated++
 			}
 			rr := reciprocalRank(hits, probe.Relevant)
-			hit, primary := indicator(rr > 0), indicator(reciprocalRank(hits, probe.Primary) > 0)
+			scores := Scores{Hit: indicator(rr > 0), RR: rr, PrimaryHit: indicator(reciprocalRank(hits, probe.Primary) > 0)}
 			if result.Form == AsIs {
-				probeScore.HitAsIs, probeScore.RRAsIs, probeScore.PrimaryHitAsIs = hit, rr, primary
-				continue
+				probeScore.AsIs = scores
+			} else {
+				rewrites = append(rewrites, scores)
 			}
-			rewrites++
-			probeScore.HitRewrite += hit
-			probeScore.RRRewrite += rr
-			probeScore.PrimaryHitRewrite += primary
 		}
-		if rewrites > 0 {
-			probeScore.HitRewrite /= float64(rewrites)
-			probeScore.RRRewrite /= float64(rewrites)
-			probeScore.PrimaryHitRewrite /= float64(rewrites)
+		for _, rewrite := range rewrites {
+			probeScore.Rewrite.addScaled(rewrite, 1/float64(len(rewrites)))
 		}
 		score.Probes = append(score.Probes, probeScore)
 	}
-	count := float64(len(score.Probes))
 	for _, probe := range score.Probes {
-		score.HitAsIs += probe.HitAsIs / count
-		score.MRRAsIs += probe.RRAsIs / count
-		score.PrimaryHitAsIs += probe.PrimaryHitAsIs / count
-		score.HitRewrite += probe.HitRewrite / count
-		score.MRRRewrite += probe.RRRewrite / count
-		score.PrimaryHitRewrite += probe.PrimaryHitRewrite / count
+		score.AsIs.addScaled(probe.AsIs, 1/float64(len(score.Probes)))
+		score.Rewrite.addScaled(probe.Rewrite, 1/float64(len(score.Probes)))
 	}
 	return score
 }

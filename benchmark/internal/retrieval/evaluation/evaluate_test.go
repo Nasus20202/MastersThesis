@@ -58,9 +58,9 @@ func TestEvaluateScoresEveryConfiguration(t *testing.T) {
 
 	lexical := report.Configs[0]
 	assert.Equal(t, "lexical/sections/k=3", lexical.Name())
-	assert.Equal(t, 1.0, lexical.HitAsIs)
-	assert.Equal(t, 0.5, lexical.HitRewrite)
-	assert.Equal(t, 0.5, lexical.PrimaryHitRewrite)
+	assert.Equal(t, 1.0, lexical.AsIs.Hit)
+	assert.Equal(t, 0.5, lexical.Rewrite.Hit)
+	assert.Equal(t, 0.5, lexical.Rewrite.PrimaryHit)
 	assert.Equal(t, 0, lexical.Truncated)
 	// One index build call plus one call per distinct query.
 	assert.Equal(t, 1+3, embedder.calls)
@@ -68,10 +68,10 @@ func TestEvaluateScoresEveryConfiguration(t *testing.T) {
 
 func TestSelectAppliesTieRule(t *testing.T) {
 	configs := []ConfigScore{
-		{Mode: retrieval.Hybrid, Chunking: retrieval.Sections, K: 5, HitRewrite: 0.90, MRRRewrite: 0.70},
-		{Mode: retrieval.Semantic, Chunking: retrieval.Windows, K: 3, HitRewrite: 0.87, MRRRewrite: 0.70},
-		{Mode: retrieval.Lexical, Chunking: retrieval.Sections, K: 3, HitRewrite: 0.80, MRRRewrite: 0.95},
-		{Mode: retrieval.Lexical, Chunking: retrieval.Windows, K: 3, HitRewrite: 0.86, MRRRewrite: 0.70},
+		{Mode: retrieval.Hybrid, Chunking: retrieval.Sections, K: 5, Rewrite: Scores{Hit: 0.90, RR: 0.70}},
+		{Mode: retrieval.Semantic, Chunking: retrieval.Windows, K: 3, Rewrite: Scores{Hit: 0.87, RR: 0.70}},
+		{Mode: retrieval.Lexical, Chunking: retrieval.Sections, K: 3, Rewrite: Scores{Hit: 0.80, RR: 0.95}},
+		{Mode: retrieval.Lexical, Chunking: retrieval.Windows, K: 3, Rewrite: Scores{Hit: 0.86, RR: 0.70}},
 	}
 	// With 24 probes 0.87 and 0.86 tie with 0.90; equal MRR then prefers k=3
 	// and lexical. 0.80 is more than one probe behind.

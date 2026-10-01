@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -41,20 +42,20 @@ func loadSettings(paths []string) (settings, error) {
 	return result, nil
 }
 
-// corpusCheckout returns the checkout directory and subtree after verifying
-// the checkout is at the pinned revision.
-func corpusCheckout(ctx context.Context) (string, string, string, error) {
+// corpusCheckout verifies the checkout is at the pinned revision and returns
+// its files, the corpus subtree and the revision.
+func corpusCheckout(ctx context.Context) (fs.FS, string, string, error) {
 	dir, subtree, pinned := os.Getenv("CORPUS_DIR"), os.Getenv("CORPUS_SUBTREE"), os.Getenv("CORPUS_REVISION")
 	if dir == "" || subtree == "" || pinned == "" {
-		return "", "", "", errors.New("CORPUS_DIR, CORPUS_SUBTREE and CORPUS_REVISION are required")
+		return nil, "", "", errors.New("CORPUS_DIR, CORPUS_SUBTREE and CORPUS_REVISION are required")
 	}
 	checkout := filepath.Join(dir, "website")
 	revision, err := retrieval.CheckoutRevision(ctx, checkout)
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w (run make corpus-download)", err)
+		return nil, "", "", fmt.Errorf("%w (run make corpus-download)", err)
 	}
 	if revision != pinned {
-		return "", "", "", fmt.Errorf("corpus checkout is at %s, want %s", revision, pinned)
+		return nil, "", "", fmt.Errorf("corpus checkout is at %s, want %s", revision, pinned)
 	}
-	return checkout, subtree, pinned, nil
+	return os.DirFS(checkout), subtree, pinned, nil
 }

@@ -94,8 +94,8 @@ func printReport(output io.Writer, report evaluation.Report) {
 	fmt.Fprintln(table, "config\thit@k rewrite\tMRR rewrite\tprimary rewrite\thit@k as-is\tMRR as-is\tprimary as-is\ttruncated\t")
 	for _, config := range report.Configs {
 		fmt.Fprintf(table, "%s\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t\n", config.Name(),
-			config.HitRewrite, config.MRRRewrite, config.PrimaryHitRewrite,
-			config.HitAsIs, config.MRRAsIs, config.PrimaryHitAsIs, config.Truncated)
+			config.Rewrite.Hit, config.Rewrite.RR, config.Rewrite.PrimaryHit,
+			config.AsIs.Hit, config.AsIs.RR, config.AsIs.PrimaryHit, config.Truncated)
 	}
 	_ = table.Flush()
 	fmt.Fprintf(output, "\nselected: %s\n", report.Selected.Name())

@@ -59,6 +59,28 @@ func openDB(ctx context.Context, dataSource string) (*sql.DB, error) {
 // BuildIndex writes the index to a temporary file and renames it to path only
 // when complete, so an interrupted build never leaves a usable partial index.
 func BuildIndex(ctx context.Context, path string, documents []Document, chunking Chunking, embedder inference.Embedder, metadata IndexMetadata) (IndexMetadata, error) {
+	chunked := make([][]Chunk, len(documents))
+	var chunks []Chunk
+	for index, document := range documents {
+		chunked[index] = ChunkDocument(document, chunking)
+		chunks = append(chunks, chunked[index]...)
+	}
+	if len(chunks) == 0 {
+		return IndexMetadata{}, errors.New("no chunks to index")
+	}
+	embeddings, err := embedChunks(ctx, embedder, chunks)
+	if err != nil {
+		return IndexMetadata{}, err
+	}
+	metadata.Chunking = chunking
+	metadata.MaxChunkBytes = MaxChunkBytes
+	if chunking == Windows {
+		metadata.WindowOverlap = WindowOverlap
+	}
+	metadata.Documents = len(documents)
+	metadata.Chunks = len(chunks)
+	metadata.Dimensions = len(embeddings[0])
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return IndexMetadata{}, err
 	}
@@ -71,14 +93,7 @@ func BuildIndex(ctx context.Context, path string, documents []Document, chunking
 		return IndexMetadata{}, err
 	}
 	defer db.Close()
-
-	metadata.Chunking = chunking
-	metadata.MaxChunkBytes = MaxChunkBytes
-	if chunking == Windows {
-		metadata.WindowOverlap = WindowOverlap
-	}
-	metadata.Documents = len(documents)
-	if err := writeIndex(ctx, db, documents, embedder, &metadata); err != nil {
+	if err := writeIndex(ctx, db, documents, chunked, embeddings, metadata); err != nil {
 		return IndexMetadata{}, err
 	}
 	if err := db.Close(); err != nil {
@@ -87,9 +102,14 @@ func BuildIndex(ctx context.Context, path string, documents []Document, chunking
 	return metadata, os.Rename(partial, path)
 }
 
-func writeIndex(ctx context.Context, db *sql.DB, documents []Document, embedder inference.Embedder, metadata *IndexMetadata) error {
+// writeIndex numbers documents and chunks from 1 in input order; a chunk's
+// vector shares its ID.
+func writeIndex(ctx context.Context, db *sql.DB, documents []Document, chunked [][]Chunk, embeddings [][]float32, metadata IndexMetadata) error {
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("create index schema: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(createVectorsSQL, metadata.Dimensions)); err != nil {
+		return fmt.Errorf("create vector table: %w", err)
 	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -97,31 +117,32 @@ func writeIndex(ctx context.Context, db *sql.DB, documents []Document, embedder 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var chunks []Chunk
+	chunkID := 0
 	for documentIndex, document := range documents {
 		documentID := documentIndex + 1
 		if _, err := tx.ExecContext(ctx, insertDocumentSQL, documentID, document.Path, document.BlobSHA, document.Title); err != nil {
 			return fmt.Errorf("insert document %s: %w", document.Path, err)
 		}
-		for _, chunk := range ChunkDocument(document, metadata.Chunking) {
-			chunks = append(chunks, chunk)
-			chunkID := len(chunks)
+		for _, chunk := range chunked[documentIndex] {
+			embedding := embeddings[chunkID]
+			chunkID++
+			if len(embedding) != metadata.Dimensions {
+				return fmt.Errorf("embedding of chunk %d has %d dimensions, want %d", chunkID, len(embedding), metadata.Dimensions)
+			}
+			blob, err := vec.SerializeFloat32(embedding)
+			if err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, insertChunkSQL, chunkID, documentID, chunk.Headings, chunk.Body); err != nil {
 				return fmt.Errorf("insert chunk of %s: %w", document.Path, err)
 			}
 			if _, err := tx.ExecContext(ctx, insertChunkTextSQL, chunkID, chunk.Title, chunk.Headings, chunk.Body); err != nil {
 				return fmt.Errorf("insert chunk text of %s: %w", document.Path, err)
 			}
+			if _, err := tx.ExecContext(ctx, insertVectorSQL, chunkID, blob); err != nil {
+				return fmt.Errorf("insert embedding of chunk %d: %w", chunkID, err)
+			}
 		}
-	}
-	metadata.Chunks = len(chunks)
-
-	embeddings, err := embedChunks(ctx, embedder, chunks)
-	if err != nil {
-		return err
-	}
-	if err := writeVectors(ctx, tx, embeddings, metadata); err != nil {
-		return err
 	}
 	encoded, err := json.Marshal(metadata)
 	if err != nil {
@@ -131,30 +152,6 @@ func writeIndex(ctx context.Context, db *sql.DB, documents []Document, embedder 
 		return err
 	}
 	return tx.Commit()
-}
-
-// writeVectors stores embeddings under their chunk IDs, which start at 1.
-func writeVectors(ctx context.Context, tx *sql.Tx, embeddings [][]float32, metadata *IndexMetadata) error {
-	if len(embeddings) == 0 {
-		return errors.New("no chunks to index")
-	}
-	metadata.Dimensions = len(embeddings[0])
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf(createVectorsSQL, metadata.Dimensions)); err != nil {
-		return fmt.Errorf("create vector table: %w", err)
-	}
-	for index, embedding := range embeddings {
-		if len(embedding) != metadata.Dimensions {
-			return fmt.Errorf("embedding of chunk %d has %d dimensions, want %d", index+1, len(embedding), metadata.Dimensions)
-		}
-		blob, err := vec.SerializeFloat32(embedding)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, insertVectorSQL, index+1, blob); err != nil {
-			return fmt.Errorf("insert embedding of chunk %d: %w", index+1, err)
-		}
-	}
-	return nil
 }
 
 func OpenIndex(ctx context.Context, path string) (*Index, error) {
