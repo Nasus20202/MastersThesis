@@ -151,6 +151,21 @@ Four tabs (**Runs**, **Agents**, **Tasks**, **Totals**) aggregate the whole
 history; at 112+ columns the list sits beside a dashboard. `/` filters by
 scenario tags.
 
+## Run analysis
+
+`cmd/analyze` scores finished runs evaluator-side: per condition the macro
+score, full successes, mean turns and tokens, per-criterion pass rates and, for
+the RAG condition, search use and whether each search returned the scenario's
+`source.md` page. With `--reference` it compares on the same scenarios and
+reports a paired bootstrap interval for the macro difference.
+
+```sh
+make analyze-runs ANALYZE_ARGS='--condition RUN/rag --reference RUN/prompt --out DIR'
+```
+
+`--subset FILE` restricts the analysis to the scenario paths listed in a file,
+and `--out` writes `summary.json` and one line per attempt to `attempts.jsonl`.
+
 ## Development
 
 ```sh
