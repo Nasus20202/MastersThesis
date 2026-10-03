@@ -1,0 +1,340 @@
+diff --git a/benchmark/cmd/benchmark/agent/search.go b/benchmark/cmd/benchmark/agent/search.go
+index 35e0988..a86960e 100644
+--- a/benchmark/cmd/benchmark/agent/search.go
++++ b/benchmark/cmd/benchmark/agent/search.go
+@@ -8,6 +8,7 @@ import (
+ 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
+ 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/retrievalenv"
+ 	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
++	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
+ 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+ 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
+ )
+@@ -39,6 +40,12 @@ func OpenSearch(ctx context.Context, values benchmarkconfig.RetrievalConfig) (*r
+ 		return nil, results.RetrievalProvenance{}, err
+ 	}
+ 	search := &ragagent.Search{Index: index, Embedder: embedder, Mode: settings.Mode, TopK: settings.TopK, MaxBytes: settings.MaxBytes}
++	if settings.Outlined {
++		if search.Outlines, err = loadOutlines(ctx, settings.IndexDir, embedding); err != nil {
++			_ = index.Close()
++			return nil, results.RetrievalProvenance{}, err
++		}
++	}
+ 	provenance := results.RetrievalProvenance{
+ 		Mode:              string(settings.Mode),
+ 		Chunking:          string(settings.Chunking),
+@@ -48,6 +55,18 @@ func OpenSearch(ctx context.Context, values benchmarkconfig.RetrievalConfig) (*r
+ 		CorpusRevision:    index.Metadata().CorpusRevision,
+ 		EmbeddingArtifact: embedding.Artifact,
+ 		EmbeddingSHA256:   embedding.SHA256,
++		Outlined:          settings.Outlined,
+ 	}
+ 	return search, provenance, nil
+ }
++
++// loadOutlines reads page headings from the sections index, which has one
++// chunk per section, unlike windows that record only the heading they start in.
++func loadOutlines(ctx context.Context, dir string, embedding inference.Metadata) (map[string][]string, error) {
++	index, err := retrievalenv.OpenIndex(ctx, retrieval.IndexPath(dir, retrieval.Sections), embedding)
++	if err != nil {
++		return nil, err
++	}
++	defer index.Close()
++	return index.Outlines(ctx)
++}
+diff --git a/benchmark/cmd/internal/config/config.go b/benchmark/cmd/internal/config/config.go
+index 1a87ed4..28ceac4 100644
+--- a/benchmark/cmd/internal/config/config.go
++++ b/benchmark/cmd/internal/config/config.go
+@@ -26,6 +26,8 @@ type RetrievalConfig struct {
+ 	TopK     *int   `yaml:"top_k,omitempty"`
+ 	MaxBytes *int   `yaml:"max_bytes,omitempty"`
+ 	IndexDir string `yaml:"index_dir,omitempty"`
++	// Presentation "outlined" selects retrieval.RenderOutlined.
++	Presentation string `yaml:"presentation,omitempty"`
+ }
+ 
+ type ContainersConfig struct {
+diff --git a/benchmark/cmd/internal/retrievalenv/retrievalenv.go b/benchmark/cmd/internal/retrievalenv/retrievalenv.go
+index 373612a..39235f3 100644
+--- a/benchmark/cmd/internal/retrievalenv/retrievalenv.go
++++ b/benchmark/cmd/internal/retrievalenv/retrievalenv.go
+@@ -20,6 +20,7 @@ type Settings struct {
+ 	TopK     int
+ 	MaxBytes int
+ 	IndexDir string
++	Outlined bool
+ }
+ 
+ func Load(values benchmarkconfig.RetrievalConfig) (Settings, error) {
+@@ -30,6 +31,13 @@ func Load(values benchmarkconfig.RetrievalConfig) (Settings, error) {
+ 	if result.TopK < 1 || result.MaxBytes < 1 {
+ 		return Settings{}, errors.New("retrieval.top_k and retrieval.max_bytes must be positive")
+ 	}
++	switch values.Presentation {
++	case "":
++	case "outlined":
++		result.Outlined = true
++	default:
++		return Settings{}, fmt.Errorf("unsupported retrieval presentation %q", values.Presentation)
++	}
+ 	var err error
+ 	if result.Mode, err = retrieval.ParseMode(values.Mode); err != nil {
+ 		return Settings{}, err
+diff --git a/benchmark/internal/agent/rag/rag.go b/benchmark/internal/agent/rag/rag.go
+index 24e609b..f18f8e7 100644
+--- a/benchmark/internal/agent/rag/rag.go
++++ b/benchmark/internal/agent/rag/rag.go
+@@ -31,6 +31,8 @@ type Search struct {
+ 	Mode     retrieval.Mode
+ 	TopK     int
+ 	MaxBytes int
++	// Outlines, when set, selects retrieval.RenderOutlined.
++	Outlines map[string][]string
+ }
+ 
+ // New builds the RAG condition. A blank systemPrompt uses the embedded
+@@ -85,5 +87,8 @@ func (t searchTool) Execute(ctx context.Context, call inference.ToolCall) common
+ 		return common.ToolResult{Content: err.Error(), Details: SearchEvidence{Query: query}, Error: err}
+ 	}
+ 	content, truncated := retrieval.Render(hits, t.search.MaxBytes)
++	if t.search.Outlines != nil {
++		content, truncated = retrieval.RenderOutlined(hits, t.search.MaxBytes, t.search.Outlines)
++	}
+ 	return common.ToolResult{Content: content, Details: SearchEvidence{Query: query, Truncated: truncated, Hits: hits}}
+ }
+diff --git a/benchmark/internal/results/results.go b/benchmark/internal/results/results.go
+index ee1a143..4050cb3 100644
+--- a/benchmark/internal/results/results.go
++++ b/benchmark/internal/results/results.go
+@@ -38,6 +38,7 @@ type RetrievalProvenance struct {
+ 	CorpusRevision    string `json:"corpus_revision"`
+ 	EmbeddingArtifact string `json:"embedding_artifact"`
+ 	EmbeddingSHA256   string `json:"embedding_sha256"`
++	Outlined          bool   `json:"outlined,omitempty"`
+ }
+ 
+ type RunType string
+diff --git a/benchmark/internal/retrieval/index.go b/benchmark/internal/retrieval/index.go
+index 1454d64..a2281be 100644
+--- a/benchmark/internal/retrieval/index.go
++++ b/benchmark/internal/retrieval/index.go
+@@ -11,6 +11,7 @@ import (
+ 	"io"
+ 	"os"
+ 	"path/filepath"
++	"slices"
+ 	"sync"
+ 
+ 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+@@ -205,3 +206,23 @@ func FileSHA256(path string) (string, error) {
+ 	}
+ 	return hex.EncodeToString(hash.Sum(nil)), nil
+ }
++
++// Outlines lists each document's section headings in document order.
++func (i *Index) Outlines(ctx context.Context) (map[string][]string, error) {
++	rows, err := i.db.QueryContext(ctx, selectOutlinesSQL)
++	if err != nil {
++		return nil, fmt.Errorf("load outlines: %w", err)
++	}
++	defer rows.Close()
++	outlines := make(map[string][]string)
++	for rows.Next() {
++		var path, headings string
++		if err := rows.Scan(&path, &headings); err != nil {
++			return nil, err
++		}
++		if !slices.Contains(outlines[path], headings) {
++			outlines[path] = append(outlines[path], headings)
++		}
++	}
++	return outlines, rows.Err()
++}
+diff --git a/benchmark/internal/retrieval/render.go b/benchmark/internal/retrieval/render.go
+index f4067fa..fe90529 100644
+--- a/benchmark/internal/retrieval/render.go
++++ b/benchmark/internal/retrieval/render.go
+@@ -2,23 +2,51 @@ package retrieval
+ 
+ import (
+ 	"fmt"
++	"html"
++	"regexp"
+ 	"strings"
+ )
+ 
+ const (
+ 	noResults      = "No documentation matched the query."
+ 	truncatedLabel = "\n[truncated]"
++	// maxOutlineBytes bounds one page's section list so the excerpts keep
++	// most of the result budget.
++	maxOutlineBytes = 600
+ )
+ 
+ // Render formats hits as the model-visible search result of at most maxBytes
+ // and reports whether the cap cut it.
+ func Render(hits []Hit, maxBytes int) (string, bool) {
++	return render(hits, maxBytes, nil)
++}
++
++// RenderOutlined is Render with HTML reduced to plain text and, after the
++// first excerpt from each page, the page's section headings, so the model can
++// see what else the page covers and search for it.
++func RenderOutlined(hits []Hit, maxBytes int, outlines map[string][]string) (string, bool) {
++	if outlines == nil {
++		outlines = map[string][]string{}
++	}
++	return render(hits, maxBytes, outlines)
++}
++
++func render(hits []Hit, maxBytes int, outlines map[string][]string) (string, bool) {
+ 	if len(hits) == 0 {
+ 		return noResults, false
+ 	}
+ 	blocks := make([]string, len(hits))
++	listed := map[string]bool{}
+ 	for index, hit := range hits {
+-		blocks[index] = fmt.Sprintf("[%d] %s", hit.Rank, hit.Chunk.Rendered())
++		text := hit.Chunk.Rendered()
++		if outlines != nil {
++			text = plainText(text)
++			if !listed[hit.Chunk.Path] {
++				listed[hit.Chunk.Path] = true
++				text += outline(outlines[hit.Chunk.Path])
++			}
++		}
++		blocks[index] = fmt.Sprintf("[%d] %s", hit.Rank, text)
+ 	}
+ 	result := strings.Join(blocks, "\n\n")
+ 	if len(result) <= maxBytes {
+@@ -27,3 +55,59 @@ func Render(hits []Hit, maxBytes int) (string, bool) {
+ 	cut := max(maxBytes-len(truncatedLabel), 0)
+ 	return result[:runeBoundary(result, cut)] + truncatedLabel, true
+ }
++
++func outline(headings []string) string {
++	if len(headings) == 0 {
++		return ""
++	}
++	var listed strings.Builder
++	for _, heading := range headings {
++		// Two levels name what a page covers; deeper ones are mostly API
++		// operation details.
++		if strings.Count(heading, " > ") > 1 {
++			continue
++		}
++		heading = headingAnchor.ReplaceAllString(heading, "")
++		if strings.Contains(listed.String(), heading+"; ") {
++			continue
++		}
++		if listed.Len()+len(heading) > maxOutlineBytes {
++			listed.WriteString("...")
++			break
++		}
++		listed.WriteString(heading + "; ")
++	}
++	return "\nSections of this page: " + strings.TrimSuffix(listed.String(), "; ")
++}
++
++var (
++	headingAnchor = regexp.MustCompile(`\s*\{#[^}]*\}`)
++	cellBoundary = regexp.MustCompile(`(?i)</t[hd]>\s*<t[hd][^>]*>`)
++	// htmlTag lists the tags the corpus uses for tables, links and inline
++	// formatting, so placeholders such as <name> in prose are kept.
++	htmlTag = regexp.MustCompile(`(?i)</?(?:table|thead|tbody|tfoot|tr|th|td|caption|colgroup|col|a|br|hr|p|div|span|code|em|strong|b|i|ul|ol|li|sup|sub)\b[^>]*>`)
++)
++
++// plainText turns the HTML some pages keep, mostly API reference tables, into
++// plain lines (table cells joined by " | "), leaving code fences unchanged.
++func plainText(text string) string {
++	lines := strings.Split(text, "\n")
++	kept := lines[:0]
++	fenced := false
++	for _, line := range lines {
++		if strings.HasPrefix(strings.TrimSpace(line), "```") {
++			fenced = !fenced
++		}
++		if fenced || !strings.Contains(line, "<") {
++			kept = append(kept, line)
++			continue
++		}
++		plain := htmlTag.ReplaceAllString(cellBoundary.ReplaceAllString(line, " | "), "")
++		plain = strings.TrimRight(html.UnescapeString(plain), " \t")
++		if strings.TrimSpace(plain) == "" && strings.TrimSpace(line) != "" {
++			continue
++		}
++		kept = append(kept, plain)
++	}
++	return strings.Join(kept, "\n")
++}
+diff --git a/benchmark/internal/retrieval/search_test.go b/benchmark/internal/retrieval/search_test.go
+index 4ad5dd0..571f367 100644
+--- a/benchmark/internal/retrieval/search_test.go
++++ b/benchmark/internal/retrieval/search_test.go
+@@ -116,6 +116,28 @@ func TestRenderCapsModelVisibleResult(t *testing.T) {
+ 	assert.Equal(t, noResults, rendered)
+ }
+ 
++func TestRenderOutlinedListsEachPageOnceAsPlainText(t *testing.T) {
++	hits := []Hit{
++		{Rank: 1, Chunk: Chunk{Path: "docs/a.md", Title: "A", Body: "<tr><td><code>spec</code></td><td>Desired &amp; state</td></tr>\n```\n<keep>\n```"}},
++		{Rank: 2, Chunk: Chunk{Path: "docs/a.md", Title: "A", Headings: "Sub", Body: "Use <name>."}},
++	}
++	outlines := map[string][]string{"docs/a.md": {"Spec {#spec}", "Spec > Taints", "Spec > Taints > Effects"}}
++	rendered, truncated := RenderOutlined(hits, 1000, outlines)
++	assert.False(t, truncated)
++	assert.Equal(t, "[1] docs/a.md\nA\nspec | Desired & state\n```\n<keep>\n```\nSections of this page: Spec; Spec > Taints\n\n[2] docs/a.md\nA > Sub\nUse <name>.", rendered)
++
++	long := map[string][]string{"docs/a.md": {"Spec", strings.Repeat("x", maxOutlineBytes)}}
++	rendered, _ = RenderOutlined(hits[:1], 10000, long)
++	assert.True(t, strings.HasSuffix(rendered, "Sections of this page: Spec; ..."))
++}
++
++func TestOutlinesListDistinctHeadingsPerPage(t *testing.T) {
++	outlines, err := buildTestIndex(t, &topicEmbedder{}).Outlines(context.Background())
++	require.NoError(t, err)
++	assert.Equal(t, []string{"Claims"}, outlines["docs/storage.md"])
++	assert.Len(t, outlines, 3)
++}
++
+ func TestOpenIndexRejectsMissingFile(t *testing.T) {
+ 	_, err := OpenIndex(context.Background(), filepath.Join(t.TempDir(), "missing.sqlite"))
+ 	assert.Error(t, err)
+diff --git a/benchmark/internal/retrieval/sql.go b/benchmark/internal/retrieval/sql.go
+index d6e0c2f..c5c1731 100644
+--- a/benchmark/internal/retrieval/sql.go
++++ b/benchmark/internal/retrieval/sql.go
+@@ -25,4 +25,6 @@ var (
+ 	searchSemanticSQL string
+ 	//go:embed sql/select_chunks.sql
+ 	selectChunksSQL string
++	//go:embed sql/select_outlines.sql
++	selectOutlinesSQL string
+ )
+diff --git a/benchmark/internal/retrieval/sql/select_outlines.sql b/benchmark/internal/retrieval/sql/select_outlines.sql
+new file mode 100644
+index 0000000..1aea39d
+--- /dev/null
++++ b/benchmark/internal/retrieval/sql/select_outlines.sql
+@@ -0,0 +1,5 @@
++SELECT documents.path, chunks.headings
++FROM chunks
++JOIN documents ON documents.id = chunks.document_id
++WHERE chunks.headings != ''
++ORDER BY chunks.id;
+diff --git a/benchmark/schemas/config.schema.json b/benchmark/schemas/config.schema.json
+index 4694ac3..6157e98 100644
+--- a/benchmark/schemas/config.schema.json
++++ b/benchmark/schemas/config.schema.json
+@@ -86,6 +86,10 @@
+           "type": "string",
+           "minLength": 1,
+           "description": "Directory holding the rag-<chunking>.sqlite indexes, relative to the config file."
++        },
++        "presentation": {
++          "enum": ["outlined"],
++          "description": "Result presentation: omit for excerpts as indexed; outlined reduces HTML to plain text and lists each page's sections from the sections index."
+         }
+       }
+     }
