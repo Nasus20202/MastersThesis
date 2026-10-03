@@ -75,17 +75,24 @@ func TestFailedChangeInReadsCommandShapeAndErrorLine(t *testing.T) {
 
 func TestFailedChangeInIgnoresReadsSuccessesTimeoutsAndWarnings(t *testing.T) {
 	for name, evidence := range map[string]CommandEvidence{
-		"read":        {Command: "kubectl get deployment app", Stderr: "Error from server (NotFound): not found", ExitCode: 1},
-		"success":     {Command: "kubectl patch deployment app -p '{}'", Stdout: "deployment.apps/app patched", ExitCode: 0},
-		"timeout":     {Command: "kubectl delete pod app", Stderr: "", ExitCode: -1},
-		"dry run":     {Command: "kubectl apply --dry-run=server -f app.yaml", Stderr: "error: invalid", ExitCode: 1},
-		"only a warn": {Command: "kubectl delete pod app --force", Stderr: "Warning: Immediate deletion does not wait\n", ExitCode: 1},
+		"read":                                  {Command: "kubectl get deployment app", Stderr: "Error from server (NotFound): not found", ExitCode: 1},
+		"success":                               {Command: "kubectl patch deployment app -p '{}'", Stdout: "deployment.apps/app patched", ExitCode: 0},
+		"timeout":                               {Command: "kubectl delete pod app", Stderr: "", ExitCode: -1},
+		"dry run":                               {Command: "kubectl apply --dry-run=server -f app.yaml", Stderr: "error: invalid", ExitCode: 1},
+		"only a warn":                           {Command: "kubectl delete pod app --force", Stderr: "Warning: Immediate deletion does not wait\n", ExitCode: 1},
+		"write succeeded, later command failed": {Command: "kubectl apply -f app.yaml && grep ready status.txt", Stdout: "deployment.apps/app created\n", ExitCode: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, ok := FailedChangeIn(evidence)
 			assert.False(t, ok)
 		})
 	}
+}
+
+func TestFailedChangeInReadsRedirectedErrorFromStdout(t *testing.T) {
+	change, ok := FailedChangeIn(CommandEvidence{Command: "kubectl patch deployment app -p '{' 2>&1", Stdout: "Error from server (BadRequest): invalid JSON patch\n", ExitCode: 1})
+	assert.True(t, ok)
+	assert.Equal(t, "invalid JSON patch", change.Error)
 }
 
 func TestFailedChangeInCleansMultilineAndEchoedObjects(t *testing.T) {

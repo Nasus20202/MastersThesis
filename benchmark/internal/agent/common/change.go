@@ -47,6 +47,7 @@ var (
 	invalidKind      = regexp.MustCompile(`^The ([A-Za-z]+) "`)
 	quoted           = regexp.MustCompile(`"[^"]*"`)
 	shellQuoted      = regexp.MustCompile(`'[^']*'|"[^"]*"`)
+	stdoutError      = regexp.MustCompile(`^(?:Error from server|error:|The [A-Za-z]+ ".*" is invalid)`)
 	errorPrefix      = regexp.MustCompile(`^(Error from server \([A-Za-z]+\): |error: )`)
 	// objectDump is what remains of a rejected object echoed in the error
 	// once its quoted strings are removed, such as {:{:,:null,:30}}; the
@@ -73,10 +74,12 @@ func FailedChangeIn(evidence CommandEvidence) (FailedChange, bool) {
 	}
 	line := errorLine(evidence.Stderr)
 	if line == "" {
-		line = errorLine(evidence.Stdout)
-	}
-	if line == "" {
-		return FailedChange{}, false
+		// kubectl reports errors on stderr; stdout counts only when the agent
+		// redirected it and the line reads as an error, not as a success
+		// message of a write followed by another failing command.
+		if line = errorLine(evidence.Stdout); !stdoutError.MatchString(line) {
+			return FailedChange{}, false
+		}
 	}
 	change := FailedChange{Verb: args[0], Kind: commandKind(args, evidence.Command)}
 	if change.Kind == "" {
