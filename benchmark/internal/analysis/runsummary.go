@@ -45,12 +45,20 @@ type Difference struct {
 	High      float64 `json:"ci_high"`
 }
 
-// Usage is the mean model cost of an attempt, over attempts where the agent ran.
+// Usage is the mean model cost of an attempt and how the agent changed and
+// checked the cluster, over attempts where the agent ran. Unconfirmed counts
+// attempts the agent completed without full success: it reported a repair the
+// grader did not confirm.
 type Usage struct {
-	Attempts   int     `json:"attempts"`
-	Turns      float64 `json:"turns"`
-	Prompt     float64 `json:"prompt_tokens"`
-	Completion float64 `json:"completion_tokens"`
+	Attempts      int     `json:"attempts"`
+	Turns         float64 `json:"turns"`
+	Prompt        float64 `json:"prompt_tokens"`
+	Completion    float64 `json:"completion_tokens"`
+	Changes       int     `json:"changes"`
+	FailedChanges int     `json:"failed_changes"`
+	Edits         int     `json:"edits"`
+	RolloutStatus int     `json:"rollout_status_attempts"`
+	Unconfirmed   int     `json:"unconfirmed_attempts"`
 }
 
 // CriterionRate is the pass rate of one scenario criterion. Criterion IDs are
@@ -226,6 +234,15 @@ func usage(attempts []RunAttempt) Usage {
 		result.Turns += float64(attempt.Turns)
 		result.Prompt += float64(attempt.Prompt)
 		result.Completion += float64(attempt.Completion)
+		result.Changes += attempt.Changes
+		result.FailedChanges += attempt.FailedChanges
+		result.Edits += attempt.Edits
+		if attempt.RolloutStatus {
+			result.RolloutStatus++
+		}
+		if attempt.Termination == "completed" && !attempt.FullSuccess {
+			result.Unconfirmed++
+		}
 	}
 	if result.Attempts > 0 {
 		count := float64(result.Attempts)

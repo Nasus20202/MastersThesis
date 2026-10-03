@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,6 +95,33 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 
 	_, err = newRunAttempt("run", result, map[string]string{})
 	assert.Error(t, err)
+}
+
+func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
+	bash := func(command string, exitCode int) common.ToolCallEvidence {
+		arguments, _ := json.Marshal(map[string]string{"command": command})
+		return common.ToolCallEvidence{Call: inference.ToolCall{Name: "bash", Arguments: string(arguments)}, Details: map[string]any{"command": command, "exit_code": exitCode}}
+	}
+	result := results.AttemptResult{
+		ScenarioID: "app",
+		Grading:    orchestration.GradingResult{Score: 0.5},
+		Agent: &common.Result{Termination: "completed", ToolCalls: []common.ToolCallEvidence{
+			bash("kubectl edit deployment app", 1),
+			bash("kubectl patch deployment app --type merge -p '{}'", 1),
+			bash("kubectl set image deployment/app app=nginx && kubectl rollout status deployment/app --timeout=50s", 0),
+		}},
+	}
+
+	attempt, err := newRunAttempt("run", result, map[string]string{"app": "app.md"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, attempt.FirstChange)
+	assert.Equal(t, 3, attempt.Changes)
+	assert.Equal(t, 2, attempt.FailedChanges)
+	assert.Equal(t, 1, attempt.Edits)
+	assert.True(t, attempt.RolloutStatus)
+
+	usage := Summarize("prompt", []RunAttempt{attempt}, nil).Usage
+	assert.Equal(t, Usage{Attempts: 1, Changes: 3, FailedChanges: 2, Edits: 1, RolloutStatus: 1, Unconfirmed: 1}, usage)
 }
 
 func TestSummarizeGroupsAttemptsAndMatchesReferenceScenarios(t *testing.T) {

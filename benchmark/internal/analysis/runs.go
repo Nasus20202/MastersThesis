@@ -37,25 +37,32 @@ type Check struct {
 
 // RunAttempt joins one benchmark attempt with its scenario's evaluator-only
 // source reference. FirstChange is the 0-based tool-call index of the first
-// Bash command that changes the cluster, or -1.
+// Bash command that changes the cluster, or -1. Changes counts such commands
+// and FailedChanges those that exited non-zero; Edits counts `kubectl edit`,
+// which cannot work without an editor, and RolloutStatus records whether the
+// agent ran `kubectl rollout status`.
 type RunAttempt struct {
-	Run         string   `json:"run"`
-	Condition   string   `json:"condition"`
-	Scenario    string   `json:"scenario"`
-	Attempt     int      `json:"attempt"`
-	Score       float64  `json:"score"`
-	FullSuccess bool     `json:"full_success"`
-	Termination string   `json:"termination,omitempty"`
-	Error       bool     `json:"error,omitempty"`
-	AgentRan    bool     `json:"agent_ran"`
-	ToolCalls   int      `json:"tool_calls"`
-	Turns       int      `json:"turns"`
-	Prompt      int      `json:"prompt_tokens"`
-	Completion  int      `json:"completion_tokens"`
-	Criteria    []Check  `json:"criteria"`
-	FirstChange int      `json:"first_change"`
-	Source      string   `json:"source"`
-	Searches    []Search `json:"searches,omitempty"`
+	Run           string   `json:"run"`
+	Condition     string   `json:"condition"`
+	Scenario      string   `json:"scenario"`
+	Attempt       int      `json:"attempt"`
+	Score         float64  `json:"score"`
+	FullSuccess   bool     `json:"full_success"`
+	Termination   string   `json:"termination,omitempty"`
+	Error         bool     `json:"error,omitempty"`
+	AgentRan      bool     `json:"agent_ran"`
+	ToolCalls     int      `json:"tool_calls"`
+	Turns         int      `json:"turns"`
+	Prompt        int      `json:"prompt_tokens"`
+	Completion    int      `json:"completion_tokens"`
+	Criteria      []Check  `json:"criteria"`
+	FirstChange   int      `json:"first_change"`
+	Changes       int      `json:"changes"`
+	FailedChanges int      `json:"failed_changes"`
+	Edits         int      `json:"edits"`
+	RolloutStatus bool     `json:"rollout_status"`
+	Source        string   `json:"source"`
+	Searches      []Search `json:"searches,omitempty"`
 }
 
 func (a RunAttempt) SourceRetrieved() bool {
@@ -164,9 +171,16 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 			var arguments struct {
 				Command string `json:"command"`
 			}
-			if json.Unmarshal([]byte(call.Call.Arguments), &arguments) == nil && attempt.FirstChange < 0 && ChangesCluster(arguments.Command) {
-				attempt.FirstChange = index
+			if json.Unmarshal([]byte(call.Call.Arguments), &arguments) != nil {
+				continue
 			}
+			var output struct {
+				ExitCode int `json:"exit_code"`
+			}
+			if err := decodeDetails(call.Details, &output); err != nil {
+				return RunAttempt{}, fmt.Errorf("%s attempt %d: %w", result.ScenarioID, result.Attempt, err)
+			}
+			attempt.observeCommand(index, arguments.Command, output.ExitCode)
 		case SearchToolName:
 			search, err := newSearch(index, call.Details, source)
 			if err != nil {
@@ -180,16 +194,45 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 	return attempt, nil
 }
 
-// newSearch decodes the rag SearchEvidence recorded as tool call details.
-func newSearch(call int, details any, source string) (Search, error) {
-	search := Search{Call: call}
+func (a *RunAttempt) observeCommand(index int, command string, exitCode int) {
+	for _, args := range kubectlCommands(command) {
+		switch {
+		case writes(args):
+			if a.FirstChange < 0 {
+				a.FirstChange = index
+			}
+			a.Changes++
+			if exitCode != 0 {
+				a.FailedChanges++
+			}
+			if args[0] == "edit" {
+				a.Edits++
+			}
+		case len(args) > 1 && args[0] == "rollout" && args[1] == "status":
+			a.RolloutStatus = true
+		}
+	}
+}
+
+// decodeDetails decodes tool call details, a JSON object once loaded from an
+// attempt file; nil details leave target unchanged.
+func decodeDetails(details, target any) error {
 	if details == nil {
-		return search, nil
+		return nil
 	}
 	encoded, err := json.Marshal(details)
 	if err != nil {
-		return Search{}, err
+		return err
 	}
+	if err := json.Unmarshal(encoded, target); err != nil {
+		return fmt.Errorf("decode tool call details: %w", err)
+	}
+	return nil
+}
+
+// newSearch decodes the rag SearchEvidence recorded as tool call details.
+func newSearch(call int, details any, source string) (Search, error) {
+	search := Search{Call: call}
 	var evidence struct {
 		Query     string `json:"query"`
 		Truncated bool   `json:"truncated"`
@@ -200,8 +243,8 @@ func newSearch(call int, details any, source string) (Search, error) {
 			} `json:"chunk"`
 		} `json:"hits"`
 	}
-	if err := json.Unmarshal(encoded, &evidence); err != nil {
-		return Search{}, fmt.Errorf("decode search evidence: %w", err)
+	if err := decodeDetails(details, &evidence); err != nil {
+		return Search{}, err
 	}
 	search.Query = evidence.Query
 	search.Truncated = evidence.Truncated
@@ -228,8 +271,19 @@ var commandSeparator = regexp.MustCompile(`\|\||&&|[|;&\n]`)
 
 // ChangesCluster reports whether a Bash command runs a kubectl subcommand that
 // writes to the cluster. It is a heuristic over the command text, used only to
-// order searches against the first repair attempt.
+// order searches against the first repair attempt and to count changes.
 func ChangesCluster(command string) bool {
+	return slices.ContainsFunc(kubectlCommands(command), writes)
+}
+
+func writes(args []string) bool {
+	return changeVerbs[args[0]] || args[0] == "rollout" && len(args) > 1 && (args[1] == "restart" || args[1] == "undo")
+}
+
+// kubectlCommands returns the positional arguments of every kubectl
+// invocation in a shell command, skipping --dry-run invocations.
+func kubectlCommands(command string) [][]string {
+	var commands [][]string
 	for _, segment := range commandSeparator.Split(command, -1) {
 		if strings.Contains(segment, "--dry-run") {
 			continue
@@ -250,12 +304,9 @@ func ChangesCluster(command string) bool {
 			}
 			args = append(args, word)
 		}
-		if len(args) == 0 {
-			continue
-		}
-		if changeVerbs[args[0]] || args[0] == "rollout" && len(args) > 1 && (args[1] == "restart" || args[1] == "undo") {
-			return true
+		if len(args) > 0 {
+			commands = append(commands, args)
 		}
 	}
-	return false
+	return commands
 }

@@ -154,7 +154,9 @@ scenario tags.
 ## Run analysis
 
 `cmd/analyze` scores finished runs evaluator-side: per condition the macro
-score, full successes, mean turns and tokens, per-criterion pass rates and, for
+score, full successes, mean turns and tokens, how often `kubectl` changes
+failed, `kubectl edit` and `kubectl rollout status` use, per-criterion pass
+rates and, for
 the RAG condition, search use and whether each search returned the scenario's
 `source.md` page. With `--reference` it compares on the same scenarios and
 reports a paired bootstrap interval for the macro difference.
