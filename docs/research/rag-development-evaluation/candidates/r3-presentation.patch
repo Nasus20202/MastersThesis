@@ -1,0 +1,119 @@
+diff --git a/benchmark/internal/agent/rag/rag.go b/benchmark/internal/agent/rag/rag.go
+index 24e609b..6332386 100644
+--- a/benchmark/internal/agent/rag/rag.go
++++ b/benchmark/internal/agent/rag/rag.go
+@@ -54,8 +54,8 @@ type searchTool struct{ search *Search }
+ func (searchTool) Definition() inference.Tool {
+ 	return inference.Tool{
+ 		Name:        searchToolName,
+-		Description: "Search the official Kubernetes documentation and return the most relevant excerpts.",
+-		Parameters:  json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Short search query"}},"required":["query"],"additionalProperties":false}`),
++		Description: "Search the official Kubernetes documentation (concepts, tasks and API reference). Returns excerpts from the most relevant pages, each page once with its title, path and section headings.",
++		Parameters:  json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Short query naming the resource kind, the field or command, and the observed error or symptom"}},"required":["query"],"additionalProperties":false}`),
+ 	}
+ }
+ 
+diff --git a/benchmark/internal/retrieval/render.go b/benchmark/internal/retrieval/render.go
+index f4067fa..0bb728b 100644
+--- a/benchmark/internal/retrieval/render.go
++++ b/benchmark/internal/retrieval/render.go
+@@ -1,7 +1,10 @@
+ package retrieval
+ 
+ import (
++	"cmp"
+ 	"fmt"
++	"regexp"
++	"slices"
+ 	"strings"
+ )
+ 
+@@ -11,14 +14,25 @@ const (
+ )
+ 
+ // Render formats hits as the model-visible search result of at most maxBytes
+-// and reports whether the cap cut it.
++// and reports whether the cap cut it. Hits are grouped by page in rank order;
++// within a page, excerpts follow the page order and overlapping windows are
++// merged, so each page is shown once without repeated text.
+ func Render(hits []Hit, maxBytes int) (string, bool) {
+ 	if len(hits) == 0 {
+ 		return noResults, false
+ 	}
+-	blocks := make([]string, len(hits))
+-	for index, hit := range hits {
+-		blocks[index] = fmt.Sprintf("[%d] %s", hit.Rank, hit.Chunk.Rendered())
++	var pages [][]Hit
++	for _, hit := range hits {
++		index := slices.IndexFunc(pages, func(page []Hit) bool { return page[0].Chunk.Path == hit.Chunk.Path })
++		if index < 0 {
++			pages = append(pages, []Hit{hit})
++			continue
++		}
++		pages[index] = append(pages[index], hit)
++	}
++	blocks := make([]string, len(pages))
++	for index, page := range pages {
++		blocks[index] = renderPage(index+1, page)
+ 	}
+ 	result := strings.Join(blocks, "\n\n")
+ 	if len(result) <= maxBytes {
+@@ -27,3 +41,58 @@ func Render(hits []Hit, maxBytes int) (string, bool) {
+ 	cut := max(maxBytes-len(truncatedLabel), 0)
+ 	return result[:runeBoundary(result, cut)] + truncatedLabel, true
+ }
++
++// renderPage shows one page: its title and path, then each excerpt under its
++// heading path. Chunk IDs follow the page order within a document.
++func renderPage(number int, hits []Hit) string {
++	hits = slices.Clone(hits)
++	slices.SortFunc(hits, func(a, b Hit) int { return cmp.Compare(a.ChunkID, b.ChunkID) })
++	var builder strings.Builder
++	fmt.Fprintf(&builder, "[%d] %s (%s)", number, hits[0].Chunk.Title, hits[0].Chunk.Path)
++	var previous Hit
++	var body string
++	flush := func() {
++		if body == "" {
++			return
++		}
++		if headings := stripAnchors(previous.Chunk.Headings); headings != "" {
++			builder.WriteString("\n§ " + headings)
++		}
++		builder.WriteString("\n" + body)
++	}
++	for _, hit := range hits {
++		text := stripAnchors(hit.Chunk.Body)
++		adjacent := body != "" && hit.ChunkID == previous.ChunkID+1
++		if adjacent {
++			if merged, ok := joinOverlapping(body, text); ok {
++				body = merged
++				previous.ChunkID = hit.ChunkID
++				continue
++			}
++		}
++		flush()
++		if body != "" && !adjacent {
++			builder.WriteString("\n…")
++		}
++		previous, body = hit, text
++	}
++	flush()
++	return builder.String()
++}
++
++// joinOverlapping appends next to text without repeating the window overlap.
++// It fails when next does not start with a suffix of text, as for sections.
++func joinOverlapping(text, next string) (string, bool) {
++	for size := min(len(text), len(next), 2*WindowOverlap); size > 0; size-- {
++		if strings.HasSuffix(text, next[:size]) {
++			return text + next[size:], true
++		}
++	}
++	return "", false
++}
++
++var headingAnchor = regexp.MustCompile(`\s*\{#[^}]*\}`)
++
++func stripAnchors(text string) string {
++	return headingAnchor.ReplaceAllString(text, "")
++}
