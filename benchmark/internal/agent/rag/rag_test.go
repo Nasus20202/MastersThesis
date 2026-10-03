@@ -144,3 +144,67 @@ func TestSearchToolReportsErrors(t *testing.T) {
 	assert.True(t, strings.HasPrefix(result.Content, "search failed:"))
 	assert.Equal(t, "volume", result.Details.(SearchEvidence).Query)
 }
+
+func TestErrorSearchAttachesExcerptsOncePerQueryUpToTheCap(t *testing.T) {
+	failures := &errorSearch{search: testSearch(t)}
+	change := common.FailedChange{Verb: "patch", Kind: "persistentvolumeclaim", Error: "spec is immutable after creation"}
+
+	text, details := failures.hint(context.Background(), change)
+	assert.True(t, strings.HasPrefix(text, `Documentation for this error (search: "kubectl patch persistentvolumeclaim spec is immutable after creation"):`+"\n[1] "))
+	assert.Contains(t, text, "docs/storage.md")
+	evidence, ok := details.(SearchEvidence)
+	require.True(t, ok)
+	assert.Equal(t, "error", evidence.Trigger)
+	assert.Equal(t, change.Query(), evidence.Query)
+	assert.NotEmpty(t, evidence.Hits)
+
+	text, details = failures.hint(context.Background(), change)
+	assert.Empty(t, text)
+	assert.Nil(t, details)
+
+	for _, kind := range []string{"pod", "service"} {
+		text, _ = failures.hint(context.Background(), common.FailedChange{Verb: "patch", Kind: kind, Error: "invalid"})
+		assert.NotEmpty(t, text)
+	}
+	text, details = failures.hint(context.Background(), common.FailedChange{Verb: "patch", Kind: "job", Error: "invalid"})
+	assert.Empty(t, text)
+	assert.Nil(t, details)
+}
+
+func TestErrorSearchRecordsSearchFailure(t *testing.T) {
+	search := testSearch(t)
+	search.Embedder = wordEmbedder{err: errors.New("embedding service unavailable")}
+	text, details := (&errorSearch{search: search}).hint(context.Background(), common.FailedChange{Verb: "patch", Error: "invalid"})
+
+	assert.Empty(t, text)
+	assert.Contains(t, details.(SearchEvidence).Error, "embedding service unavailable")
+}
+
+type failingShell struct{}
+
+func (failingShell) Exec(context.Context, command.Spec) (command.Result, error) {
+	return command.Result{Stderr: "The PersistentVolumeClaim \"data\" is invalid: spec: Forbidden: spec is immutable after creation\n", ExitCode: 1}, errors.New("exit status 1")
+}
+
+// patchingClient asks for one failing patch, then stops.
+type patchingClient struct{ turns int }
+
+func (c *patchingClient) Chat(context.Context, []inference.Message, []inference.Tool, inference.Options) (inference.Result, error) {
+	c.turns++
+	if c.turns > 1 {
+		return inference.Result{Message: inference.Message{Role: "assistant", Content: "Done."}, FinishReason: "stop"}, nil
+	}
+	call := inference.ToolCall{ID: "call-1", Type: "function", Name: "bash", Arguments: `{"command":"kubectl patch pvc data -p '{}'"}`}
+	return inference.Result{Message: inference.Message{Role: "assistant", ToolCalls: []inference.ToolCall{call}}, FinishReason: "tool_calls"}, nil
+}
+
+func TestBashResultOfFailedChangeCarriesDocumentation(t *testing.T) {
+	agent, err := New(&patchingClient{}, failingShell{}, common.Config{MaxTurns: 2, MaxToolCalls: 1}, "", testSearch(t))
+	require.NoError(t, err)
+
+	result, err := agent.Run(context.Background(), "Restore the application.")
+	require.NoError(t, err)
+	require.Len(t, result.ToolCalls, 1)
+	assert.Contains(t, result.ToolCalls[0].Content, `Documentation for this error (search: "kubectl patch pvc The PersistentVolumeClaim is invalid: spec: Forbidden: spec is immutable after creation")`)
+	assert.Equal(t, "error", result.ToolCalls[0].Details.(common.CommandEvidence).Hint.(SearchEvidence).Trigger)
+}

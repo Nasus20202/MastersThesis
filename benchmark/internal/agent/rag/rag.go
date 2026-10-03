@@ -1,5 +1,6 @@
 // Package rag implements the RAG condition: the prompt condition's Bash tool
-// loop with a search_docs tool over the frozen documentation corpus.
+// loop with a search_docs tool over the frozen documentation corpus, and a
+// search the harness runs when a kubectl change fails.
 package rag
 
 import (
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -22,6 +24,16 @@ import (
 var defaultSystemPrompt string
 
 const searchToolName = "search_docs"
+
+// Error searches: when a kubectl change fails, the harness searches with the
+// command shape and the error line and appends the top excerpts to the Bash
+// result. Bounded per attempt so repeated failures do not fill the context.
+const (
+	errorSearchTopK     = 3
+	errorSearchMaxBytes = 4 * 1024
+	maxErrorSearches    = 3
+	errorTrigger        = "error"
+)
 
 // Search is the configured retrieval over one opened index. It is read-only
 // and shared by concurrent attempts.
@@ -42,11 +54,38 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
 	if search == nil || search.Index == nil {
 		return nil, errors.New("rag search index is required")
 	}
-	bash, err := common.NewBashTool(shell)
+	failures := &errorSearch{search: search}
+	bash, err := common.NewHintedBashTool(shell, failures.hint)
 	if err != nil {
 		return nil, err
 	}
 	return common.NewCondition("rag", client, []common.Tool{bash, searchTool{search: search}}, config, systemPrompt, nil)
+}
+
+// errorSearch holds one attempt's error searches; New builds one per attempt.
+type errorSearch struct {
+	search  *Search
+	queries []string
+}
+
+func (e *errorSearch) hint(ctx context.Context, change common.FailedChange) (string, any) {
+	query := change.Query()
+	if len(e.queries) >= maxErrorSearches || slices.Contains(e.queries, query) {
+		return "", nil
+	}
+	e.queries = append(e.queries, query)
+	evidence := SearchEvidence{Query: query, Trigger: errorTrigger}
+	hits, err := e.search.Index.Search(ctx, e.search.Embedder, e.search.Mode, query, errorSearchTopK)
+	if err != nil {
+		evidence.Error = err.Error()
+		return "", evidence
+	}
+	if len(hits) == 0 {
+		return "", evidence
+	}
+	content, truncated := retrieval.Render(hits, errorSearchMaxBytes)
+	evidence.Truncated, evidence.Hits = truncated, hits
+	return fmt.Sprintf("Documentation for this error (search: %q):\n%s", query, content), evidence
 }
 
 type searchTool struct{ search *Search }
@@ -59,12 +98,16 @@ func (searchTool) Definition() inference.Tool {
 	}
 }
 
-// SearchEvidence records one search for later analysis. Chunk text is omitted;
-// the model-visible excerpts are in the tool call content.
+// SearchEvidence records one search for later analysis; the model-visible
+// excerpts are in the tool call content. Trigger is empty for the agent's own
+// search_docs calls and "error" for a search after a failed change, which is
+// recorded as the hint of that Bash call.
 type SearchEvidence struct {
 	Query     string          `json:"query"`
+	Trigger   string          `json:"trigger,omitempty"`
 	Truncated bool            `json:"truncated"`
 	Hits      []retrieval.Hit `json:"hits"`
+	Error     string          `json:"error,omitempty"`
 }
 
 func (t searchTool) Execute(ctx context.Context, call inference.ToolCall) common.ToolResult {

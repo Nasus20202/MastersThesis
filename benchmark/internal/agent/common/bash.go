@@ -20,13 +20,23 @@ const maxModelVisibleCommandOutputBytes = 8 * 1024
 
 const truncatedCommandOutputMarker = "\n[command output truncated; full stdout/stderr is preserved in evidence]\n"
 
-type bashTool struct{ shell Shell }
+type bashTool struct {
+	shell Shell
+	hint  Hint
+}
 
 func NewBashTool(shell Shell) (Tool, error) {
+	return NewHintedBashTool(shell, nil)
+}
+
+// NewHintedBashTool returns the Bash tool that appends hint's text to the
+// result of a failed kubectl change (see FailedChangeIn). A nil hint appends
+// nothing.
+func NewHintedBashTool(shell Shell, hint Hint) (Tool, error) {
 	if shell == nil {
 		return nil, errors.New("bash shell is required")
 	}
-	return bashTool{shell: shell}, nil
+	return bashTool{shell: shell, hint: hint}, nil
 }
 
 func BashTool() inference.Tool {
@@ -47,6 +57,8 @@ type CommandEvidence struct {
 	Stderr          string  `json:"stderr"`
 	ExitCode        int     `json:"exit_code"`
 	DurationSeconds float64 `json:"duration_seconds"`
+	// Hint is the evidence of a hint appended to a failed change, if any.
+	Hint any `json:"hint,omitempty"`
 }
 
 func (t bashTool) Execute(ctx context.Context, call inference.ToolCall) ToolResult {
@@ -72,11 +84,17 @@ func (t bashTool) Execute(ctx context.Context, call inference.ToolCall) ToolResu
 		ExitCode:        commandResult.ExitCode,
 		DurationSeconds: commandResult.Duration.Seconds(),
 	}
-	return ToolResult{
-		Content: formatCommandResult(commandResult, execErr),
-		Details: details,
-		Error:   execErr,
+	content := formatCommandResult(commandResult, execErr)
+	if t.hint != nil {
+		if change, ok := FailedChangeIn(details); ok {
+			text, hintDetails := t.hint(ctx, change)
+			details.Hint = hintDetails
+			if text != "" {
+				content += "\n" + text
+			}
+		}
 	}
+	return ToolResult{Content: content, Details: details, Error: execErr}
 }
 
 func formatCommandResult(result command.Result, execErr error) string {

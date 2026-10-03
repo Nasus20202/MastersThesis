@@ -141,3 +141,25 @@ func TestBashToolPreservesFullOutputInEvidence(t *testing.T) {
 	assert.Equal(t, stdout, details.Stdout)
 	assert.LessOrEqual(t, len(result.Content), maxModelVisibleCommandOutputBytes)
 }
+
+func TestHintedBashToolAppendsHintToFailedChange(t *testing.T) {
+	shell := &bashTestShell{result: command.Result{Stderr: "error: must specify --patch\n", ExitCode: 1}}
+	var changes []FailedChange
+	tool, err := NewHintedBashTool(shell, func(_ context.Context, change FailedChange) (string, any) {
+		changes = append(changes, change)
+		return "hint text", "hint evidence"
+	})
+	require.NoError(t, err)
+
+	result := tool.Execute(context.Background(), inference.ToolCall{Type: "function", Name: "bash", Arguments: `{"command":"kubectl patch deployment app"}`})
+	assert.Equal(t, []FailedChange{{Verb: "patch", Kind: "deployment", Error: "must specify --patch"}}, changes)
+	assert.True(t, strings.HasSuffix(result.Content, "stderr:\nerror: must specify --patch\n\nhint text"))
+	details, ok := result.Details.(CommandEvidence)
+	require.True(t, ok)
+	assert.Equal(t, "hint evidence", details.Hint)
+
+	shell.result = command.Result{Stdout: "deployment.apps/app patched\n"}
+	result = tool.Execute(context.Background(), inference.ToolCall{Type: "function", Name: "bash", Arguments: `{"command":"kubectl patch deployment app"}`})
+	assert.Len(t, changes, 1)
+	assert.NotContains(t, result.Content, "hint text")
+}
