@@ -3,7 +3,9 @@
 package skill
 
 import (
+	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"strings"
 
@@ -31,10 +33,60 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
 	if err != nil {
 		return nil, err
 	}
-	bash, err := common.NewBashTool(shell)
+	var hint common.Hint
+	if section := changeSection(files); section != "" {
+		hint = (&changeHint{section: section}).hint
+	}
+	bash, err := common.NewHintedBashTool(shell, hint)
 	if err != nil {
 		return nil, err
 	}
 	tools := []common.Tool{bash, skillTool{files: files}, referenceTool{files: files}}
 	return common.NewCondition("skill", client, tools, config, prompt, nil)
+}
+
+// The change hint: when a kubectl change fails, the harness appends the
+// kubectl skill's section on changing state to the Bash result once per
+// attempt, so the curated mechanics are in view at the failure.
+const (
+	changeSkill   = "kubectl"
+	changeHeading = "## Changing state"
+)
+
+// ChangeHintEvidence records the appended section for later analysis.
+type ChangeHintEvidence struct {
+	Skill   string `json:"skill"`
+	Section string `json:"section"`
+}
+
+// changeSection is the section under changeHeading in the kubectl skill, or
+// empty when the skill set has no such section.
+func changeSection(files fs.FS) string {
+	_, body, err := readSkillDocument(files, changeSkill)
+	if err != nil {
+		return ""
+	}
+	_, section, found := strings.Cut(body, "\n"+changeHeading+"\n")
+	if !found {
+		return ""
+	}
+	if end := strings.Index(section, "\n## "); end >= 0 {
+		section = section[:end]
+	}
+	return strings.TrimSpace(section)
+}
+
+// changeHint holds one attempt's state; New builds one per attempt.
+type changeHint struct {
+	section string
+	shown   bool
+}
+
+func (h *changeHint) hint(context.Context, common.FailedChange) (string, any) {
+	if h.shown {
+		return "", nil
+	}
+	h.shown = true
+	return fmt.Sprintf("Guidance from the %s skill on changing state:\n%s", changeSkill, h.section),
+		ChangeHintEvidence{Skill: changeSkill, Section: strings.TrimPrefix(changeHeading, "## ")}
 }

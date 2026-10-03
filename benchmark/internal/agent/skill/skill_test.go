@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
@@ -124,4 +125,25 @@ func TestRunRejectsBlankTask(t *testing.T) {
 	require.NoError(t, err)
 	_, err = agent.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")
+}
+
+func TestChangeHintAppendsKubectlSectionOncePerAttempt(t *testing.T) {
+	section := changeSection(defaultSkillFiles)
+	require.NotEmpty(t, section)
+	assert.Contains(t, section, "strategic merge patch")
+	assert.NotContains(t, section, "\n## ")
+
+	hint := &changeHint{section: section}
+	text, details := hint.hint(context.Background(), common.FailedChange{Verb: "patch"})
+	assert.Equal(t, "Guidance from the kubectl skill on changing state:\n"+section, text)
+	assert.Equal(t, ChangeHintEvidence{Skill: "kubectl", Section: "Changing state"}, details)
+
+	text, details = hint.hint(context.Background(), common.FailedChange{Verb: "patch"})
+	assert.Empty(t, text)
+	assert.Nil(t, details)
+}
+
+func TestChangeSectionIsEmptyWithoutKubectlSkill(t *testing.T) {
+	assert.Empty(t, changeSection(fstest.MapFS{"custom/SKILL.md": {Data: []byte("# Custom\n")}}))
+	assert.Empty(t, changeSection(fstest.MapFS{"kubectl/SKILL.md": {Data: []byte("---\nname: kubectl\ndescription: d\n---\n# kubectl\n\n## Reading\n")}}))
 }
