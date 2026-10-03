@@ -135,3 +135,11 @@ func TestOpenIndexRejectsOtherChunkingParameters(t *testing.T) {
 	_, err = OpenIndex(ctx, path)
 	assert.ErrorContains(t, err, "other chunking parameters")
 }
+
+func TestRenderTurnsHTMLIntoPlainLinesOutsideCodeFences(t *testing.T) {
+	body := "<table>\n  <tr><th>Field</th><th>Description</th></tr>\n  <tr><td>tolerations</td><td><a href=\"x\">Tolerations</a> &amp; taints</td></tr>\n</table>\nRun `kubectl rollout status <kind>/<name>`.\n```html\n<td>kept</td>\n```"
+	result, _ := Render([]Hit{{Rank: 1, Chunk: Chunk{Path: "docs/a.md", Title: "A", Body: body}}}, 8192)
+
+	assert.Contains(t, result, "  Field | Description\n  tolerations | Tolerations & taints\nRun `kubectl rollout status <kind>/<name>`.\n```html\n<td>kept</td>\n```")
+	assert.NotContains(t, result, "<table>")
+}
