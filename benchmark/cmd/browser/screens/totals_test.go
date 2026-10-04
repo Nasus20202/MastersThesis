@@ -16,7 +16,7 @@ import (
 func TestTotalsAggregateEveryRun(t *testing.T) {
 	root := t.TempDir()
 	for _, runID := range []string{"run-1", "run-2"} {
-		store, err := results.New(root, results.RunMetadata{RunID: runID, Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+		store, err := results.New(root, results.RunMetadata{RunID: runID, Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1, Sampling: &results.SamplingProvenance{Model: "model-" + runID}})
 		require.NoError(t, err)
 		result := orchestration.RunResult{
 			ScenarioID: "alpha", Condition: "skill",
@@ -43,4 +43,7 @@ func TestTotalsAggregateEveryRun(t *testing.T) {
 	assert.Contains(t, out, "12,345")
 	assert.Contains(t, out, "ctx overflows")
 	assert.Contains(t, out, "Termination")
+	assert.Contains(t, out, "by model")
+	assert.Contains(t, out, "model-run-1")
+	assert.Contains(t, out, "model-run-2")
 }

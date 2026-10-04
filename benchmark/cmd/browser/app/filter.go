@@ -17,7 +17,13 @@ type filterOption struct {
 	key      string
 	value    string
 	selected bool
+	// model marks a run-model option; the others are scenario tags.
+	model bool
 }
+
+// modelFilterKey heads the run-model section of the filter, listed before the
+// scenario tags.
+const modelFilterKey = "model"
 
 // filterRow is one filter body line; a negative option marks a key heading.
 type filterRow struct {
@@ -35,8 +41,17 @@ func (m *Model) openFilter() {
 	}
 	sort.Strings(keys)
 
-	active := m.view.Store().TagFilter()
+	store := m.view.Store()
+	active := store.TagFilter()
 	m.filterOptions = m.filterOptions[:0]
+	for _, model := range store.ModelOptions() {
+		m.filterOptions = append(m.filterOptions, filterOption{
+			key:      modelFilterKey,
+			value:    model,
+			model:    true,
+			selected: containsValue(store.ModelFilter(), model),
+		})
+	}
 	for _, key := range keys {
 		for _, value := range options[key] {
 			m.filterOptions = append(m.filterOptions, filterOption{
@@ -178,11 +193,17 @@ func (m *Model) filterRows() ([]filterRow, []int) {
 
 func (m *Model) applyFilter() {
 	filter := scenario.TagFilter{}
+	var models []string
 	for _, option := range m.filterOptions {
-		if option.selected {
+		switch {
+		case !option.selected:
+		case option.model:
+			models = append(models, option.value)
+		default:
 			filter[option.key] = append(filter[option.key], option.value)
 		}
 	}
+	m.view.Store().SetModelFilter(models)
 	m.view.Store().SetTagFilter(filter)
 	m.filterOpen = false
 	m.view.Invalidate()
@@ -193,11 +214,11 @@ func (m *Model) renderFilter() string {
 	rows, _ := m.filterRows()
 	visible := m.filterVisibleRows()
 	lines := []string{
-		ui.JoinSides(ui.Title.Render("◆ filter by tags"), m.filterButtonsLabel(), m.width),
+		ui.JoinSides(ui.Title.Render("◆ filter by model and tags"), m.filterButtonsLabel(), m.width),
 		"",
 	}
 	if len(rows) == 0 {
-		lines = append(lines, ui.MutedStyle.Render("  no tags found in the scenario catalogue"))
+		lines = append(lines, ui.MutedStyle.Render("  no models or tags found"))
 	}
 	for offset := 0; offset < visible; offset++ {
 		index := m.filterOffset + offset

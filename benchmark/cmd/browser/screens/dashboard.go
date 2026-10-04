@@ -43,7 +43,8 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 
 // agentRankGraphs renders one line per agent combining the mean-score and
 // full-success bars, best mean score first.
-func agentRankGraphs(metrics map[string]model.Metrics, width int) string {
+// rankGraphs renders mean score and full success per group, best first.
+func rankGraphs(title string, metrics map[string]model.Metrics, width int) string {
 	agents := make([]string, 0, len(metrics))
 	for agent := range metrics {
 		agents = append(agents, agent)
@@ -59,7 +60,7 @@ func agentRankGraphs(metrics map[string]model.Metrics, width int) string {
 	const rateWidth = 4
 	labelWidth := min(24, max(12, width/4))
 	barWidth := max(4, (width-labelWidth-2*rateWidth-2)/2)
-	lines := []string{components.Section(width, "Mean score · full success by agent")}
+	lines := []string{components.Section(width, title)}
 	for _, agent := range agents {
 		item := metrics[agent]
 		score, rate := item.MeanScore, model.OutcomeRate(item)
@@ -222,4 +223,12 @@ func intsToFloats(values []int) []float64 {
 		out[index] = float64(value)
 	}
 	return out
+}
+
+func agentRankGraphs(metrics map[string]model.Metrics, width int) string {
+	return rankGraphs("Mean score · full success by agent", metrics, width)
+}
+
+func modelRankGraphs(metrics map[string]model.Metrics, width int) string {
+	return rankGraphs("Mean score · full success by model", metrics, width)
 }

@@ -22,6 +22,7 @@ type Store struct {
 	scenariosRoot string
 	catalog       map[string]scenario.Definition
 	selector      scenario.TagFilter
+	models        []string
 
 	runs     []results.RunRef
 	visible  []results.RunRef
@@ -60,11 +61,49 @@ func (s *Store) Reload() error {
 	return nil
 }
 
-// recompute rebuilds the tag-filtered views from the full run list.
+// recompute rebuilds the model- and tag-filtered views from the full run list.
 func (s *Store) recompute() {
-	s.visible = s.filterRuns(s.runs)
-	s.agents = results.RollupAgents(s.runs, s.matchesTags)
-	s.tasks = results.RollupTasks(s.runs, s.matchesTags)
+	byModel := s.runs
+	if len(s.models) > 0 {
+		byModel = make([]results.RunRef, 0, len(s.runs))
+		for _, run := range s.runs {
+			if containsString(s.models, run.Model) {
+				byModel = append(byModel, run)
+			}
+		}
+	}
+	s.visible = s.filterRuns(byModel)
+	s.agents = results.RollupAgents(byModel, s.matchesTags)
+	s.tasks = results.RollupTasks(byModel, s.matchesTags)
+}
+
+// SetModelFilter keeps only runs of the given models; none keeps all.
+func (s *Store) SetModelFilter(models []string) {
+	s.models = models
+	s.recompute()
+}
+
+func (s *Store) ModelFilter() []string { return s.models }
+
+// ModelOptions returns the sorted models of all discovered runs.
+func (s *Store) ModelOptions() []string {
+	var models []string
+	for _, run := range s.runs {
+		if run.Model != "" && !containsString(models, run.Model) {
+			models = append(models, run.Model)
+		}
+	}
+	sort.Strings(models)
+	return models
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // Runs returns every discovered run that matches the active tag filter, newest first.

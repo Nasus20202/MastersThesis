@@ -23,6 +23,9 @@ func (v *View) runsPreview(route *Route, width int) string {
 	}
 	scoped := !v.store.TagFilter().Empty() || route.Agent != "" || route.Task != ""
 	lines := []string{components.Section(width, "Across runs"), v.runComparison(runs, route.Agent, route.Task, width)}
+	if route.Kind == AgentRuns || route.Kind == TaskRuns {
+		lines = append(lines, "", modelRankGraphs(model.ModelMetrics(v.store, route.Agent, route.Task), width))
+	}
 	if route.Cursor < len(runs) {
 		run := runs[route.Cursor]
 		metrics := model.RunMetrics(v.store, run.RunID, route.Agent, route.Task)
@@ -49,6 +52,7 @@ func (v *View) runComparison(runs []results.RunRef, agent, task string, width in
 func (v *View) runPreview(run results.RunRef, metrics model.Metrics, scoped bool, width int) string {
 	body := []string{
 		ui.Header.Render(run.RunID) + "  " + ui.StateBadge(string(run.Metadata.State)),
+		ui.MutedStyle.Render("model " + modelName(run.Model)),
 		ui.MutedStyle.Render(fmt.Sprintf("type %s · agents %s · repeat %d · parallel %d",
 			run.Metadata.RunType, strings.Join(run.Metadata.Agents, ","), run.Metadata.RepeatCount, run.Metadata.Parallelism)),
 		ui.MutedStyle.Render(fmt.Sprintf("started %s · rev %s", ui.Time(run.Metadata.StartedAt), ui.ShortRevision(run.Metadata.RepositoryRevision))),
@@ -81,6 +85,8 @@ func (v *View) agentPreview(route *Route, width int) string {
 		components.Section(width, "Selected agent"),
 		components.CardRow(v.vitals(metrics), width),
 		"",
+		modelRankGraphs(model.ModelMetrics(v.store, agents[route.Cursor].Agent, ""), width),
+		"",
 		v.dashboardView(metrics, width),
 	}
 	return strings.Join(lines, "\n")
@@ -108,6 +114,8 @@ func (v *View) taskPreview(route *Route, width int) string {
 		v.dashboardView(metrics, width),
 		"",
 		agentRankGraphs(model.TaskAgentMetrics(v.store, task.ScenarioID), width),
+		"",
+		modelRankGraphs(model.ModelMetrics(v.store, "", task.ScenarioID), width),
 		"",
 		components.Section(width, "Criteria by agent"),
 		criteriaMatrix(model.TaskCriteria(v.store, task.ScenarioID), width),

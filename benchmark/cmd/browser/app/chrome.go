@@ -121,11 +121,18 @@ func (m *Model) headerRight() (text string, filterStart, filterEnd int) {
 }
 
 func (m *Model) filterControlLabel() string {
-	filter := m.view.Store().TagFilter()
-	if filter.Empty() {
+	store := m.view.Store()
+	var parts []string
+	if models := store.ModelFilter(); len(models) > 0 {
+		parts = append(parts, "model="+strings.Join(models, ","))
+	}
+	if filter := store.TagFilter(); !filter.Empty() {
+		parts = append(parts, filter.String())
+	}
+	if len(parts) == 0 {
 		return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("⌕ filter") + ui.TabIdle.Render("]")
 	}
-	return ui.TabActive.Render(" ⌕ " + ui.Truncate(filter.String(), 44) + " ")
+	return ui.TabActive.Render(" ⌕ " + ui.Truncate(strings.Join(parts, " "), 44) + " ")
 }
 
 func (m *Model) filterControlAt(x int) bool {

@@ -100,5 +100,8 @@ func (v *View) buildTotals(width int) []string {
 	if len(metrics.Terminations) > 0 {
 		lines = append(lines, components.Section(width, "Termination"), terminationBars(contentWidth, metrics.Terminations))
 	}
+	if byModel := model.ModelMetrics(v.store, "", ""); len(byModel) > 0 {
+		lines = append(lines, "", modelRankGraphs(byModel, contentWidth))
+	}
 	return lines
 }

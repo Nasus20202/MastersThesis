@@ -17,6 +17,8 @@ type RunRef struct {
 	RunID    string
 	Metadata RunMetadata
 	Summary  *RunSummary
+	// Model is the model a benchmark run used, empty when unknown.
+	Model string
 }
 
 // AttemptRef identifies one persisted attempt without loading its payload. The
@@ -83,7 +85,7 @@ func ListRuns(root string) ([]RunRef, error) {
 				return nil, err
 			}
 		}
-		runs = append(runs, RunRef{RunID: metadata.RunID, Metadata: metadata, Summary: summary})
+		runs = append(runs, RunRef{RunID: metadata.RunID, Metadata: metadata, Summary: summary, Model: runModel(runDir, metadata)})
 	}
 	slices.SortFunc(runs, func(a, b RunRef) int {
 		if !a.Metadata.StartedAt.Equal(b.Metadata.StartedAt) {
@@ -234,6 +236,28 @@ func readJSON(path string, value any) error {
 		return fmt.Errorf("decode %q: %w", path, err)
 	}
 	return nil
+}
+
+// runModel returns the model of a benchmark run: the sampling record of newer
+// runs, otherwise the inference metadata of its first attempt with an agent.
+func runModel(runDir string, metadata RunMetadata) string {
+	if metadata.Sampling != nil {
+		return metadata.Sampling.Model
+	}
+	if runType(metadata) != RunTypeBenchmark {
+		return ""
+	}
+	attempts, err := listAttempts(runDir)
+	if err != nil {
+		return ""
+	}
+	for _, ref := range attempts {
+		attempt, err := LoadAttempt(ref, RunTypeBenchmark)
+		if err == nil && attempt.Benchmark != nil && attempt.Benchmark.Agent != nil {
+			return attempt.Benchmark.Agent.Inference.Model
+		}
+	}
+	return ""
 }
 
 func listAttempts(runDir string) ([]AttemptRef, error) {

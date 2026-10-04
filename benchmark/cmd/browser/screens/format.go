@@ -39,8 +39,19 @@ func overflowStyle(overflow bool) lipgloss.Style {
 
 // runLabel is a short, sortable label for a run in comparison lists.
 func runLabel(run results.RunRef) string {
+	label := run.RunID
 	if !run.Metadata.StartedAt.IsZero() {
-		return ui.Time(run.Metadata.StartedAt)
+		label = ui.Time(run.Metadata.StartedAt)
 	}
-	return run.RunID
+	if run.Model != "" {
+		label += " " + run.Model
+	}
+	return label
+}
+
+func modelName(model string) string {
+	if model == "" {
+		return "unknown"
+	}
+	return model
 }
