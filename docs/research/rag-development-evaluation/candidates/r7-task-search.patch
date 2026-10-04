@@ -1,0 +1,167 @@
+diff --git a/benchmark/cmd/benchmark/agent/search.go b/benchmark/cmd/benchmark/agent/search.go
+index 35e0988..3fa591a 100644
+--- a/benchmark/cmd/benchmark/agent/search.go
++++ b/benchmark/cmd/benchmark/agent/search.go
+@@ -38,7 +38,7 @@ func OpenSearch(ctx context.Context, values benchmarkconfig.RetrievalConfig) (*r
+ 	if err != nil {
+ 		return nil, results.RetrievalProvenance{}, err
+ 	}
+-	search := &ragagent.Search{Index: index, Embedder: embedder, Mode: settings.Mode, TopK: settings.TopK, MaxBytes: settings.MaxBytes}
++	search := &ragagent.Search{Index: index, Embedder: embedder, Mode: settings.Mode, TopK: settings.TopK, MaxBytes: settings.MaxBytes, TaskSearch: settings.TaskSearch}
+ 	provenance := results.RetrievalProvenance{
+ 		Mode:              string(settings.Mode),
+ 		Chunking:          string(settings.Chunking),
+@@ -48,6 +48,7 @@ func OpenSearch(ctx context.Context, values benchmarkconfig.RetrievalConfig) (*r
+ 		CorpusRevision:    index.Metadata().CorpusRevision,
+ 		EmbeddingArtifact: embedding.Artifact,
+ 		EmbeddingSHA256:   embedding.SHA256,
++		TaskSearch:        settings.TaskSearch,
+ 	}
+ 	return search, provenance, nil
+ }
+diff --git a/benchmark/cmd/internal/config/config.go b/benchmark/cmd/internal/config/config.go
+index 1a87ed4..9c0aad2 100644
+--- a/benchmark/cmd/internal/config/config.go
++++ b/benchmark/cmd/internal/config/config.go
+@@ -26,6 +26,8 @@ type RetrievalConfig struct {
+ 	TopK     *int   `yaml:"top_k,omitempty"`
+ 	MaxBytes *int   `yaml:"max_bytes,omitempty"`
+ 	IndexDir string `yaml:"index_dir,omitempty"`
++	// TaskSearch enables rag.Search.TaskSearch.
++	TaskSearch bool `yaml:"task_search,omitempty"`
+ }
+ 
+ type ContainersConfig struct {
+diff --git a/benchmark/cmd/internal/retrievalenv/retrievalenv.go b/benchmark/cmd/internal/retrievalenv/retrievalenv.go
+index 373612a..567cf26 100644
+--- a/benchmark/cmd/internal/retrievalenv/retrievalenv.go
++++ b/benchmark/cmd/internal/retrievalenv/retrievalenv.go
+@@ -15,18 +15,19 @@ import (
+ )
+ 
+ type Settings struct {
+-	Mode     retrieval.Mode
+-	Chunking retrieval.Chunking
+-	TopK     int
+-	MaxBytes int
+-	IndexDir string
++	Mode       retrieval.Mode
++	Chunking   retrieval.Chunking
++	TopK       int
++	MaxBytes   int
++	IndexDir   string
++	TaskSearch bool
+ }
+ 
+ func Load(values benchmarkconfig.RetrievalConfig) (Settings, error) {
+ 	if values.TopK == nil || values.MaxBytes == nil || values.IndexDir == "" {
+ 		return Settings{}, errors.New("retrieval.top_k, retrieval.max_bytes and retrieval.index_dir are required")
+ 	}
+-	result := Settings{TopK: *values.TopK, MaxBytes: *values.MaxBytes, IndexDir: values.IndexDir}
++	result := Settings{TopK: *values.TopK, MaxBytes: *values.MaxBytes, IndexDir: values.IndexDir, TaskSearch: values.TaskSearch}
+ 	if result.TopK < 1 || result.MaxBytes < 1 {
+ 		return Settings{}, errors.New("retrieval.top_k and retrieval.max_bytes must be positive")
+ 	}
+diff --git a/benchmark/internal/agent/rag/rag.go b/benchmark/internal/agent/rag/rag.go
+index 24e609b..6dfbfaa 100644
+--- a/benchmark/internal/agent/rag/rag.go
++++ b/benchmark/internal/agent/rag/rag.go
+@@ -9,6 +9,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+ 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
+@@ -31,6 +32,9 @@ type Search struct {
+ 	Mode     retrieval.Mode
+ 	TopK     int
+ 	MaxBytes int
++	// TaskSearch searches once with the task text before the first turn and
++	// appends the excerpts to the task message.
++	TaskSearch bool
+ }
+ 
+ // New builds the RAG condition. A blank systemPrompt uses the embedded
+@@ -46,7 +50,26 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	return common.NewCondition("rag", client, []common.Tool{bash, searchTool{search: search}}, config, systemPrompt, nil)
++	var formatTask func(string) string
++	if search.TaskSearch {
++		formatTask = search.withTaskExcerpts
++	}
++	return common.NewCondition("rag", client, []common.Tool{bash, searchTool{search: search}}, config, systemPrompt, formatTask)
++}
++
++const taskSearchTimeout = 30 * time.Second
++
++// withTaskExcerpts leaves the task unchanged when the search fails, so a
++// retrieval outage degrades to R1 instead of failing the attempt.
++func (s *Search) withTaskExcerpts(task string) string {
++	ctx, cancel := context.WithTimeout(context.Background(), taskSearchTimeout)
++	defer cancel()
++	hits, err := s.Index.Search(ctx, s.Embedder, s.Mode, task, s.TopK)
++	if err != nil || len(hits) == 0 {
++		return task
++	}
++	content, _ := retrieval.Render(hits, s.MaxBytes)
++	return task + "\n\nDocumentation excerpts found by searching the official Kubernetes documentation with the task text. They may not describe this cluster's cause; check them against your observations.\n\n" + content
+ }
+ 
+ type searchTool struct{ search *Search }
+diff --git a/benchmark/internal/agent/rag/rag_test.go b/benchmark/internal/agent/rag/rag_test.go
+index 5113b20..898672c 100644
+--- a/benchmark/internal/agent/rag/rag_test.go
++++ b/benchmark/internal/agent/rag/rag_test.go
+@@ -144,3 +144,21 @@ func TestSearchToolReportsErrors(t *testing.T) {
+ 	assert.True(t, strings.HasPrefix(result.Content, "search failed:"))
+ 	assert.Equal(t, "volume", result.Details.(SearchEvidence).Query)
+ }
++
++func TestTaskSearchAppendsExcerptsToTheTask(t *testing.T) {
++	search := testSearch(t)
++	search.TaskSearch = true
++	client := &ragTestClient{}
++	condition, err := New(client, ragTestShell{}, common.Config{MaxTurns: 1, MaxToolCalls: 1}, "", search)
++	require.NoError(t, err)
++	_, err = condition.Run(context.Background(), "A volume claim is pending.")
++	require.NoError(t, err)
++	task := client.messages[len(client.messages)-1].Content
++	assert.True(t, strings.HasPrefix(task, "A volume claim is pending.\n\nDocumentation excerpts"))
++	assert.Contains(t, task, "[1] docs/storage.md")
++
++	search.Embedder = wordEmbedder{err: errors.New("down")}
++	_, err = condition.Run(context.Background(), "A volume claim is pending.")
++	require.NoError(t, err)
++	assert.Equal(t, "A volume claim is pending.", client.messages[len(client.messages)-1].Content)
++}
+diff --git a/benchmark/internal/results/results.go b/benchmark/internal/results/results.go
+index ee1a143..ab79333 100644
+--- a/benchmark/internal/results/results.go
++++ b/benchmark/internal/results/results.go
+@@ -38,6 +38,7 @@ type RetrievalProvenance struct {
+ 	CorpusRevision    string `json:"corpus_revision"`
+ 	EmbeddingArtifact string `json:"embedding_artifact"`
+ 	EmbeddingSHA256   string `json:"embedding_sha256"`
++	TaskSearch        bool   `json:"task_search,omitempty"`
+ }
+ 
+ type RunType string
+diff --git a/benchmark/schemas/config.schema.json b/benchmark/schemas/config.schema.json
+index 4694ac3..1ba53eb 100644
+--- a/benchmark/schemas/config.schema.json
++++ b/benchmark/schemas/config.schema.json
+@@ -86,6 +86,10 @@
+           "type": "string",
+           "minLength": 1,
+           "description": "Directory holding the rag-<chunking>.sqlite indexes, relative to the config file."
++        },
++        "task_search": {
++          "type": "boolean",
++          "description": "Search once with the task text before the first turn and append the excerpts to the task message."
+         }
+       }
+     }
