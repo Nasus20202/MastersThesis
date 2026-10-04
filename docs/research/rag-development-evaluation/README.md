@@ -303,10 +303,7 @@ Cross-invocation differences of about 0.05 are within this variation.
 - **A stronger model uses the tool as intended.** Qwen3.5 9B searched in every
   attempt with symptom-based queries. Whether the text then improves repairs
   cannot be read from these runs, because Qwen hits the turn and time limits.
-- **Candidate.** `R1` remains the best observed candidate; freezing it is
-  pending in the [decision log](../../decision-log.md). Its gain over the prompt
-  agent should be reported as the effect of the RAG condition as a whole, not
-  of retrieved documentation.
+- **Candidate.** `R1` is frozen as the development RAG condition (D-036 in the [decision log](../../decision-log.md)). Its gain over the prompt agent is reported as the effect of the RAG condition as a whole, not of retrieved documentation.
 
 ## Limitations
 
