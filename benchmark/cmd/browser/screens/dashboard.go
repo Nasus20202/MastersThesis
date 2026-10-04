@@ -230,5 +230,37 @@ func agentRankGraphs(metrics map[string]model.Metrics, width int) string {
 }
 
 func modelRankGraphs(metrics map[string]model.Metrics, width int) string {
-	return rankGraphs("Mean score · full success by model", metrics, width)
+	short := make(map[string]model.Metrics, len(metrics))
+	for name, value := range metrics {
+		short[shortModel(name)] = value
+	}
+	return rankGraphs("Mean score · full success by model", short, width)
+}
+
+// agentModelMatrix renders mean score and attempt count per agent and model.
+func agentModelMatrix(matrix model.AgentModelMatrix, width int) string {
+	lines := []string{components.Section(width, "Mean score by agent and model")}
+	if len(matrix.Models) == 0 {
+		return strings.Join(append(lines, ui.MutedStyle.Render("no runs with a known model")), "\n")
+	}
+	labelWidth := min(16, max(8, width/5))
+	columnWidth := max(10, (width-labelWidth)/len(matrix.Models))
+	header := ui.PadRight(ui.Header.Render("AGENT"), labelWidth)
+	for _, name := range matrix.Models {
+		header += ui.PadRight(ui.Header.Render(ui.Truncate(shortModel(name), columnWidth-1)), columnWidth)
+	}
+	lines = append(lines, header)
+	for _, agent := range matrix.Agents {
+		line := ui.PadRight(ui.Truncate(agent, labelWidth-1), labelWidth)
+		for _, name := range matrix.Models {
+			label, style := "–", ui.MutedStyle
+			if cell, ok := matrix.Cells[agent][name]; ok {
+				label = fmt.Sprintf("%s (%d)", ui.Rate(cell.MeanScore), cell.Attempts)
+				style = ui.Outcome(cell.FullSuccessRate >= 1, cell.MeanScore)
+			}
+			line += ui.PadRight(style.Render(label), columnWidth)
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
 }

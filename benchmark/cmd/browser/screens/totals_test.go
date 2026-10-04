@@ -46,4 +46,5 @@ func TestTotalsAggregateEveryRun(t *testing.T) {
 	assert.Contains(t, out, "by model")
 	assert.Contains(t, out, "model-run-1")
 	assert.Contains(t, out, "model-run-2")
+	assert.Contains(t, out, "by agent and model")
 }

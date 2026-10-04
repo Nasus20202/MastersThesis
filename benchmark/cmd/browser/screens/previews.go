@@ -79,6 +79,8 @@ func (v *View) agentPreview(route *Route, width int) string {
 	}
 	metrics := model.AgentMetrics(v.store, agents[route.Cursor].Agent)
 	lines := []string{
+		agentModelMatrix(v.store.AgentModelMatrix(), width),
+		"",
 		components.Section(width, "Mean score by agent"),
 		ui.Ranked(ranks, width, 0),
 		"",

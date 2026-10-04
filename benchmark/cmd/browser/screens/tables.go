@@ -16,7 +16,7 @@ func (v *View) runsTable(runs []results.RunRef, route *Route, width, height int)
 	tbl := components.NewTable(
 		components.Column{Title: "RUN", Min: 18, Max: 40},
 		components.Column{Title: "STATE", Min: 9, Max: 9},
-		components.Column{Title: "MODEL", Min: 8, Max: 30},
+		components.Column{Title: "MODEL", Min: 8, Max: 14},
 		components.Column{Title: "AGENTS", Min: 7, Max: 16},
 		components.Column{Title: "ATT", Min: 5, Max: 9},
 		components.Column{Title: "SUCCESS", Min: 7, Max: 7},
@@ -36,7 +36,7 @@ func (v *View) runsTable(runs []results.RunRef, route *Route, width, height int)
 		rows[index] = []string{
 			run.RunID,
 			string(run.Metadata.State),
-			modelName(run.Model),
+			shortModel(modelName(run.Model)),
 			strings.Join(run.Metadata.Agents, ","),
 			attempts,
 			success,

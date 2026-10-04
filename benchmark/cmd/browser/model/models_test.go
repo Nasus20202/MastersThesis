@@ -62,3 +62,16 @@ func TestModelMetricsGroupsVisibleRunsByModel(t *testing.T) {
 	store.SetModelFilter([]string{"gemma"})
 	assert.Len(t, ModelMetrics(store, "", ""), 1)
 }
+
+func TestAgentModelMatrixRollsUpConditionsByModel(t *testing.T) {
+	store := modelStore(t)
+
+	matrix := store.AgentModelMatrix()
+	assert.Equal(t, []string{"skill"}, matrix.Agents)
+	assert.Equal(t, []string{"gemma", "qwen"}, matrix.Models)
+	assert.Equal(t, results.Rollup{Attempts: 1, FullSuccessCount: 1, FullSuccessRate: 1, MeanScore: 1}, matrix.Cells["skill"]["gemma"])
+	assert.InDelta(t, 0.5, matrix.Cells["skill"]["qwen"].MeanScore, 1e-9)
+
+	store.SetModelFilter([]string{"qwen"})
+	assert.Equal(t, []string{"qwen"}, store.AgentModelMatrix().Models)
+}

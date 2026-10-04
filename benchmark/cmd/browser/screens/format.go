@@ -2,6 +2,7 @@ package screens
 
 import (
 	"charm.land/lipgloss/v2"
+	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
@@ -44,7 +45,7 @@ func runLabel(run results.RunRef) string {
 		label = ui.Time(run.Metadata.StartedAt)
 	}
 	if run.Model != "" {
-		label += " " + run.Model
+		label += " " + shortModel(run.Model)
 	}
 	return label
 }
@@ -54,4 +55,15 @@ func modelName(model string) string {
 		return "unknown"
 	}
 	return model
+}
+
+// shortModel drops the instruction-tuning and quantization suffixes of a model
+// name, e.g. gemma-4-E4B-it-qat-UD-Q4_K_XL becomes gemma-4-E4B.
+func shortModel(name string) string {
+	for _, marker := range []string{"-it-", "-it", "-Q"} {
+		if before, _, ok := strings.Cut(name, marker); ok && before != "" {
+			return before
+		}
+	}
+	return name
 }

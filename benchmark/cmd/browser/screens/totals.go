@@ -103,5 +103,8 @@ func (v *View) buildTotals(width int) []string {
 	if byModel := model.ModelMetrics(v.store, "", ""); len(byModel) > 0 {
 		lines = append(lines, "", modelRankGraphs(byModel, contentWidth))
 	}
+	if matrix := v.store.AgentModelMatrix(); len(matrix.Models) > 0 {
+		lines = append(lines, "", agentModelMatrix(matrix, contentWidth))
+	}
 	return lines
 }
