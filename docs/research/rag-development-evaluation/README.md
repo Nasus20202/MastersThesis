@@ -200,6 +200,35 @@ six with retrieval-reachable failures under `R1`
   search; no attempt stated which result a change relied on.
 - Not run on the full set.
 
+### Empty-index control: what the retrieved text adds
+
+`R1` with an index from which every chunk was removed
+([empty.yaml](candidates/empty.yaml)): the prompt and the tool are unchanged,
+and every search returns `No documentation matched the query.` The control and
+a prompt agent ran in one invocation on the subset, three attempts.
+
+| Run           | Condition         | Macro | Full success | Attempts searching | Mean prompt tokens |
+| ------------- | ----------------- | ----: | -----------: | -----------------: | -----------------: |
+| `R1` full run | prompt            | 0.578 |        27/54 |                  — |             39,947 |
+| `R1` full run | `R1`              | 0.722 |        33/54 |              20/54 |             46,495 |
+| control run   | prompt            | 0.595 |        27/54 |                  — |             34,163 |
+| control run   | `R1`, empty index | 0.715 |        35/54 |              21/54 |             40,783 |
+
+| Comparison                      | Macro difference |           95% CI |
+| ------------------------------- | ---------------: | ---------------: |
+| `R1` − prompt (same run)        |           +0.144 | [−0.008, +0.299] |
+| empty index − prompt (same run) |           +0.119 | [−0.025, +0.265] |
+| empty index − `R1`              |           −0.007 | [−0.116, +0.090] |
+| prompt, control run − first run |           +0.017 | [−0.125, +0.165] |
+
+- With no documentation at all, the RAG agent scored as `R1` did; the prompt
+  agent reproduced its earlier score.
+- The agent searched as often as in `R1` (21 vs 20 of 54 attempts) and
+  searched again after an empty result in 6 attempts.
+- On this subset, the gain of `R1` over the prompt agent comes from the search
+  paragraph and the tool, not from the retrieved text. This matches the
+  largest gap being in `R1` attempts that never searched.
+
 ### `R7`: documentation retrieved with the task (short test)
 
 Retrieval before the first turn, as in classic retrieve-then-generate RAG, so
@@ -237,8 +266,8 @@ on the same scenarios (three attempts).
 | Qwen, prompt     | 0.852 |        13/18 |                  — |                           — |             9/18 |       21.3 |            117,437 |
 | Qwen, `R1`       | 0.722 |        13/18 |              18/18 |                       16/18 |            15/18 |       21.9 |            164,861 |
 
-- Qwen searched in every `R1` attempt, after inspecting the cluster, with
-  queries that name the observed symptom (`Service targetPort containerPort
+- Qwen searched in every `R1` attempt, after inspecting the cluster (median 8 earlier tool calls before the first search; Gemma 3), with queries that name the
+  observed symptom (`Service targetPort containerPort
 mismatch`, `Kubernetes NetworkPolicy egress DNS port 53`). The search
   instruction that Gemma follows in a third of attempts is followed by Qwen in
   all of them.
@@ -309,6 +338,8 @@ Analyses (`report.txt`, `summary.json`, `attempts.jsonl`):
 | `P4`, `R4`, prompt vs `S10`                     | [analysis/vs-skill/](analysis/vs-skill/)                 |
 | Prompt replicate vs first prompt run            | [analysis/prompt-replicate/](analysis/prompt-replicate/) |
 | `R7` vs `R1` (ten scenarios)                    | [analysis/r7-short/](analysis/r7-short/)                 |
+| Empty index vs same-run prompt (subset)         | [analysis/empty-subset/](analysis/empty-subset/)         |
+| Empty index vs `R1` (subset)                    | [analysis/empty-vs-r1/](analysis/empty-vs-r1/)           |
 | Qwen3.5 9B `R1` vs prompt (subset)              | [analysis/qwen9b-subset/](analysis/qwen9b-subset/)       |
 | `R6` vs `R1` (ten scenarios)                    | [analysis/r6-short/](analysis/r6-short/)                 |
 | Failure causes after retrieving the source page | [analysis/failure-causes.md](analysis/failure-causes.md) |
@@ -324,6 +355,7 @@ Raw runs (`run.json`, `results.json`, per-attempt records, configuration):
 | `P4` + `R4`, full set             | `run-2026-10-02-22-39-05-228Z` | [raw/p4-r4/](raw/p4-r4/)                                           |
 | `R6`, ten scenarios               | `run-2026-10-03-21-54-29-642Z` | [raw/r6-short/](raw/r6-short/)                                     |
 | `R7`, ten scenarios               | `run-2026-10-04-01-51-51-746Z` | [raw/r7-short/](raw/r7-short/)                                     |
+| Empty index + prompt, subset      | `run-2026-10-04-02-32-31-899Z` | [raw/empty-subset/](raw/empty-subset/)                             |
 | Qwen3.5 9B, prompt + `R1`, subset | `run-2026-10-03-23-40-15-673Z` | [raw/qwen9b-subset/](raw/qwen9b-subset/)                           |
 | Prompt replicate (35)             | `run-2026-10-02-21-41-02-671Z` | [raw/prompt-replicate/](raw/prompt-replicate/)                     |
 | skill `S10`                       | `run-2026-09-26-00-21-23-444Z` | [../skills-optimization/raw/s10/](../skills-optimization/raw/s10/) |
