@@ -56,6 +56,10 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if err != nil {
 		return err
 	}
+	sampling, err := readSampling(ctx)
+	if err != nil {
+		return err
+	}
 	var search *ragagent.Search
 	var retrievalProvenance *results.RetrievalProvenance
 	if slices.Contains(agentNames, commandagent.RAG) {
@@ -80,7 +84,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	if resumeID != "" {
 		store, err = results.Resume(resultsDir, resumeID)
 		if err == nil {
-			err = validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions), retrievalProvenance)
+			err = validateResumeMetadata(store.Metadata(), agentNames, repeat, scenarioIDs(definitions), retrievalProvenance, sampling)
 		}
 	} else {
 		store, err = startRun(ctx, results.RunMetadata{
@@ -92,6 +96,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			Scenarios:        scenarioIDs(definitions),
 			TagSelector:      tagFilter.String(),
 			Retrieval:        retrievalProvenance,
+			Sampling:         sampling,
 		})
 	}
 	if err != nil {
@@ -150,7 +155,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	})
 }
 
-func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string, retrieval *results.RetrievalProvenance) error {
+func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.Name, repeat int, scenarios []string, retrieval *results.RetrievalProvenance, sampling *results.SamplingProvenance) error {
 	if metadata.RunType != results.RunTypeBenchmark {
 		return fmt.Errorf("run %q is not a benchmark run", metadata.RunID)
 	}
@@ -164,13 +169,30 @@ func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.
 	if !slices.Equal(metadata.Scenarios, scenarios) {
 		return fmt.Errorf("resume scenarios %v do not match run scenarios %v", scenarios, metadata.Scenarios)
 	}
-	if !equalRetrieval(metadata.Retrieval, retrieval) {
+	if !equalPointers(metadata.Retrieval, retrieval) {
 		return fmt.Errorf("resume retrieval %+v does not match run retrieval %+v", retrieval, metadata.Retrieval)
+	}
+	if !equalPointers(metadata.Sampling, sampling) {
+		return fmt.Errorf("resume sampling %+v does not match run sampling %+v", sampling, metadata.Sampling)
 	}
 	return nil
 }
 
-func equalRetrieval(a, b *results.RetrievalProvenance) bool {
+// readSampling records the sampler settings the inference server applies to
+// the profile's model. It also fails the run early when the server is down.
+func readSampling(ctx context.Context) (*results.SamplingProvenance, error) {
+	client, err := llamaenv.NewChatClient()
+	if err != nil {
+		return nil, err
+	}
+	sampling, err := client.Sampling(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read sampling settings: %w; start the server with make llama-start", err)
+	}
+	return &results.SamplingProvenance{Model: client.Metadata().Model, Sampling: sampling}, nil
+}
+
+func equalPointers[T comparable](a, b *T) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

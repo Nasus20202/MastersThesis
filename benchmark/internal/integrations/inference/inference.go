@@ -31,3 +31,15 @@ type Options struct {
 	MaxTokens   *int
 	Seed        *int
 }
+
+// Sampling is the sampler configuration the inference server applies to a
+// model.
+type Sampling struct {
+	Temperature      float64 `json:"temperature"`
+	TopK             int     `json:"top_k"`
+	TopP             float64 `json:"top_p"`
+	MinP             float64 `json:"min_p"`
+	PresencePenalty  float64 `json:"presence_penalty"`
+	FrequencyPenalty float64 `json:"frequency_penalty"`
+	RepeatPenalty    float64 `json:"repeat_penalty"`
+}

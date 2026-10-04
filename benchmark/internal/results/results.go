@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 )
 
@@ -25,6 +26,16 @@ type RunMetadata struct {
 	TagSelector        string     `json:"tag_selector,omitempty"`
 	// Retrieval is recorded only for runs that include the RAG condition.
 	Retrieval *RetrievalProvenance `json:"retrieval,omitempty"`
+	// Sampling is recorded only for benchmark runs, read from the inference
+	// server before the first attempt.
+	Sampling *SamplingProvenance `json:"sampling,omitempty"`
+}
+
+// SamplingProvenance is the sampler configuration the inference server applied
+// to the run's model.
+type SamplingProvenance struct {
+	Model string `json:"model"`
+	inference.Sampling
 }
 
 // RetrievalProvenance identifies the RAG condition's search settings and the

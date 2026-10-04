@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 const (
 	chatCompletionsPath = "/v1/chat/completions"
 	embeddingsPath      = "/v1/embeddings"
+	propsPath           = "/props"
 	healthPath          = "/health"
 )
 
@@ -138,13 +140,32 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	return embeddings, nil
 }
 
+// Sampling returns the default sampler settings llama-server applies to the
+// client's model. The router loads the model if it is not loaded yet.
+func (c *Client) Sampling(ctx context.Context) (inference.Sampling, error) {
+	var response struct {
+		DefaultGenerationSettings struct {
+			Params inference.Sampling `json:"params"`
+		} `json:"default_generation_settings"`
+	}
+	path := propsPath + "?" + url.Values{"model": {c.model}}.Encode()
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return inference.Sampling{}, err
+	}
+	return response.DefaultGenerationSettings.Params, nil
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, payload, result any) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encode llama request: %w", err)
+	var body io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("encode llama request: %w", err)
+		}
+		body = bytes.NewReader(encoded)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, c.endpoint(path), bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, c.endpoint(path), body)
 	if err != nil {
 		return fmt.Errorf("create llama request: %w", err)
 	}
@@ -191,6 +212,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload, resul
 
 func (c *Client) endpoint(path string) string {
 	endpoint := *c.baseURL
+	path, endpoint.RawQuery, _ = strings.Cut(path, "?")
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + path
 	endpoint.RawPath = ""
 	return endpoint.String()
