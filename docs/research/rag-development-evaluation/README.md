@@ -94,8 +94,7 @@ Files under [`candidates/`](candidates/). None contains scenario answers.
 
 `R1` with an index from which every chunk was removed: the prompt and the tool
 are unchanged, and every search returns `No documentation matched the query.`
-
-On the full set, three attempts, compared with the `R1` run:
+Full set, three attempts, compared with the `R1` run:
 
 | Condition         | Macro | Full success | Attempts searching | Mean turns | Mean prompt tokens |
 | ----------------- | ----: | -----------: | -----------------: | ---------: | -----------------: |
@@ -109,62 +108,37 @@ On the full set, three attempts, compared with the `R1` run:
 | empty index − prompt |           +0.067 | [−0.016, +0.144] |
 | `R1` − empty index   |           +0.024 | [−0.038, +0.088] |
 
-| Scenario tag                         | Scenarios | Prompt | Empty index |  `R1` | `R1` − empty index, 95% CI |
-| ------------------------------------ | --------: | -----: | ----------: | ----: | -------------------------- |
-| `knowledge: documentation-dependent` |        26 |  0.665 |       0.705 | 0.693 | −0.012 [−0.098, +0.080]    |
-| `knowledge: general`                 |        11 |  0.616 |       0.778 | 0.778 | +0.000 [−0.091, +0.091]    |
-| `knowledge: multi-source`            |         6 |  0.591 |       0.519 | 0.736 | +0.218 [+0.056, +0.361]    |
-| `knowledge: version-specific`        |         3 |  0.519 |       0.741 | 0.778 | +0.037 (3 scenarios)       |
+| Scenario tag                         | Scenarios | Prompt | Empty index |  `R1` | `R1` − prompt, 95% CI   | `R1` − empty index, 95% CI |
+| ------------------------------------ | --------: | -----: | ----------: | ----: | ----------------------- | -------------------------- |
+| `knowledge: documentation-dependent` |        26 |  0.665 |       0.705 | 0.693 | +0.029 [−0.112, +0.161] | −0.012 [−0.098, +0.080]    |
+| `knowledge: general`                 |        11 |  0.616 |       0.778 | 0.778 | +0.162 [+0.020, +0.303] | +0.000 [−0.091, +0.091]    |
+| `knowledge: multi-source`            |         6 |  0.591 |       0.519 | 0.736 | +0.145 [−0.189, +0.431] | +0.218 [+0.056, +0.361]    |
+| `knowledge: version-specific`        |         3 |  0.519 |       0.741 | 0.778 | +0.259 (3 scenarios)    | +0.037 (3 scenarios)       |
 
-- Without any documentation the agent searched as often (30% vs 32% of
-  attempts), used the same number of turns and 19% fewer prompt tokens, and
-  scored within 0.024 of `R1`. About three quarters of `R1`'s gain over the
-  prompt agent remains without retrieved text.
+- Without documentation the agent searched as often, used as many turns and
+  19% fewer prompt tokens, and kept about three quarters of `R1`'s gain over
+  the prompt agent.
 - On the 26 documentation-dependent scenarios, where retrieved text should
   matter most, the empty index scored as high as `R1`.
 - The multi-source difference (6 scenarios) is mostly not explained by
-  retrieval: `R1` retrieved the source page in 5 of its 18 attempts there. The
-  largest per-scenario gains (`sidecar-shared-volume`, `dns-name-resolution`)
-  come from attempts that did not retrieve it; only in
-  `networkpolicy-egress-dns` did `R1` retrieve the page in every attempt (1 of
-  3 succeeded, 0 of 3 with the empty index). Tag intervals use a paired
-  bootstrap within each tag and are not corrected for comparing four tags.
+  retrieval: `R1` retrieved the source page in 5 of its 18 attempts there, and
+  the largest per-scenario gains (`sidecar-shared-volume`,
+  `dns-name-resolution`) come from attempts that did not retrieve it. Tag
+  intervals are not corrected for comparing four tags.
+- On the subset the control also ran next to a prompt agent in one
+  invocation: empty index − prompt +0.119 [−0.025, +0.265], against `R1` −
+  prompt +0.144 [−0.008, +0.299] in the `R1` run; empty index − `R1` −0.007
+  [−0.116, +0.090]. The prompt agent scored 0.595 there and 0.578 in the `R1`
+  run.
 
-On the subset, the control and a prompt agent ran in one invocation, three
-attempts each:
-
-| Run           | Condition         | Macro | Full success | Attempts searching | Mean prompt tokens |
-| ------------- | ----------------- | ----: | -----------: | -----------------: | -----------------: |
-| `R1` full run | prompt            | 0.578 |        27/54 |                  — |             39,947 |
-| `R1` full run | `R1`              | 0.722 |        33/54 |              20/54 |             46,495 |
-| control run   | prompt            | 0.595 |        27/54 |                  — |             34,163 |
-| control run   | `R1`, empty index | 0.715 |        35/54 |              21/54 |             40,783 |
-
-| Comparison                      | Macro difference |           95% CI |
-| ------------------------------- | ---------------: | ---------------: |
-| `R1` − prompt (same run)        |           +0.144 | [−0.008, +0.299] |
-| empty index − prompt (same run) |           +0.119 | [−0.025, +0.265] |
-| empty index − `R1`              |           −0.007 | [−0.116, +0.090] |
-| prompt, control run − first run |           +0.017 | [−0.125, +0.165] |
-
-- Without any documentation the RAG agent searched as often as `R1` (21 vs 20
-  of 54 attempts), searched again after an empty result in 6 attempts, and
-  scored as `R1` did. The prompt agent reproduced its earlier score.
-- This agrees with where `R1`'s gain lies: the largest gap to the prompt agent
-  is in `R1` attempts that never searched, and on general-knowledge scenarios.
+This agrees with where `R1`'s gain lies in its own run: the largest gap to the
+prompt agent is in attempts that never searched.
 
 | Group (`R1`, full set)         | Attempts | Macro | Prompt, same scenarios |
 | ------------------------------ | -------: | ----: | ---------------------: |
 | no search                      |       94 | 0.757 |                  0.651 |
 | searched, source not retrieved |       11 | 0.517 |                  0.456 |
 | source retrieved               |       33 | 0.617 |                  0.544 |
-
-| Scenario tag                         | Scenarios | Prompt |   RAG | Skill | RAG − prompt, 95% CI    |
-| ------------------------------------ | --------: | -----: | ----: | ----: | ----------------------- |
-| `knowledge: documentation-dependent` |        26 |  0.665 | 0.693 | 0.715 | +0.029 [−0.112, +0.161] |
-| `knowledge: general`                 |        11 |  0.616 | 0.778 | 0.788 | +0.162 [+0.020, +0.303] |
-| `knowledge: multi-source`            |         6 |  0.591 | 0.736 | 0.624 | +0.145 [−0.189, +0.431] |
-| `knowledge: version-specific`        |         3 |  0.519 | 0.778 | 0.556 | +0.259 (3 scenarios)    |
 
 The search paragraph asks the agent to identify the affected resource before
 its first change; the control suggests that this ordering, not the excerpts,
