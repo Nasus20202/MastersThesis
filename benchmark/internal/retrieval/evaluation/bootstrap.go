@@ -31,13 +31,15 @@ func compareToSelected(selected ConfigScore, configs []ConfigScore) []Difference
 		for index := range perProbe {
 			perProbe[index] = config.Probes[index].Rewrite.Hit - selected.Probes[index].Rewrite.Hit
 		}
-		low, high := bootstrapInterval(perProbe)
+		low, high := BootstrapInterval(perProbe)
 		differences = append(differences, Difference{Config: config.Name(), Mean: mean(perProbe), Low: low, High: high})
 	}
 	return differences
 }
 
-func bootstrapInterval(values []float64) (float64, float64) {
+// BootstrapInterval is the 95% percentile interval of the mean of values over
+// seeded resamples with replacement.
+func BootstrapInterval(values []float64) (float64, float64) {
 	random := rand.New(rand.NewPCG(bootstrapSeed, bootstrapSeed)) //nolint:gosec // Resampling must be seeded and reproducible.
 	means := make([]float64, bootstrapResamples)
 	sample := make([]float64, len(values))

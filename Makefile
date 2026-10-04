@@ -21,6 +21,7 @@ QUERIES ?= ../docs/research/retrieval-design/queries.json
 CHUNKING ?= all
 Q ?=
 SEARCH_ARGS ?=
+ANALYZE_ARGS ?=
 
 include $(LLAMA_CONFIG)
 include $(RETRIEVAL_CONFIG)
@@ -66,7 +67,7 @@ BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),embed
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search
+.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search analyze-runs
 
 help:
 	@printf '%s\n' 'Available commands:'
@@ -83,13 +84,14 @@ help:
 		'make retrieval-queries' 'Generate the frozen retrieval evaluation queries.' \
 		'make retrieval-evaluate' 'Evaluate the retrieval configurations on the query set.' \
 		'make retrieval-search Q=TEXT' 'Search the corpus with the configured retrieval settings.' \
+		'make analyze-runs' 'Score RAG searches in benchmark runs against scenario sources (ANALYZE_ARGS).' \
 		'make llama-start' 'Start the llama.cpp model router.' \
 		'make llama-stop' 'Stop the llama.cpp model router.' \
 		'make llama-logs' 'Follow llama.cpp model router logs.' \
 		'make registry-start' 'Start the pull-through image registry used by benchmark clusters.' \
 		'make registry-stop' 'Stop the pull-through image registry.' \
 		'make docker-cleanup' 'Remove benchmark Kind clusters, sandbox and setup containers.' \
-		'make build' 'Build the benchmark, browser and retrieval executables.' \
+		'make build' 'Build the benchmark, browser, retrieval and analyze executables.' \
 		'make browser' 'Browse benchmark run history in a terminal UI.' \
 		'make benchmark' 'Run the default benchmark scenario.' \
 		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.' \
@@ -111,7 +113,8 @@ help:
 		'CHUNKING=NAME' 'Index sections, windows or all (default: all).' \
 		'PROBES=PATH' 'Knowledge-check probes for query generation (relative to benchmark/).' \
 		'QUERIES=PATH' 'Query set for retrieval evaluation (relative to benchmark/).' \
-		'SEARCH_ARGS=FLAGS' 'Override search settings, e.g. --mode lexical --k 3.'
+		'SEARCH_ARGS=FLAGS' 'Override search settings, e.g. --mode lexical --k 3.' \
+		'ANALYZE_ARGS=FLAGS' 'Run analysis flags, e.g. --condition RUN/rag --reference RUN/prompt --out DIR.'
 
 test:
 	$(MAKE) benchmark-go-test
@@ -164,6 +167,9 @@ retrieval-evaluate: embedding-start
 retrieval-search: embedding-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/retrieval search $(BENCHMARK_CONFIG_ARGS) $(SEARCH_ARGS) "$(Q)"
 
+analyze-runs:
+	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/analyze $(ANALYZE_ARGS)
+
 kind-network:
 	@docker network create kind >/dev/null 2>&1 || true
 
@@ -180,6 +186,7 @@ build:
 	cd $(BENCHMARK_DIR) && $(GO) build -o benchmark ./cmd/benchmark
 	cd $(BENCHMARK_DIR) && $(GO) build -o browser ./cmd/browser
 	cd $(BENCHMARK_DIR) && $(GO) build -o retrieval ./cmd/retrieval
+	cd $(BENCHMARK_DIR) && $(GO) build -o analyze ./cmd/analyze
 
 browser:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
