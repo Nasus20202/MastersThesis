@@ -3,8 +3,10 @@ package model
 import (
 	"io"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
@@ -32,9 +34,13 @@ type Store struct {
 	attempts map[string]attemptEntry
 }
 
+// attemptEntry caches a parsed attempt file. Attempt files are written once,
+// so entries survive reloads and are re-read only when the file's modification
+// time changes, e.g. after a rerun replaced it.
 type attemptEntry struct {
 	attempt results.Attempt
 	err     error
+	modTime time.Time
 }
 
 // New returns an empty store; call Reload to populate it.
@@ -56,7 +62,6 @@ func (s *Store) Reload() error {
 	}
 	s.runs = runs
 	s.snapshot = make(map[string]results.RunSnapshot)
-	s.attempts = make(map[string]attemptEntry)
 	s.recompute()
 	return nil
 }
@@ -226,7 +231,11 @@ func (s *Store) EnsureSnapshot(runID string) error {
 
 // Attempt loads and caches one attempt artifact.
 func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, error) {
-	if entry, ok := s.attempts[ref.Path]; ok {
+	var modTime time.Time
+	if info, err := os.Stat(ref.Path); err == nil {
+		modTime = info.ModTime()
+	}
+	if entry, ok := s.attempts[ref.Path]; ok && entry.modTime.Equal(modTime) {
 		return entry.attempt, entry.err
 	}
 	var runType results.RunType
@@ -234,7 +243,7 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 		runType = snapshot.Metadata.RunType
 	}
 	attempt, err := results.LoadAttempt(ref, runType)
-	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err}
+	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err, modTime: modTime}
 	return attempt, err
 }
 
@@ -435,4 +444,21 @@ func (s *Store) AgentModelMatrix() AgentModelMatrix {
 		}
 	}
 	return matrix
+}
+
+// ModelRollups sums each model's conditions in the agent-by-model matrix into
+// summary-level metrics, without loading attempt files.
+func (s *Store) ModelRollups() map[string]Metrics {
+	matrix := s.AgentModelMatrix()
+	metrics := make(map[string]Metrics, len(matrix.Models))
+	for _, byModel := range matrix.Cells {
+		for model, cell := range byModel {
+			item := metrics[model]
+			item.MeanScore = (item.MeanScore*float64(item.Attempts) + cell.MeanScore*float64(cell.Attempts)) / float64(item.Attempts+cell.Attempts)
+			item.Attempts += cell.Attempts
+			item.Full += cell.FullSuccessCount
+			metrics[model] = item
+		}
+	}
+	return metrics
 }

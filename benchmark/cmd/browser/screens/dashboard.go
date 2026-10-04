@@ -244,7 +244,7 @@ func agentModelMatrix(matrix model.AgentModelMatrix, width int) string {
 		return strings.Join(append(lines, ui.MutedStyle.Render("no runs with a known model")), "\n")
 	}
 	labelWidth := min(16, max(8, width/5))
-	columnWidth := max(10, (width-labelWidth)/len(matrix.Models))
+	columnWidth := min(18, max(10, (width-labelWidth)/len(matrix.Models)))
 	header := ui.PadRight(ui.Header.Render("AGENT"), labelWidth)
 	for _, name := range matrix.Models {
 		header += ui.PadRight(ui.Header.Render(ui.Truncate(shortModel(name), columnWidth-1)), columnWidth)

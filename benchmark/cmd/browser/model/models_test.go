@@ -1,7 +1,10 @@
 package model
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,4 +77,42 @@ func TestAgentModelMatrixRollsUpConditionsByModel(t *testing.T) {
 
 	store.SetModelFilter([]string{"qwen"})
 	assert.Equal(t, []string{"qwen"}, store.AgentModelMatrix().Models)
+}
+
+func TestAttemptCacheSurvivesReloadUntilTheFileChanges(t *testing.T) {
+	root := t.TempDir()
+	runStore, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
+	require.NoError(t, err)
+	require.NoError(t, runStore.WriteAttempt(1, "skill", attemptResult("alpha", false, 0.5, 10, 2)))
+
+	store := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, store.Reload())
+	assert.InDelta(t, 0.5, RunMetrics(store, "run-1", "", "").MeanScore, 1e-9)
+
+	require.NoError(t, store.Reload())
+	assert.Len(t, store.attempts, 1)
+
+	// A rerun replaces the attempt file.
+	path := store.attemptsPath(t, "run-1")
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(data, &record))
+	record["grading"].(map[string]any)["score"] = 1.0
+	data, err = json.Marshal(record)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+	later := time.Now().Add(time.Second)
+	require.NoError(t, os.Chtimes(path, later, later))
+	require.NoError(t, store.Reload())
+	assert.InDelta(t, 1, RunMetrics(store, "run-1", "", "").MeanScore, 1e-9)
+}
+
+func (s *Store) attemptsPath(t *testing.T, runID string) string {
+	t.Helper()
+	require.NoError(t, s.EnsureSnapshot(runID))
+	snapshot, ok := s.Snapshot(runID)
+	require.True(t, ok)
+	require.Len(t, snapshot.Attempts, 1)
+	return snapshot.Attempts[0].Path
 }

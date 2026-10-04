@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/model"
@@ -27,7 +28,9 @@ func (v *View) totalsLines(width int) []string {
 	if lines, ok := v.totals[width]; ok {
 		return lines
 	}
-	lines := v.buildTotals(width)
+	// Sections render as multi-line blocks; the viewport scrolls and sizes by
+	// physical lines, so split them before caching.
+	lines := strings.Split(strings.Join(v.buildTotals(width), "\n"), "\n")
 	v.totals[width] = lines
 	return lines
 }
@@ -100,7 +103,7 @@ func (v *View) buildTotals(width int) []string {
 	if len(metrics.Terminations) > 0 {
 		lines = append(lines, components.Section(width, "Termination"), terminationBars(contentWidth, metrics.Terminations))
 	}
-	if byModel := model.ModelMetrics(v.store, "", ""); len(byModel) > 0 {
+	if byModel := v.store.ModelRollups(); len(byModel) > 0 {
 		lines = append(lines, "", modelRankGraphs(byModel, contentWidth))
 	}
 	if matrix := v.store.AgentModelMatrix(); len(matrix.Models) > 0 {

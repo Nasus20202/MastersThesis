@@ -417,3 +417,14 @@ func TestFilterOverlayListsModelsFirstAndAppliesThem(t *testing.T) {
 	require.Len(t, model.store.Runs(), 1)
 	assert.Contains(t, model.View().Content, "model=qwen")
 }
+
+func TestTotalsFrameFitsTheTerminal(t *testing.T) {
+	model := newTestModel(t)
+	model.Update(tea.WindowSizeMsg{Width: 200, Height: 30})
+	model.Update(press("4"))
+	lines := strings.Split(model.View().Content, "\n")
+	assert.LessOrEqual(t, len(lines), 30)
+
+	model.Update(press("end"))
+	assert.LessOrEqual(t, len(strings.Split(model.View().Content, "\n")), 30)
+}
