@@ -48,17 +48,22 @@ type Difference struct {
 // Usage is the mean model cost of an attempt and how the agent changed and
 // checked the cluster, over attempts where the agent ran. Unconfirmed counts
 // attempts the agent completed without full success: it reported a repair the
-// grader did not confirm.
+// grader did not confirm. PeakContext and MaxPeakContext are the mean and
+// largest per-attempt peak context; Overflows counts attempts that ran out of
+// context.
 type Usage struct {
-	Attempts      int     `json:"attempts"`
-	Turns         float64 `json:"turns"`
-	Prompt        float64 `json:"prompt_tokens"`
-	Completion    float64 `json:"completion_tokens"`
-	Changes       int     `json:"changes"`
-	FailedChanges int     `json:"failed_changes"`
-	Edits         int     `json:"edits"`
-	RolloutStatus int     `json:"rollout_status_attempts"`
-	Unconfirmed   int     `json:"unconfirmed_attempts"`
+	Attempts       int     `json:"attempts"`
+	Turns          float64 `json:"turns"`
+	Prompt         float64 `json:"prompt_tokens"`
+	Completion     float64 `json:"completion_tokens"`
+	PeakContext    float64 `json:"peak_context_tokens"`
+	MaxPeakContext int     `json:"max_peak_context_tokens"`
+	Overflows      int     `json:"context_overflows"`
+	Changes        int     `json:"changes"`
+	FailedChanges  int     `json:"failed_changes"`
+	Edits          int     `json:"edits"`
+	RolloutStatus  int     `json:"rollout_status_attempts"`
+	Unconfirmed    int     `json:"unconfirmed_attempts"`
 }
 
 // CriterionRate is the pass rate of one scenario criterion. Criterion IDs are
@@ -234,6 +239,11 @@ func usage(attempts []RunAttempt) Usage {
 		result.Turns += float64(attempt.Turns)
 		result.Prompt += float64(attempt.Prompt)
 		result.Completion += float64(attempt.Completion)
+		result.PeakContext += float64(attempt.PeakContext)
+		result.MaxPeakContext = max(result.MaxPeakContext, attempt.PeakContext)
+		if attempt.Overflow {
+			result.Overflows++
+		}
 		result.Changes += attempt.Changes
 		result.FailedChanges += attempt.FailedChanges
 		result.Edits += attempt.Edits
@@ -249,6 +259,7 @@ func usage(attempts []RunAttempt) Usage {
 		result.Turns /= count
 		result.Prompt /= count
 		result.Completion /= count
+		result.PeakContext /= count
 	}
 	return result
 }

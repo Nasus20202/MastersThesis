@@ -4,7 +4,11 @@ package inference
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrContextOverflow reports a request that does not fit in the model context.
+var ErrContextOverflow = errors.New("request exceeds the model context")
 
 // Client sends chat-completion requests. llama.Adapter implements it.
 type Client interface {

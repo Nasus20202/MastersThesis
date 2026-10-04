@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -267,7 +268,7 @@ func TestLoopLogsInferenceMessagesResponsesToolCallsAndMetrics(t *testing.T) {
 
 	result, err := loop.Run(context.Background(), "Inspect the workload.")
 	require.NoError(t, err)
-	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42, CachedTokens: 15}, result.TokenUsage)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42, CachedTokens: 15, PeakContextTokens: 28}, result.TokenUsage)
 
 	records := make([]map[string]any, 0)
 	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
@@ -569,4 +570,58 @@ func TestConditionRejectsUninitializedAgentAndBlankTask(t *testing.T) {
 	require.NoError(t, err)
 	_, err = condition.Run(context.Background(), " ")
 	assert.EqualError(t, err, "agent task is required")
+}
+
+func TestLoopRecordsPeakContextAndOverflow(t *testing.T) {
+	tool := &loopTool{definition: inference.Tool{Name: "inspect"}}
+	call := inference.Message{Role: "assistant", ToolCalls: []inference.ToolCall{{ID: "call-1", Type: "function", Name: "inspect"}}}
+	maxTokens := 100
+
+	for name, test := range map[string]struct {
+		results      []inference.Result
+		errors       []error
+		maxTokens    *int
+		wantPeak     int
+		wantOverflow bool
+	}{
+		"completed": {
+			results: []inference.Result{
+				{Message: call, Usage: &inference.Usage{PromptTokens: 900, CompletionTokens: 50}},
+				{Message: inference.Message{Role: "assistant", Content: "done"}, FinishReason: "stop", Usage: &inference.Usage{PromptTokens: 800, CompletionTokens: 20}},
+			},
+			wantPeak: 950,
+		},
+		"rejected request": {
+			results:      []inference.Result{{Message: call, Usage: &inference.Usage{PromptTokens: 900, CompletionTokens: 50}}},
+			errors:       []error{nil, fmt.Errorf("call: %w", inference.ErrContextOverflow)},
+			wantPeak:     950,
+			wantOverflow: true,
+		},
+		"length without max tokens": {
+			results:      []inference.Result{{Message: inference.Message{Role: "assistant"}, FinishReason: "length", Usage: &inference.Usage{PromptTokens: 1000, CompletionTokens: 24}}},
+			wantPeak:     1024,
+			wantOverflow: true,
+		},
+		"length below max tokens": {
+			results:      []inference.Result{{Message: inference.Message{Role: "assistant"}, FinishReason: "length", Usage: &inference.Usage{PromptTokens: 1000, CompletionTokens: 24}}},
+			maxTokens:    &maxTokens,
+			wantPeak:     1024,
+			wantOverflow: true,
+		},
+		"length at max tokens": {
+			results:   []inference.Result{{Message: inference.Message{Role: "assistant"}, FinishReason: "length", Usage: &inference.Usage{PromptTokens: 1000, CompletionTokens: 100}}},
+			maxTokens: &maxTokens,
+			wantPeak:  1100,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := &loopClient{results: test.results, errors: test.errors}
+			loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 2, MaxToolCalls: 2, MaxTokens: test.maxTokens})
+			require.NoError(t, err)
+
+			result, _ := loop.Run(context.Background(), "Inspect the workload.")
+			assert.Equal(t, test.wantPeak, result.TokenUsage.PeakContextTokens)
+			assert.Equal(t, test.wantOverflow, result.ContextOverflow)
+		})
+	}
 }

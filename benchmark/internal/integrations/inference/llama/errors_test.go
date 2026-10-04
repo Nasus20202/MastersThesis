@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
 func TestChatReturnsHTTPError(t *testing.T) {
@@ -34,5 +36,18 @@ func TestChatReturnsHTTPError(t *testing.T) {
 	}
 	if !strings.Contains(httpErr.Body, "model is not loaded") {
 		t.Errorf("error body = %q, want model-not-loaded message", httpErr.Body)
+	}
+}
+
+func TestHTTPErrorMapsContextSizeRejection(t *testing.T) {
+	t.Parallel()
+
+	overflow := &HTTPError{StatusCode: http.StatusBadRequest, Body: `{"error":{"code":400,"message":"request (40012 tokens) exceeds the available context size (32768 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":40012,"n_ctx":32768}}`}
+	if !errors.Is(overflow, inference.ErrContextOverflow) {
+		t.Errorf("errors.Is(%v, ErrContextOverflow) = false, want true", overflow)
+	}
+	other := &HTTPError{StatusCode: http.StatusServiceUnavailable, Body: "model is not loaded"}
+	if errors.Is(other, inference.ErrContextOverflow) {
+		t.Errorf("errors.Is(%v, ErrContextOverflow) = true, want false", other)
 	}
 }
