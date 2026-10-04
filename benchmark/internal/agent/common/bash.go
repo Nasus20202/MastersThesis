@@ -97,15 +97,17 @@ func formatCommandResult(result command.Result, execErr error) string {
 	if execErr != nil && result.ExitCode <= 0 {
 		fmt.Fprintf(&builder, "error: %s\n", execErr)
 	}
-	return limitModelVisibleOutput(builder.String())
+	return limitOutput(builder.String(), truncatedCommandOutputMarker)
 }
 
-func limitModelVisibleOutput(content string) string {
+// limitOutput keeps the head and tail of content within
+// maxModelVisibleCommandOutputBytes, joined by marker.
+func limitOutput(content, marker string) string {
 	if len(content) <= maxModelVisibleCommandOutputBytes {
 		return content
 	}
-	available := maxModelVisibleCommandOutputBytes - len(truncatedCommandOutputMarker)
+	available := maxModelVisibleCommandOutputBytes - len(marker)
 	head := available / 2
 	tail := available - head
-	return content[:head] + truncatedCommandOutputMarker + content[len(content)-tail:]
+	return content[:head] + marker + content[len(content)-tail:]
 }

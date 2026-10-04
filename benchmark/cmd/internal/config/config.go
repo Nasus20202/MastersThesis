@@ -58,6 +58,7 @@ type LoopConfig struct {
 	MaxToolCalls       *int     `yaml:"max_tool_calls,omitempty"`
 	ToolTimeoutSeconds *float64 `yaml:"tool_timeout_seconds,omitempty"`
 	TimeoutSeconds     *float64 `yaml:"timeout_seconds,omitempty"`
+	FileTools          *bool    `yaml:"file_tools,omitempty"`
 }
 
 type PromptAgentConfig struct {
