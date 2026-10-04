@@ -40,7 +40,7 @@
   Full runs: 46 scenarios × 3 attempts. Screening: that study's 18-scenario
   [subset](../skills-optimization/subset.txt) × 3. Short tests: ten scenarios × 2. Skill agent: archived `S10` run; the same-run prompt agent reproduced that
   study's prompt result (0.634, 78/138).
-- **Setup failures.** 15 attempts whose setup failed before the agent started
+- **Setup failures.** 16 attempts whose setup failed before the agent started
   were rerun with `RESUME`. Attempts that failed after the agent started are
   kept.
 - **Measures.** Macro score (mean per scenario, then over scenarios), full
