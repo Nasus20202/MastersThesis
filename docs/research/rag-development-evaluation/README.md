@@ -54,6 +54,7 @@ Files under [`candidates/`](candidates/). None contains scenario answers.
 | `R4` | `R1` + a paragraph on change mechanics and `kubectl rollout status` verification.                                                                                                    | [prompt/r4.md](candidates/prompt/r4.md), [r4.yaml](candidates/r4.yaml)                                                            |
 | `P4` | Control for `R4`: prompt agent + the same paragraph, same invocation as `R4`.                                                                                                        | [prompt/p4.md](candidates/prompt/p4.md), [r4.yaml](candidates/r4.yaml)                                                            |
 | `R6` | `R1` with queries from observed status or errors, retrieved causes checked before acting, each change tied to the results; results with HTML as plain text and each page's sections. | [prompt/r6.md](candidates/prompt/r6.md), [r6.yaml](candidates/r6.yaml), [r6-presentation.patch](candidates/r6-presentation.patch) |
+| `R7` | `R1` (same prompt and tool) + one search with the task text before the first turn, excerpts appended to the task message.                                                            | [r7.yaml](candidates/r7.yaml), [r7-task-search.patch](candidates/r7-task-search.patch)                                            |
 
 ## Results
 
@@ -199,6 +200,57 @@ six with retrieval-reachable failures under `R1`
   search; no attempt stated which result a change relied on.
 - Not run on the full set.
 
+### `R7`: documentation retrieved with the task (short test)
+
+Retrieval before the first turn, as in classic retrieve-then-generate RAG, so
+that the agent sees documentation before forming a hypothesis. Searching each
+scenario's task text returns the source page for 21 of 46 scenarios (14 at
+rank 1); the results for `daemonset-missing-toleration` and
+`networkpolicy-egress-dns` contain the toleration and the DNS caution that the
+agent's own queries missed. Same ten scenarios × 2 attempts as `R6`.
+
+| Condition       | Macro | Full success | Attempts searching (`search_docs`) | Mean prompt tokens |
+| --------------- | ----: | -----------: | ---------------------------------: | -----------------: |
+| `R1` (full run) | 0.567 |        16/30 |                              20/30 |             59,438 |
+| `R7`            | 0.387 |         7/20 |                               4/20 |             88,204 |
+
+- `R7` − `R1`: −0.180 [−0.363, +0.004], across invocations; scores dropped on
+  scenarios `R1` solved (`service-targetport-mismatch` 0/2, `pvc-pending` 1/2).
+- The appended excerpts replaced the agent's own searching.
+- They were copied rather than checked: in `daemonset-missing-toleration` the
+  agent applied the example manifest URL from the excerpts, in
+  `service-targetport-mismatch`, where the source page was only at rank 5, it
+  guessed port 8080.
+- Not run on the full set.
+
+### Stronger model: Qwen3.5 9B (exploratory)
+
+Prompt agent and `R1` in one invocation, Qwen3.5 9B (`Q4_K_M`, the
+[qwen35-9b profile](../../../benchmark/model-profiles/qwen35-9b.env)), subset ×
+1 attempt, same limits as for Gemma. Gemma rows are `R1` and its prompt agent
+on the same scenarios (three attempts).
+
+| Model, condition | Macro | Full success | Attempts searching | Source retrieved (attempts) | Ended by a limit | Mean turns | Mean prompt tokens |
+| ---------------- | ----: | -----------: | -----------------: | --------------------------: | ---------------: | ---------: | -----------------: |
+| Gemma, prompt    | 0.578 |        27/54 |                  — |                           — |             0/54 |       11.2 |             39,947 |
+| Gemma, `R1`      | 0.722 |        33/54 |              20/54 |                       17/54 |             0/54 |       10.9 |             46,495 |
+| Qwen, prompt     | 0.852 |        13/18 |                  — |                           — |             9/18 |       21.3 |            117,437 |
+| Qwen, `R1`       | 0.722 |        13/18 |              18/18 |                       16/18 |            15/18 |       21.9 |            164,861 |
+
+- Qwen searched in every `R1` attempt, after inspecting the cluster, with
+  queries that name the observed symptom (`Service targetPort containerPort
+mismatch`, `Kubernetes NetworkPolicy egress DNS port 53`). The search
+  instruction that Gemma follows in a third of attempts is followed by Qwen in
+  all of them.
+- Qwen uses most of the 25-turn and 600-second budget: one command per turn,
+  long verification. Search results add context to every later turn, so `R1`
+  attempts hit the time limit in 9 of 18 attempts against 1 of 18 for the
+  prompt agent. All five `R1` failures ended at a limit; the graded state is
+  the cluster when the attempt was stopped.
+- `R1` − prompt on Qwen: −0.130 [−0.389, +0.116]. Under these limits the
+  difference measures how fast an attempt finishes, not whether the retrieved
+  text helped.
+
 ### Run-to-run variation
 
 A prompt replicate (first attempt of 35 scenarios) scored 0.600 vs 0.645 for
@@ -236,8 +288,8 @@ the same attempts in the first run (−0.058 against all three attempts, CI
   agent.
 - Search ordering and change counts use a text heuristic.
 - `R3`: subset only, disturbed run.
-- `R6`: 20 attempts on scenarios chosen for the change, compared across
-  invocations.
+- `R6`, `R7`: 20 attempts each on scenarios chosen for the change, compared
+  across invocations.
 - The `P4` paragraph was written from development traces; it names no
   scenario, resource or fix.
 
@@ -256,21 +308,25 @@ Analyses (`report.txt`, `summary.json`, `attempts.jsonl`):
 | `R4` vs `R1`                                    | [analysis/r4-vs-r1/](analysis/r4-vs-r1/)                 |
 | `P4`, `R4`, prompt vs `S10`                     | [analysis/vs-skill/](analysis/vs-skill/)                 |
 | Prompt replicate vs first prompt run            | [analysis/prompt-replicate/](analysis/prompt-replicate/) |
+| `R7` vs `R1` (ten scenarios)                    | [analysis/r7-short/](analysis/r7-short/)                 |
+| Qwen3.5 9B `R1` vs prompt (subset)              | [analysis/qwen9b-subset/](analysis/qwen9b-subset/)       |
 | `R6` vs `R1` (ten scenarios)                    | [analysis/r6-short/](analysis/r6-short/)                 |
 | Failure causes after retrieving the source page | [analysis/failure-causes.md](analysis/failure-causes.md) |
 
 Raw runs (`run.json`, `results.json`, per-attempt records, configuration):
 
-| Run                     | Run ID                         | Raw results                                                        |
-| ----------------------- | ------------------------------ | ------------------------------------------------------------------ |
-| `R1` + prompt, full set | `run-2026-10-02-07-35-43-038Z` | [raw/r1/](raw/r1/)                                                 |
-| `R2`, full set          | `run-2026-10-02-17-28-03-947Z` | [raw/r2/](raw/r2/)                                                 |
-| `R2`, subset            | `run-2026-10-02-10-32-47-138Z` | [raw/r2-subset/](raw/r2-subset/)                                   |
-| `R3`, subset            | `run-2026-10-02-12-21-54-157Z` | [raw/r3-subset/](raw/r3-subset/)                                   |
-| `P4` + `R4`, full set   | `run-2026-10-02-22-39-05-228Z` | [raw/p4-r4/](raw/p4-r4/)                                           |
-| `R6`, ten scenarios     | `run-2026-10-03-21-54-29-642Z` | [raw/r6-short/](raw/r6-short/)                                     |
-| Prompt replicate (35)   | `run-2026-10-02-21-41-02-671Z` | [raw/prompt-replicate/](raw/prompt-replicate/)                     |
-| skill `S10`             | `run-2026-09-26-00-21-23-444Z` | [../skills-optimization/raw/s10/](../skills-optimization/raw/s10/) |
+| Run                               | Run ID                         | Raw results                                                        |
+| --------------------------------- | ------------------------------ | ------------------------------------------------------------------ |
+| `R1` + prompt, full set           | `run-2026-10-02-07-35-43-038Z` | [raw/r1/](raw/r1/)                                                 |
+| `R2`, full set                    | `run-2026-10-02-17-28-03-947Z` | [raw/r2/](raw/r2/)                                                 |
+| `R2`, subset                      | `run-2026-10-02-10-32-47-138Z` | [raw/r2-subset/](raw/r2-subset/)                                   |
+| `R3`, subset                      | `run-2026-10-02-12-21-54-157Z` | [raw/r3-subset/](raw/r3-subset/)                                   |
+| `P4` + `R4`, full set             | `run-2026-10-02-22-39-05-228Z` | [raw/p4-r4/](raw/p4-r4/)                                           |
+| `R6`, ten scenarios               | `run-2026-10-03-21-54-29-642Z` | [raw/r6-short/](raw/r6-short/)                                     |
+| `R7`, ten scenarios               | `run-2026-10-04-01-51-51-746Z` | [raw/r7-short/](raw/r7-short/)                                     |
+| Qwen3.5 9B, prompt + `R1`, subset | `run-2026-10-03-23-40-15-673Z` | [raw/qwen9b-subset/](raw/qwen9b-subset/)                           |
+| Prompt replicate (35)             | `run-2026-10-02-21-41-02-671Z` | [raw/prompt-replicate/](raw/prompt-replicate/)                     |
+| skill `S10`                       | `run-2026-09-26-00-21-23-444Z` | [../skills-optimization/raw/s10/](../skills-optimization/raw/s10/) |
 
 Reproduce from `benchmark/` (link raw directories back to their run IDs under
 `results/` first):
