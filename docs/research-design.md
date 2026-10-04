@@ -51,6 +51,8 @@ The benchmark defines the observable scoring and result format. Fine-tuning cost
 
 The conditions should use the same benchmark and evaluation process wherever possible. The intended experimental difference is the adaptation method, not an unrelated change in the task or scoring.
 
+Conditions are developed and evaluated on four models, Gemma 4 E2B and E4B and Qwen3.5 4B and 9B (D-037), so that no condition is fitted to one model's weaknesses and condition differences can be checked across model families and sizes. Each model is reported separately; the models are listed in [tech-stack.md](tech-stack.md).
+
 Any necessary difference in model, runtime, tools or limits must be recorded and considered when interpreting the results.
 
 The study should preserve raw results, including negative and inconclusive outcomes. Conclusions should be based on repeated runs rather than on a single model execution.

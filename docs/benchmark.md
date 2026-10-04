@@ -77,13 +77,17 @@ The final evaluation may extend the comparison beyond the adaptation conditions 
 
 ## Agent execution limits
 
-The common model/tool loop uses per-attempt limits of 25 model turns, 50 tool calls, 60 seconds per tool call and 600 seconds total agent runtime. The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 600-second deadline stops the entire attempt.
+The common model/tool loop uses per-attempt limits of 50 model turns, 100 tool calls, 60 seconds per tool call and 1800 seconds total agent runtime (D-039, provisional). The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 1800-second deadline stops the entire attempt.
 
 Model-visible Bash output is capped at 8 KiB so a single command cannot fill the context; the complete output remains in raw evidence.
 
 The loop retains the model's reasoning content between tool calls and re-sends it with the next request, so the model keeps its reasoning context and the inference prompt cache can reuse the shared prefix. Reasoning is recorded in the raw attempt evidence.
 
 The selected limits are preserved in each raw run result so later conditions can be compared under the same execution budget.
+
+Each attempt records its peak context, the largest prompt plus completion of a single response, and whether it ran out of context: llama-server rejected a request as too long, or a response stopped at the length limit (D-040). A rejected request reports no usage, so the peak then underestimates the context.
+
+With `agents.loop.file_tools`, every condition gets `read_file`, `write_file` and an exact-string `edit_file` next to bash; they are off by default (D-041). `kubectl edit` always fails with a hint to export, change and apply the manifest, because the sandbox has no interactive editor.
 
 ## Model visibility
 
@@ -130,12 +134,12 @@ The current repetition decision is recorded in the [decision log](decision-log.m
 Each run should preserve, where available:
 
 - scenario and condition identifiers,
-- model and runtime identifiers,
+- model and runtime identifiers, including the applied sampling,
 - criterion-level verification results,
 - partial score,
 - complete-success status,
 - execution time,
-- token and tool usage,
+- token and tool usage, including peak context per attempt,
 - model and tool transcript,
 - relevant runtime metadata,
 - failure and cleanup information.
