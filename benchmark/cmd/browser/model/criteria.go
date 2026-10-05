@@ -1,7 +1,9 @@
 package model
 
 import (
-	"sort"
+	"maps"
+	"slices"
+	"strings"
 )
 
 // CriteriaMatrix compares grading criteria across conditions for one scenario.
@@ -49,13 +51,13 @@ func TaskCriteria(store *Store, scenarioID string) CriteriaMatrix {
 
 func criteriaFromRefs(store *Store, refs []ref) CriteriaMatrix {
 	cells := make(map[string]map[string]CriterionStat)
-	agents := make(map[string]struct{})
+	agents := make(map[string]bool)
 	for _, item := range refs {
 		attempt, err := store.Attempt(item.runID, item.ref)
 		if err != nil {
 			continue
 		}
-		agents[item.ref.Group] = struct{}{}
+		agents[item.ref.Group] = true
 		for _, criterion := range attempt.Grading().Criteria {
 			if cells[criterion.ID] == nil {
 				cells[criterion.ID] = make(map[string]CriterionStat)
@@ -69,19 +71,10 @@ func criteriaFromRefs(store *Store, refs []ref) CriteriaMatrix {
 		}
 	}
 
-	matrix := CriteriaMatrix{Agents: sortedKeys(agents)}
+	matrix := CriteriaMatrix{Agents: slices.Sorted(maps.Keys(agents))}
 	for id, byAgent := range cells {
 		matrix.Rows = append(matrix.Rows, CriteriaRow{ID: id, Cells: byAgent})
 	}
-	sort.Slice(matrix.Rows, func(i, j int) bool { return matrix.Rows[i].ID < matrix.Rows[j].ID })
+	slices.SortFunc(matrix.Rows, func(a, b CriteriaRow) int { return strings.Compare(a.ID, b.ID) })
 	return matrix
-}
-
-func sortedKeys(values map[string]struct{}) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
