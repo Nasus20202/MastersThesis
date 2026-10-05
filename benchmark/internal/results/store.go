@@ -42,7 +42,10 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 		return nil, fmt.Errorf("create result directory: %w", err)
 	}
 	store := newStore(runDir, metadata)
-	return store, store.writeState()
+	if err := store.writeState(); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 // newStore marks the run as running; the caller writes its state.
@@ -100,7 +103,10 @@ func Resume(root, runID string) (*Store, error) {
 		store.recorded[attempt.key()] = struct{}{}
 		store.summary.addAttempt(attempt)
 	}
-	return store, store.writeState()
+	if err := store.writeState(); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) HasAttempt(attempt int, scenarioID, condition string) bool {
