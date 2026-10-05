@@ -82,7 +82,7 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 		}},
 	}
 
-	attempt, err := newRunAttempt("run", result, map[string]string{"service-port": "service.md"})
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, "service.md")
 
 	require.NoError(t, err)
 	assert.True(t, attempt.AgentRan)
@@ -93,9 +93,6 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 	assert.Zero(t, attempt.Searches[1].SourceRank)
 	assert.Equal(t, "search failed", attempt.Searches[1].Error)
 	assert.True(t, attempt.SourceRetrieved())
-
-	_, err = newRunAttempt("run", result, map[string]string{})
-	assert.Error(t, err)
 }
 
 func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
@@ -113,7 +110,7 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 		}},
 	}
 
-	attempt, err := newRunAttempt("run", result, map[string]string{"app": "app.md"})
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, "app.md")
 	require.NoError(t, err)
 	assert.Equal(t, 0, attempt.FirstChange)
 	assert.Equal(t, 3, attempt.Changes)
@@ -193,4 +190,49 @@ func TestSummarizeReportsUsageAndCriteriaAgainstReference(t *testing.T) {
 		{Scenario: "a", ID: "ready", Passed: 2, Total: 3, ReferencePassed: 0, ReferenceTotal: 1, ReferenceAvailable: true},
 		{Scenario: "a", ID: "svc", Passed: 1, Total: 2, ReferencePassed: 0, ReferenceTotal: 1, ReferenceAvailable: true},
 	}, summary.Criteria)
+}
+
+func TestNewRunAttemptRecordsCostAndDuration(t *testing.T) {
+	timings := func(predicted int, ms float64, drafted, accepted int) common.ResponseEvidence {
+		return common.ResponseEvidence{Response: inference.Result{Timings: &inference.Timings{PredictedN: predicted, PredictedMS: ms, DraftN: drafted, DraftNAccepted: accepted}}}
+	}
+	grading := orchestration.GradingResult{Score: 1, Criteria: []orchestration.CriterionResult{{ID: "ready", Passed: true, DurationSeconds: 2}, {ID: "svc", DurationSeconds: 3}}}
+	benchmark := results.AttemptResult{ScenarioID: "app", Grading: grading, Agent: &common.Result{
+		DurationSeconds: 40,
+		TokenUsage:      common.TokenUsage{TotalTokens: 1200, CachedTokens: 800},
+		Responses:       []common.ResponseEvidence{timings(100, 2000, 60, 30), {}, timings(50, 500, 0, 0)},
+	}}
+
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &benchmark}, "")
+
+	require.NoError(t, err)
+	assert.InDelta(t, 40, attempt.Duration, 1e-9)
+	assert.Equal(t, 1200, attempt.Tokens)
+	assert.Equal(t, 800, attempt.Cached)
+	assert.Equal(t, 150, attempt.Predicted)
+	assert.InDelta(t, 2.5, attempt.PredictedTime, 1e-9)
+	assert.Equal(t, 60, attempt.Drafted)
+	assert.Equal(t, 30, attempt.DraftAccepted)
+
+	validation := results.ValidationAttemptResult{Condition: "validation", ScenarioID: "app", Attempt: 2, Grading: grading, Error: "expected score 0"}
+	attempt, err = NewRunAttempt("run", results.Attempt{Validation: &validation}, "")
+
+	require.NoError(t, err)
+	assert.Equal(t, RunAttempt{Run: "run", Condition: "validation", Scenario: "app", Attempt: 2, Score: 1, Error: true, Duration: 5, FirstChange: -1,
+		Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc"}}}, attempt)
+}
+
+func TestLoadRunAttemptsRequiresScenarioSource(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run", Agents: []string{"prompt"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"app"}})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "prompt", orchestration.RunResult{ScenarioID: "app", Condition: "prompt"}))
+
+	attempts, err := LoadRunAttempts(root, "run", map[string]string{"app": "app.md"})
+	require.NoError(t, err)
+	require.Len(t, attempts, 1)
+	assert.Equal(t, "app.md", attempts[0].Source)
+
+	_, err = LoadRunAttempts(root, "run", map[string]string{})
+	assert.EqualError(t, err, "scenario app has no source reference")
 }
