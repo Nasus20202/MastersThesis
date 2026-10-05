@@ -76,7 +76,7 @@ Model commands run in a disposable Docker sandbox.
 
 Bash is exposed to the model as the primary raw execution interface. The sandbox provides the command-line tools required by the relevant benchmark condition, including `kubectl` for Kubernetes interaction.
 
-The sandbox has no interactive editor. `KUBE_EDITOR` points at a script that makes `kubectl edit` fail at once with a hint to export the manifest, change it and apply it (D-041). The optional `read_file`, `write_file` and `edit_file` tools run through the same sandbox boundary as bash.
+The sandbox has no interactive editor. `KUBE_EDITOR` points at a script that makes `kubectl edit` fail at once with a hint to export the manifest, change it and apply it (D-041). The `read_file`, `write_file` and `edit_file` tools run through the same sandbox boundary as bash.
 
 The sandbox image is built only when it is missing; after changing its Dockerfile, remove the image so the next run rebuilds it.
 
