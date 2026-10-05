@@ -198,12 +198,13 @@ func (a *summaryAccumulator) summary(state RunState, completedAt *time.Time) Run
 		ByCondition:      make(map[string]ConditionSummary, len(a.byCondition)),
 	}
 	for name, accumulator := range a.byCondition {
-		result.ByCondition[name] = accumulator.summary(runType(a.metadata), a.metadata)
+		result.ByCondition[name] = accumulator.summary(a.metadata)
 	}
 	return result
 }
 
-func (a *conditionAccumulator) summary(kind RunType, metadata RunMetadata) ConditionSummary {
+func (a *conditionAccumulator) summary(metadata RunMetadata) ConditionSummary {
+	benchmark := runType(metadata) == RunTypeBenchmark
 	result := ConditionSummary{
 		ExpectedAttempts:      a.expectedAttempts,
 		AttemptCount:          a.attemptCount,
@@ -223,7 +224,7 @@ func (a *conditionAccumulator) summary(kind RunType, metadata RunMetadata) Condi
 	}
 	for scenarioID, accumulator := range a.scenarios {
 		expected := 0
-		if kind == RunTypeBenchmark {
+		if benchmark {
 			expected = metadata.RepeatCount
 		}
 		scenario := ScenarioSummary{
@@ -237,21 +238,26 @@ func (a *conditionAccumulator) summary(kind RunType, metadata RunMetadata) Condi
 		}
 		result.Scenarios[scenarioID] = scenario
 	}
-	if kind == RunTypeBenchmark && a.expectedAttempts > 0 && a.attemptCount == a.expectedAttempts && len(a.scenarios) == len(metadata.Scenarios) {
-		var macroScore float64
-		complete := true
-		for _, scenarioID := range metadata.Scenarios {
-			scenario := a.scenarios[scenarioID]
-			if scenario == nil || scenario.attemptCount != metadata.RepeatCount {
-				complete = false
-				break
-			}
-			macroScore += scenario.scoreTotal / float64(scenario.attemptCount)
-		}
-		if complete && len(metadata.Scenarios) > 0 {
-			macroScore /= float64(len(metadata.Scenarios))
-			result.MacroAverageScore = &macroScore
-		}
+	if benchmark {
+		result.MacroAverageScore = a.macroAverageScore(metadata)
 	}
 	return result
+}
+
+// macroAverageScore is the mean of the per-scenario mean scores, reported only
+// once every scenario has all its attempts.
+func (a *conditionAccumulator) macroAverageScore(metadata RunMetadata) *float64 {
+	if a.expectedAttempts <= 0 || a.attemptCount != a.expectedAttempts || len(metadata.Scenarios) == 0 || len(a.scenarios) != len(metadata.Scenarios) {
+		return nil
+	}
+	var total float64
+	for _, scenarioID := range metadata.Scenarios {
+		scenario := a.scenarios[scenarioID]
+		if scenario == nil || scenario.attemptCount != metadata.RepeatCount {
+			return nil
+		}
+		total += scenario.scoreTotal / float64(scenario.attemptCount)
+	}
+	mean := total / float64(len(metadata.Scenarios))
+	return &mean
 }

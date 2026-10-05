@@ -36,31 +36,28 @@ func New(root string, metadata RunMetadata) (*Store, error) {
 	if len(metadata.Scenarios) == 0 {
 		return nil, errors.New("result requires at least one scenario")
 	}
-	metadata.Agents = slices.Clone(metadata.Agents)
-	metadata.Scenarios = slices.Clone(metadata.Scenarios)
-	if metadata.ExpectedAttempts < 1 {
-		metadata.ExpectedAttempts = expectedAttemptCount(metadata)
-	}
-	metadata.RunType = runType(metadata)
-	metadata.State = RunStateRunning
-	metadata.CompletedAt = nil
+	metadata.ExpectedAttempts = expectedAttemptCount(metadata)
 	runDir := filepath.Join(root, metadata.RunID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create result directory: %w", err)
 	}
-	store := &Store{
+	store := newStore(runDir, metadata)
+	return store, store.writeState()
+}
+
+// newStore marks the run as running; the caller writes its state.
+func newStore(runDir string, metadata RunMetadata) *Store {
+	metadata.Agents = slices.Clone(metadata.Agents)
+	metadata.Scenarios = slices.Clone(metadata.Scenarios)
+	metadata.RunType = runType(metadata)
+	metadata.State = RunStateRunning
+	metadata.CompletedAt = nil
+	return &Store{
 		runDir:   runDir,
 		metadata: metadata,
 		summary:  newSummaryAccumulator(metadata),
 		recorded: make(map[string]struct{}),
 	}
-	if err := store.writeRunMetadata(); err != nil {
-		return nil, err
-	}
-	if err := store.writeSummary(); err != nil {
-		return nil, err
-	}
-	return store, nil
 }
 
 // Resume reopens an incomplete run and rebuilds its summary from the attempts
@@ -87,39 +84,23 @@ func Resume(root, runID string) (*Store, error) {
 	if metadata.Parallelism < 1 || metadata.RepeatCount < 1 || len(metadata.Scenarios) == 0 {
 		return nil, errors.New("run metadata is incomplete or invalid")
 	}
-	metadata.Agents = slices.Clone(metadata.Agents)
-	metadata.Scenarios = slices.Clone(metadata.Scenarios)
-	metadata.RunType = runType(metadata)
-	metadata.State = RunStateRunning
-	metadata.CompletedAt = nil
-	store := &Store{
-		runDir:   runDir,
-		metadata: metadata,
-		summary:  newSummaryAccumulator(metadata),
-		recorded: make(map[string]struct{}),
-	}
+	store := newStore(runDir, metadata)
 	refs, err := listAttempts(runDir)
 	if err != nil {
 		return nil, err
 	}
 	for _, ref := range refs {
-		attempt, err := LoadAttempt(ref, metadata.RunType)
+		attempt, err := LoadAttempt(ref, store.metadata.RunType)
 		if err != nil {
 			return nil, err
 		}
-		if attempt.runID() != metadata.RunID {
+		if attempt.runID() != runID {
 			return nil, fmt.Errorf("run attempt %q belongs to %q", ref.Path, attempt.runID())
 		}
 		store.recorded[attempt.key()] = struct{}{}
 		store.summary.addAttempt(attempt)
 	}
-	if err := store.writeRunMetadata(); err != nil {
-		return nil, err
-	}
-	if err := store.writeSummary(); err != nil {
-		return nil, err
-	}
-	return store, nil
+	return store, store.writeState()
 }
 
 func (s *Store) HasAttempt(attempt int, scenarioID, condition string) bool {
@@ -155,21 +136,13 @@ func (s *Store) WriteAttemptFailure(attempt int, scenarioID, agent string, resul
 }
 
 func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orchestration.RunResult, runErr error) error {
-	if attempt < 1 {
-		return errors.New("result attempt number must be at least 1")
-	}
-	if strings.TrimSpace(scenarioID) == "" {
-		return errors.New("result scenario ID is required")
-	}
 	if strings.TrimSpace(agent) == "" {
 		return errors.New("result agent is required")
 	}
-
-	scenarioDir := filepath.Join(s.runDir, scenarioID, agent)
-	if err := os.MkdirAll(scenarioDir, 0o755); err != nil {
-		return fmt.Errorf("create scenario result directory: %w", err)
+	path, err := s.attemptPath(attempt, scenarioID, agent, "scenario")
+	if err != nil {
+		return err
 	}
-	path := filepath.Join(scenarioDir, fmt.Sprintf("%03d.json", attempt))
 	condition := result.Condition
 	if strings.TrimSpace(condition) == "" {
 		condition = agent
@@ -190,19 +163,12 @@ func (s *Store) writeAttempt(attempt int, scenarioID, agent string, result orche
 }
 
 func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, expectedScore float64, expectedFullSuccess bool, result orchestration.RunResult, validationErr error) error {
-	if attempt < 1 {
-		return errors.New("result attempt number must be at least 1")
-	}
-	if strings.TrimSpace(scenarioID) == "" {
-		return errors.New("result scenario ID is required")
-	}
 	if strings.TrimSpace(caseID) == "" {
 		return errors.New("result case ID is required")
 	}
-
-	caseDir := filepath.Join(s.runDir, scenarioID, caseID)
-	if err := os.MkdirAll(caseDir, 0o755); err != nil {
-		return fmt.Errorf("create validation result directory: %w", err)
+	path, err := s.attemptPath(attempt, scenarioID, caseID, "validation")
+	if err != nil {
+		return err
 	}
 	condition := result.Condition
 	if strings.TrimSpace(condition) == "" {
@@ -223,8 +189,23 @@ func (s *Store) WriteValidationAttempt(attempt int, scenarioID, caseID string, e
 	if validationErr != nil {
 		artifact.Error = validationErr.Error()
 	}
-	path := filepath.Join(caseDir, fmt.Sprintf("%03d.json", attempt))
 	return s.recordAttempt(path, Attempt{Validation: &artifact})
+}
+
+// attemptPath creates the directory of a scenario's group, the condition or
+// validation case, and returns the attempt's file path in it.
+func (s *Store) attemptPath(attempt int, scenarioID, group, kind string) (string, error) {
+	if attempt < 1 {
+		return "", errors.New("result attempt number must be at least 1")
+	}
+	if strings.TrimSpace(scenarioID) == "" {
+		return "", errors.New("result scenario ID is required")
+	}
+	dir := filepath.Join(s.runDir, scenarioID, group)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create %s result directory: %w", kind, err)
+	}
+	return filepath.Join(dir, fmt.Sprintf("%03d.json", attempt)), nil
 }
 
 func (s *Store) recordAttempt(path string, attempt Attempt) error {
@@ -266,6 +247,13 @@ func (s *Store) Finalize(completedAt time.Time) error {
 	return s.writeRunMetadata()
 }
 
+func (s *Store) writeState() error {
+	if err := s.writeRunMetadata(); err != nil {
+		return err
+	}
+	return s.writeSummary()
+}
+
 func (s *Store) writeRunMetadata() error {
 	if err := writeJSON(filepath.Join(s.runDir, "run.json"), s.metadata); err != nil {
 		return fmt.Errorf("write run metadata: %w", err)
@@ -281,35 +269,31 @@ func (s *Store) writeSummary() error {
 	return nil
 }
 
+// writeJSON replaces path atomically, so readers such as the browser never see
+// a partial file.
 func writeJSON(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
 	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
 	if err != nil {
 		return err
 	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o644); err != nil {
-		_ = temporary.Close()
-		return err
+	defer os.Remove(temporary.Name())
+	err = temporary.Chmod(0o644)
+	if err == nil {
+		_, err = temporary.Write(append(data, '\n'))
 	}
-	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		return err
+	if err == nil {
+		err = temporary.Sync()
 	}
-	if err := temporary.Sync(); err != nil {
+	if err != nil {
 		_ = temporary.Close()
 		return err
 	}
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
-	}
-	return nil
+	return os.Rename(temporary.Name(), path)
 }
