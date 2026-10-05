@@ -15,6 +15,11 @@ type CriteriaMatrix struct {
 	Rows   []CriteriaRow
 }
 
+type CriterionStat struct {
+	Passed int
+	Total  int
+}
+
 // CriteriaRow is one criterion's pass counts, keyed by condition.
 type CriteriaRow struct {
 	ID    string

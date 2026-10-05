@@ -1,7 +1,7 @@
 // Package model is the browser's read model: a cached view of the results
 // tree and the attempt-level numbers the dashboards render, such as outcome
 // mix, speed and turn distributions, termination reasons and criteria pass
-// rates.
+// rates per scenario.
 package model
 
 import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
@@ -33,12 +33,6 @@ type Metrics struct {
 	DraftAccepted    int
 
 	Terminations map[string]int
-	Criteria     map[string]CriterionStat
-}
-
-type CriterionStat struct {
-	Passed int
-	Total  int
 }
 
 type ref struct {
@@ -46,12 +40,8 @@ type ref struct {
 	ref   results.AttemptRef
 }
 
-func newMetrics() Metrics {
-	return Metrics{Terminations: make(map[string]int), Criteria: make(map[string]CriterionStat)}
-}
-
 func gather(store *Store, refs []ref) Metrics {
-	metrics := newMetrics()
+	metrics := Metrics{Terminations: make(map[string]int)}
 	for _, item := range refs {
 		attempt, err := store.Attempt(item.runID, item.ref)
 		if err != nil {
@@ -68,14 +58,6 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.Failed++
 		}
 		metrics.MeanScore += grading.Score
-		for _, criterion := range grading.Criteria {
-			stat := metrics.Criteria[criterion.ID]
-			stat.Total++
-			if criterion.Passed {
-				stat.Passed++
-			}
-			metrics.Criteria[criterion.ID] = stat
-		}
 		metrics.Durations = append(metrics.Durations, AttemptDuration(attempt))
 		if attempt.Benchmark != nil && attempt.Benchmark.Agent != nil {
 			agent := attempt.Benchmark.Agent
