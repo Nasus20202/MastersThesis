@@ -12,13 +12,14 @@ import (
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 // SearchToolName is the RAG condition's search tool, as recorded in traces.
 const SearchToolName = "search_docs"
 
 // Search is one recorded search_docs call. SourceRank is the rank of the first
-// hit from the scenario's source file, or 0 when the source was not returned.
+// hit from one of the scenario's source pages, or 0 when none was returned.
 type Search struct {
 	Call         int      `json:"call"`
 	Query        string   `json:"query"`
@@ -36,7 +37,7 @@ type Check struct {
 }
 
 // RunAttempt flattens one recorded attempt and joins it with its scenario's
-// evaluator-only source reference. Duration is the agent's wall-clock time, or
+// evaluator-only source pages. Duration is the agent's wall-clock time, or
 // the summed grading time when no agent ran. Predicted and draft counters sum
 // llama.cpp's generation timings over the attempt's responses. FirstChange is the 0-based tool-call index of the first
 // Bash command that changes the cluster, or -1. Changes counts such commands
@@ -73,7 +74,7 @@ type RunAttempt struct {
 	FailedChanges int      `json:"failed_changes"`
 	Edits         int      `json:"edits"`
 	RolloutStatus bool     `json:"rollout_status"`
-	Source        string   `json:"source"`
+	Sources       []string `json:"sources"`
 	Searches      []Search `json:"searches,omitempty"`
 }
 
@@ -81,29 +82,25 @@ func (a RunAttempt) SourceRetrieved() bool {
 	return slices.ContainsFunc(a.Searches, func(search Search) bool { return search.SourceRank > 0 })
 }
 
-var sourcePath = regexp.MustCompile("Source path: `([^`]+)`")
-
-// LoadSources reads the evaluator-only source path of every scenario under
-// root, keyed by scenario directory name (the scenario ID).
-func LoadSources(root string) (map[string]string, error) {
-	files, err := filepath.Glob(filepath.Join(root, "*", "*", "source.md"))
+// LoadSources reads the evaluator-only source pages of every scenario under
+// root, keyed by scenario ID.
+func LoadSources(root string) (map[string][]string, error) {
+	paths, err := scenario.Discover(root)
 	if err != nil {
 		return nil, err
 	}
-	sources := make(map[string]string, len(files))
-	for _, file := range files {
-		data, err := os.ReadFile(file)
+	sources := make(map[string][]string, len(paths))
+	for _, path := range paths {
+		definition, err := scenario.Load(path)
 		if err != nil {
 			return nil, err
 		}
-		match := sourcePath.FindSubmatch(data)
-		if match == nil {
-			return nil, fmt.Errorf("%s has no source path", file)
+		for _, source := range definition.Sources {
+			sources[definition.ID] = append(sources[definition.ID], source.Path)
 		}
-		sources[filepath.Base(filepath.Dir(file))] = string(match[1])
 	}
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("no source.md files under %s", root)
+		return nil, fmt.Errorf("no scenario sources under %s", root)
 	}
 	return sources, nil
 }
@@ -126,7 +123,7 @@ func LoadSubset(path string) (func(string) bool, error) {
 }
 
 // LoadRunAttempts reads every benchmark attempt of a run.
-func LoadRunAttempts(root, runID string, sources map[string]string) ([]RunAttempt, error) {
+func LoadRunAttempts(root, runID string, sources map[string][]string) ([]RunAttempt, error) {
 	run, err := results.LoadRun(root, runID)
 	if err != nil {
 		return nil, err
@@ -140,11 +137,11 @@ func LoadRunAttempts(root, runID string, sources map[string]string) ([]RunAttemp
 		if loaded.Benchmark == nil {
 			return nil, fmt.Errorf("run %s is not a benchmark run", runID)
 		}
-		source, ok := sources[loaded.Benchmark.ScenarioID]
-		if !ok {
-			return nil, fmt.Errorf("scenario %s has no source reference", loaded.Benchmark.ScenarioID)
+		scenarioSources := sources[loaded.Benchmark.ScenarioID]
+		if len(scenarioSources) == 0 {
+			return nil, fmt.Errorf("scenario %s has no sources", loaded.Benchmark.ScenarioID)
 		}
-		attempt, err := NewRunAttempt(runID, loaded, source)
+		attempt, err := NewRunAttempt(runID, loaded, scenarioSources)
 		if err != nil {
 			return nil, err
 		}
@@ -154,8 +151,8 @@ func LoadRunAttempts(root, runID string, sources map[string]string) ([]RunAttemp
 }
 
 // NewRunAttempt flattens one loaded attempt. Validation attempts carry only
-// grading. Searches are ranked against source, the scenario's source path.
-func NewRunAttempt(runID string, loaded results.Attempt, source string) (RunAttempt, error) {
+// grading. Searches are ranked against sources, the scenario's source pages.
+func NewRunAttempt(runID string, loaded results.Attempt, sources []string) (RunAttempt, error) {
 	grading := loaded.Grading()
 	attempt := RunAttempt{
 		Run:         runID,
@@ -163,7 +160,7 @@ func NewRunAttempt(runID string, loaded results.Attempt, source string) (RunAtte
 		FullSuccess: grading.FullSuccess,
 		Error:       loaded.ErrorMessage() != "",
 		FirstChange: -1,
-		Source:      source,
+		Sources:     sources,
 	}
 	for _, criterion := range grading.Criteria {
 		attempt.Criteria = append(attempt.Criteria, Check{ID: criterion.ID, Passed: criterion.Passed})
@@ -219,7 +216,7 @@ func NewRunAttempt(runID string, loaded results.Attempt, source string) (RunAtte
 			}
 			attempt.observeCommand(index, arguments.Command, output.ExitCode)
 		case SearchToolName:
-			search, err := newSearch(index, call.Details, attempt.Source)
+			search, err := newSearch(index, call.Details, attempt.Sources)
 			if err != nil {
 				return RunAttempt{}, fmt.Errorf("%s attempt %d: %w", result.ScenarioID, result.Attempt, err)
 			}
@@ -268,7 +265,7 @@ func decodeDetails(details, target any) error {
 }
 
 // newSearch decodes the rag SearchEvidence recorded as tool call details.
-func newSearch(call int, details any, source string) (Search, error) {
+func newSearch(call int, details any, sources []string) (Search, error) {
 	search := Search{Call: call}
 	var evidence struct {
 		Query     string `json:"query"`
@@ -287,7 +284,7 @@ func newSearch(call int, details any, source string) (Search, error) {
 	search.Truncated = evidence.Truncated
 	for _, hit := range evidence.Hits {
 		search.Paths = append(search.Paths, hit.Chunk.Path)
-		if search.SourceRank == 0 && hit.Chunk.Path == source {
+		if search.SourceRank == 0 && slices.Contains(sources, hit.Chunk.Path) {
 			search.SourceRank = hit.Rank
 		}
 	}

@@ -135,7 +135,7 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 }
 
 // RunAttempt returns one attempt flattened into the record analyze uses,
-// without a scenario source.
+// without scenario sources.
 func (s *Store) RunAttempt(runID string, ref results.AttemptRef) (analysis.RunAttempt, error) {
 	entry := s.attempt(runID, ref)
 	if entry.err != nil {
@@ -159,7 +159,7 @@ func (s *Store) attempt(runID string, ref results.AttemptRef) attemptEntry {
 	entry := attemptEntry{modTime: modTime}
 	entry.attempt, entry.err = results.LoadAttempt(ref, runType)
 	if entry.err == nil {
-		entry.record, entry.recordErr = analysis.NewRunAttempt(runID, entry.attempt, "")
+		entry.record, entry.recordErr = analysis.NewRunAttempt(runID, entry.attempt, nil)
 	}
 	s.attempts[ref.Path] = entry
 	return entry

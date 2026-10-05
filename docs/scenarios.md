@@ -12,8 +12,8 @@ The contract, lifecycle, visibility rules and scoring are in
 ## Source corpus
 
 Scenarios are grounded in the frozen corpus `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15`
-(see [sources.md](sources.md)). Each scenario gets a `source.md` with its exact
-corpus path, blob SHA and section.
+(see [sources.md](sources.md)). Each scenario lists its corpus pages and
+relevant sections under `sources` in `scenario.yaml`.
 
 ## Difficulty
 

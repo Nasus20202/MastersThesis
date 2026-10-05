@@ -90,7 +90,7 @@ type OutcomeGroup struct {
 
 type ScenarioUsage struct {
 	Scenario        string   `json:"scenario"`
-	Source          string   `json:"source"`
+	Sources         []string `json:"sources"`
 	Attempts        int      `json:"attempts"`
 	MeanScore       float64  `json:"mean_score"`
 	FullSuccess     int      `json:"full_success"`
@@ -202,7 +202,7 @@ func scenarioUsage(attempts, reference []RunAttempt) []ScenarioUsage {
 	for _, attempt := range attempts {
 		usage, ok := byScenario[attempt.Scenario]
 		if !ok {
-			usage = &ScenarioUsage{Scenario: attempt.Scenario, Source: attempt.Source}
+			usage = &ScenarioUsage{Scenario: attempt.Scenario, Sources: attempt.Sources}
 			byScenario[attempt.Scenario] = usage
 			order = append(order, attempt.Scenario)
 		}

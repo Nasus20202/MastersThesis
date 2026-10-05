@@ -49,11 +49,20 @@ type Criterion struct {
 	Check  Command `yaml:"check" validate:"required"`
 }
 
+// Source is an evaluator-only reference to a page of the documentation corpus.
+// Path is relative to the corpus repository root; Sections are heading paths
+// joined with " > ", as the retrieval index names them.
+type Source struct {
+	Path     string   `yaml:"path" validate:"required,notblank"`
+	Sections []string `yaml:"sections,omitempty" validate:"dive,notblank"`
+}
+
 type Definition struct {
 	ID          string            `yaml:"id" validate:"required,scenarioid,max=32"`
 	Title       string            `yaml:"title" validate:"required,notblank"`
 	Task        string            `yaml:"task" validate:"required,notblank"`
 	Tags        map[string]string `yaml:"tags,omitempty"`
+	Sources     []Source          `yaml:"sources,omitempty" validate:"dive"`
 	Cluster     ClusterConfig     `yaml:"cluster,omitempty"`
 	Prepare     Step              `yaml:"prepare" validate:"required,min=1,dive"`
 	VerifyClean Step              `yaml:"verify_clean" validate:"required,min=1,dive"`
@@ -78,6 +87,13 @@ var definitionValidator = yamlfile.NewValidator("scenarioid")
 func (d Definition) Validate() error {
 	if err := definitionValidator.Struct(d); err != nil {
 		return yamlfile.FormatValidationError("scenario", err)
+	}
+	seenPaths := make(map[string]struct{}, len(d.Sources))
+	for _, source := range d.Sources {
+		if _, exists := seenPaths[source.Path]; exists {
+			return fmt.Errorf("invalid scenario: duplicate source path %q", source.Path)
+		}
+		seenPaths[source.Path] = struct{}{}
 	}
 	seenIDs := make(map[string]struct{}, len(d.Grading))
 	for _, criterion := range d.Grading {

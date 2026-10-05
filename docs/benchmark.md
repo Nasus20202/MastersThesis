@@ -31,7 +31,7 @@ Each scenario should record the following fields in a small, human-readable form
 - a task description visible to the model,
 - optional controlled fault injection and fault verification for troubleshooting tasks,
 - observable grading criteria for the expected final state,
-- source references and ground-truth metadata used during construction and validation.
+- evaluator-only source references: the corpus pages and sections the scenario is grounded in.
 
 The task description is the model-facing part of the scenario. Fault details, expected diagnosis, grading criteria, verifier implementation details and source/ground-truth metadata are evaluator data. They must not disclose a hidden fault or answer to the model.
 

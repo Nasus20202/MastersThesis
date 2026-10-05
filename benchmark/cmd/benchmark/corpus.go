@@ -13,8 +13,8 @@ import (
 )
 
 // runCorpusCheck loads every scenario in the corpus and its validation cases so
-// a broken scenario, an ID/directory mismatch or a missing validation file
-// fails the check instead of only failing at run time.
+// a broken scenario, an ID/directory mismatch, a scenario without sources or a
+// missing validation file fails the check instead of only failing at run time.
 func runCorpusCheck(root string) error {
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -64,6 +64,9 @@ func runCorpusCheck(root string) error {
 		}
 		if filepath.Base(dir) != definition.ID {
 			errs = append(errs, fmt.Errorf("%s: scenario id %q does not match directory name", dir, definition.ID))
+		}
+		if len(definition.Sources) == 0 {
+			errs = append(errs, fmt.Errorf("%s: scenario has no sources", dir))
 		}
 		cases, err := validation.LoadCases([]string{validationsByDir[dir]})
 		if err != nil {

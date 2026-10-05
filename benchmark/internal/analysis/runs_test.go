@@ -35,14 +35,21 @@ func TestKubectlWrites(t *testing.T) {
 
 func TestLoadSources(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(root, "networking", "service-port")
-	require.NoError(t, os.MkdirAll(dir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "source.md"), []byte("- Source path: `content/en/docs/service.md`\n"), 0o600))
+	writeScenario(t, filepath.Join(root, "networking", "service-port"), "service-port", "sources:\n  - path: docs/service.md\n  - path: docs/dns.md\n")
+	writeScenario(t, filepath.Join(root, "networking", "no-source"), "no-source", "")
 
 	sources, err := LoadSources(root)
 
 	require.NoError(t, err)
-	assert.Equal(t, map[string]string{"service-port": "content/en/docs/service.md"}, sources)
+	assert.Equal(t, map[string][]string{"service-port": {"docs/service.md", "docs/dns.md"}}, sources)
+}
+
+func writeScenario(t *testing.T, dir, id, sources string) {
+	t.Helper()
+	definition := "id: " + id + "\ntitle: Test\ntask: Fix it.\n" + sources +
+		"prepare: [{program: prepare}]\nverify_clean: [{program: check}]\ngrading: [{id: ready, weight: 1, check: {program: check}}]\n"
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "scenario.yaml"), []byte(definition), 0o600))
 }
 
 func TestLoadSubset(t *testing.T) {
@@ -82,7 +89,7 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 		}},
 	}
 
-	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, "service.md")
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, []string{"intro.md", "service.md"})
 
 	require.NoError(t, err)
 	assert.True(t, attempt.AgentRan)
@@ -110,7 +117,7 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 		}},
 	}
 
-	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, "app.md")
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &result}, []string{"app.md"})
 	require.NoError(t, err)
 	assert.Equal(t, 0, attempt.FirstChange)
 	assert.Equal(t, 3, attempt.Changes)
@@ -203,7 +210,7 @@ func TestNewRunAttemptRecordsCostAndDuration(t *testing.T) {
 		Responses:       []common.ResponseEvidence{timings(100, 2000, 60, 30), {}, timings(50, 500, 0, 0)},
 	}}
 
-	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &benchmark}, "")
+	attempt, err := NewRunAttempt("run", results.Attempt{Benchmark: &benchmark}, nil)
 
 	require.NoError(t, err)
 	assert.InDelta(t, 40, attempt.Duration, 1e-9)
@@ -215,24 +222,24 @@ func TestNewRunAttemptRecordsCostAndDuration(t *testing.T) {
 	assert.Equal(t, 30, attempt.DraftAccepted)
 
 	validation := results.ValidationAttemptResult{Condition: "validation", ScenarioID: "app", Attempt: 2, Grading: grading, Error: "expected score 0"}
-	attempt, err = NewRunAttempt("run", results.Attempt{Validation: &validation}, "")
+	attempt, err = NewRunAttempt("run", results.Attempt{Validation: &validation}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, RunAttempt{Run: "run", Condition: "validation", Scenario: "app", Attempt: 2, Score: 1, Error: true, Duration: 5, FirstChange: -1,
 		Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc"}}}, attempt)
 }
 
-func TestLoadRunAttemptsRequiresScenarioSource(t *testing.T) {
+func TestLoadRunAttemptsRequiresScenarioSources(t *testing.T) {
 	root := t.TempDir()
 	store, err := results.New(root, results.RunMetadata{RunID: "run", Agents: []string{"prompt"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"app"}})
 	require.NoError(t, err)
 	require.NoError(t, store.WriteAttempt(1, "prompt", orchestration.RunResult{ScenarioID: "app", Condition: "prompt"}))
 
-	attempts, err := LoadRunAttempts(root, "run", map[string]string{"app": "app.md"})
+	attempts, err := LoadRunAttempts(root, "run", map[string][]string{"app": {"app.md"}})
 	require.NoError(t, err)
 	require.Len(t, attempts, 1)
-	assert.Equal(t, "app.md", attempts[0].Source)
+	assert.Equal(t, []string{"app.md"}, attempts[0].Sources)
 
-	_, err = LoadRunAttempts(root, "run", map[string]string{})
-	assert.EqualError(t, err, "scenario app has no source reference")
+	_, err = LoadRunAttempts(root, "run", map[string][]string{})
+	assert.EqualError(t, err, "scenario app has no sources")
 }

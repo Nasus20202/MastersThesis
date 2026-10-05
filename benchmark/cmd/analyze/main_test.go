@@ -18,7 +18,9 @@ func TestRunScoresSearchesAgainstReference(t *testing.T) {
 	root := t.TempDir()
 	scenarios := filepath.Join(root, "scenarios", "networking", "svc")
 	require.NoError(t, os.MkdirAll(scenarios, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(scenarios, "source.md"), []byte("- Source path: `docs/service.md`\n"), 0o600))
+	scenario := "id: svc\ntitle: Service\ntask: Fix it.\nsources: [{path: docs/service.md}]\n" +
+		"prepare: [{program: prepare}]\nverify_clean: [{program: check}]\ngrading: [{id: ready, weight: 1, check: {program: check}}]\n"
+	require.NoError(t, os.WriteFile(filepath.Join(scenarios, "scenario.yaml"), []byte(scenario), 0o600))
 	store, err := results.New(filepath.Join(root, "results"), results.RunMetadata{RunID: "run", Agents: []string{"rag", "prompt"}, Parallelism: 1, RepeatCount: 1, Scenarios: []string{"svc"}})
 	require.NoError(t, err)
 	search := common.ToolCallEvidence{
