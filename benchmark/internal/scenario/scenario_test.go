@@ -186,3 +186,21 @@ func TestParseRejectsMultipleDocuments(t *testing.T) {
 	_, err := Parse([]byte(validScenarioYAML + "\n---\n" + validScenarioYAML))
 	assert.ErrorContains(t, err, "exactly one document")
 }
+
+func TestParseSources(t *testing.T) {
+	sources := "\nsources:\n  - path: docs/service.md\n    sections: [Defining a Service, Headless Services]\n"
+
+	definition, err := Parse([]byte(validScenarioYAML + sources))
+
+	require.NoError(t, err)
+	assert.Equal(t, []Source{{Path: "docs/service.md", Sections: []string{"Defining a Service", "Headless Services"}}}, definition.Sources)
+}
+
+func TestValidateRejectsInvalidSources(t *testing.T) {
+	definition := validDefinition(t)
+	definition.Sources = []Source{{Path: "docs/service.md"}, {Path: "docs/service.md"}}
+	assert.ErrorContains(t, definition.Validate(), `duplicate source path "docs/service.md"`)
+
+	definition.Sources = []Source{{Path: "docs/service.md", Sections: []string{" "}}}
+	assert.Error(t, definition.Validate())
+}
