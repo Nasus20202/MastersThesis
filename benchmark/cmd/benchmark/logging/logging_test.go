@@ -11,7 +11,7 @@ import (
 
 func TestNewCreatesConfiguredHandler(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := New(&output, FormatJSON, slog.LevelInfo)
+	logger, err := New(&output, FormatJSON, slog.LevelInfo, false)
 	require.NoError(t, err)
 
 	logger.Debug("hidden")
@@ -24,7 +24,7 @@ func TestNewCreatesConfiguredHandler(t *testing.T) {
 
 func TestNewAddsSourceAtDebugLevel(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := New(&output, FormatJSON, slog.LevelDebug)
+	logger, err := New(&output, FormatJSON, slog.LevelDebug, false)
 	require.NoError(t, err)
 
 	logger.Debug("visible")
@@ -33,7 +33,7 @@ func TestNewAddsSourceAtDebugLevel(t *testing.T) {
 }
 
 func TestNewRejectsUnknownFormat(t *testing.T) {
-	_, err := New(&bytes.Buffer{}, Format("xml"), slog.LevelInfo)
+	_, err := New(&bytes.Buffer{}, Format("xml"), slog.LevelInfo, false)
 	assert.Error(t, err)
 }
 

@@ -71,14 +71,10 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 	}
 	corpusPath := strings.TrimSpace(*checkCorpus)
 	modes := 0
-	if len(scenarioPaths) > 0 {
-		modes++
-	}
-	if len(validationPaths) > 0 {
-		modes++
-	}
-	if corpusPath != "" {
-		modes++
+	for _, selected := range []bool{len(scenarioPaths) > 0, len(validationPaths) > 0, corpusPath != ""} {
+		if selected {
+			modes++
+		}
 	}
 	if modes > 1 {
 		return errors.New("scenario, validate and check-corpus paths cannot be combined")
@@ -119,6 +115,7 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		return err
 	}
 
+	options := runOptions{parallel: *parallel, repeat: *repeat, tags: tagFilter, config: benchmarkConfig, terminal: terminal}
 	if len(validationPaths) > 0 {
 		if strings.TrimSpace(*resumeID) != "" {
 			return errors.New("resume is only supported with scenario runs")
@@ -126,9 +123,9 @@ func run(ctx context.Context, args []string, logOutput io.Writer) error {
 		if len(agentValues) > 0 && !explicitAllAgentSelection(agentValues) {
 			return errors.New("agent selection is only supported with scenario runs")
 		}
-		return runValidation(ctx, validationPaths, *parallel, *repeat, benchmarkConfig, terminal, tagFilter)
+		return runValidation(ctx, options, validationPaths)
 	}
-	return runBenchmark(ctx, scenarioPaths, *parallel, *repeat, agentNames, benchmarkConfig, terminal, strings.TrimSpace(*resumeID), tagFilter)
+	return runBenchmark(ctx, options, scenarioPaths, agentNames, strings.TrimSpace(*resumeID))
 }
 
 type stringList []string
@@ -154,26 +151,21 @@ func newLogger(output io.Writer, settings config.LoggingConfig) (*slog.Logger, e
 	if err != nil {
 		return nil, err
 	}
-
-	format := logging.Format(settings.Format)
-	if format == "" {
-		format = logging.FormatText
-	}
-	if color, configured := logColorSetting(settings.Color); configured {
-		return logging.NewWithColor(output, format, level, color)
-	}
-	if colorProvider, ok := output.(interface{ ColorEnabled() bool }); ok {
-		return logging.NewWithColor(output, format, level, colorProvider.ColorEnabled())
-	}
-	return logging.New(output, format, level)
+	return logging.New(output, logging.Format(settings.Format), level, logColor(output, settings.Color))
 }
 
-func logColorSetting(value string) (bool, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
+// logColor applies the configured color setting, then NO_COLOR, then whether
+// the output is an interactive terminal.
+func logColor(output io.Writer, setting string) bool {
+	switch strings.ToLower(strings.TrimSpace(setting)) {
 	case "always", "true", "1":
-		return true, true
+		return true
 	case "never", "false", "0":
-		return false, true
+		return false
 	}
-	return false, os.Getenv(envNoColor) != ""
+	if os.Getenv(envNoColor) != "" {
+		return false
+	}
+	terminal, ok := output.(interface{ ColorEnabled() bool })
+	return ok && terminal.ColorEnabled()
 }

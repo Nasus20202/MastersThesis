@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -260,15 +259,6 @@ func colorize(value, color string, enabled bool) string {
 		return value
 	}
 	return color + value + colorReset
-}
-
-func colorEnabled(writer io.Writer) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func sourceLocation(pc uintptr) string {

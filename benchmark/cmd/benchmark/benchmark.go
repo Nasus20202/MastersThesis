@@ -10,7 +10,6 @@ import (
 	"slices"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
-	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
@@ -33,14 +32,14 @@ const (
 	controlPlaneSuffix = "-control-plane"
 )
 
-func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int, agentNames []commandagent.Name, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, resumeID string, tagFilter scenario.TagFilter) error {
+func runBenchmark(ctx context.Context, options runOptions, inputs []string, agentNames []commandagent.Name, resumeID string) error {
 	definitions, err := scenario.LoadInputs(inputs)
 	if err != nil {
 		return err
 	}
-	definitions = scenario.FilterByTags(definitions, tagFilter)
+	definitions = scenario.FilterByTags(definitions, options.tags)
 	if len(definitions) == 0 {
-		return fmt.Errorf("no scenarios match tag filter %q", tagFilter.String())
+		return fmt.Errorf("no scenarios match tag filter %q", options.tags.String())
 	}
 	if len(agentNames) == 0 {
 		return errors.New("benchmark requires at least one agent")
@@ -50,9 +49,10 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		return err
 	}
 	agentSlots := make(chan struct{}, llamaParallelism)
+	repeat := options.repeat
 	totalTasks := len(definitions) * repeat * len(agentNames)
 
-	deps, err := newRunnerDeps(command.LocalExecutor{Environment: os.Environ()}, benchmarkConfig.Containers)
+	deps, err := newRunnerDeps(options.config.Containers)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	var retrievalProvenance *results.RetrievalProvenance
 	if slices.Contains(agentNames, commandagent.RAG) {
 		var provenance results.RetrievalProvenance
-		search, provenance, err = commandagent.OpenSearch(ctx, benchmarkConfig.Retrieval)
+		search, provenance, err = commandagent.OpenSearch(ctx, options.config.Retrieval)
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 	}
 	agentFactories := make(map[commandagent.Name]rootagent.Factory, len(agentNames))
 	for _, agentName := range agentNames {
-		agentFactory, err := commandagent.NewFactory(agentName, benchmarkConfig, search)
+		agentFactory, err := commandagent.NewFactory(agentName, options.config, search)
 		if err != nil {
 			return err
 		}
@@ -91,10 +91,10 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			RunType:          results.RunTypeBenchmark,
 			ExpectedAttempts: totalTasks,
 			Agents:           agentNamesToStrings(agentNames),
-			Parallelism:      parallelism,
+			Parallelism:      options.parallel,
 			RepeatCount:      repeat,
 			Scenarios:        scenarioIDs(definitions),
-			TagSelector:      tagFilter.String(),
+			TagSelector:      options.tags.String(),
 			Retrieval:        retrievalProvenance,
 			Sampling:         sampling,
 		})
@@ -108,7 +108,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 		"run_id", metadata.RunID,
 		"agents", metadata.Agents,
 		"scenarios", len(definitions),
-		"parallelism", parallelism,
+		"parallelism", options.parallel,
 		"repeat_count", repeat,
 		"total_tasks", totalTasks,
 	)
@@ -132,7 +132,7 @@ func runBenchmark(ctx context.Context, inputs []string, parallelism, repeat int,
 			}
 		}
 	}
-	return executeRun(ctx, store, terminal, tasks, parallelism, func(outcome executor.Outcome) (bool, error) {
+	return options.execute(ctx, store, tasks, func(outcome executor.Outcome) (bool, error) {
 		if outcome.Err != nil {
 			logger.Error("benchmark attempt failed",
 				"run_id", metadata.RunID,
@@ -207,7 +207,8 @@ type runnerDeps struct {
 	setupFactory        sandboxintegration.Factory
 }
 
-func newRunnerDeps(executor command.Executor, containers benchmarkconfig.ContainersConfig) (runnerDeps, error) {
+func newRunnerDeps(containers benchmarkconfig.ContainersConfig) (runnerDeps, error) {
+	executor := command.LocalExecutor{Environment: os.Environ()}
 	sandboxImageBuilder, err := docker.NewImageBuilder(executor, docker.ImageConfig{
 		Image:          containers.Sandbox.Image,
 		DockerfilePath: containers.Sandbox.DockerfilePath,

@@ -35,39 +35,29 @@ const (
 // allAgents is the default selection and the expansion of "all".
 var allAgents = []Name{Baseline, Prompt, Skill, RAG}
 
+// Select parses repeated or comma-separated agent names; none selects all.
 func Select(values ...string) ([]Name, error) {
 	if len(values) == 0 {
 		return slices.Clone(allAgents), nil
 	}
-
-	selected := make([]Name, 0, len(values))
-	seen := make(map[Name]struct{}, len(values))
-	allSelected := false
-	for _, value := range values {
-		for _, item := range strings.Split(value, ",") {
-			normalized := Name(strings.ToLower(strings.TrimSpace(item)))
-			if normalized == "" {
-				return nil, errors.New("agent must not be blank")
+	items := strings.Split(strings.Join(values, ","), ",")
+	selected := make([]Name, 0, len(items))
+	for _, item := range items {
+		name := Name(strings.ToLower(strings.TrimSpace(item)))
+		switch {
+		case name == "":
+			return nil, errors.New("agent must not be blank")
+		case name == All:
+			if len(items) != 1 {
+				return nil, errors.New("agent all cannot be combined with other agents")
 			}
-			if normalized == All {
-				if len(values) != 1 || len(strings.Split(value, ",")) != 1 || len(selected) > 0 {
-					return nil, errors.New("agent all cannot be combined with other agents")
-				}
-				allSelected = true
-				continue
-			}
-			if !slices.Contains(allAgents, normalized) {
-				return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, prompt, skill, or rag", item)
-			}
-			if _, exists := seen[normalized]; exists {
-				return nil, fmt.Errorf("agent %q was selected more than once", normalized)
-			}
-			seen[normalized] = struct{}{}
-			selected = append(selected, normalized)
+			return slices.Clone(allAgents), nil
+		case !slices.Contains(allAgents, name):
+			return nil, fmt.Errorf("unsupported agent %q; expected all, baseline, prompt, skill, or rag", item)
+		case slices.Contains(selected, name):
+			return nil, fmt.Errorf("agent %q was selected more than once", name)
 		}
-	}
-	if allSelected {
-		return slices.Clone(allAgents), nil
+		selected = append(selected, name)
 	}
 	return selected, nil
 }

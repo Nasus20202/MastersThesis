@@ -5,11 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
-	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
@@ -17,26 +13,27 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 )
 
-func runValidation(ctx context.Context, inputs []string, parallelism, repeat int, benchmarkConfig benchmarkconfig.Config, terminal *ui.Terminal, tagFilter scenario.TagFilter) error {
+func runValidation(ctx context.Context, options runOptions, inputs []string) error {
 	cases, err := validation.LoadCases(inputs)
 	if err != nil {
 		return err
 	}
-	cases = validation.FilterCases(cases, tagFilter)
+	cases = validation.FilterCases(cases, options.tags)
 	if len(cases) == 0 {
-		return fmt.Errorf("no validation cases match tag filter %q", tagFilter.String())
+		return fmt.Errorf("no validation cases match tag filter %q", options.tags.String())
 	}
-	deps, err := newRunnerDeps(command.LocalExecutor{Environment: os.Environ()}, benchmarkConfig.Containers)
+	repeat := options.repeat
+	deps, err := newRunnerDeps(options.config.Containers)
 	if err != nil {
 		return err
 	}
 	store, err := startRun(ctx, results.RunMetadata{
 		RunType:          results.RunTypeValidation,
 		ExpectedAttempts: len(cases) * repeat,
-		Parallelism:      parallelism,
+		Parallelism:      options.parallel,
 		RepeatCount:      repeat,
 		Scenarios:        validationScenarioIDs(cases),
-		TagSelector:      tagFilter.String(),
+		TagSelector:      options.tags.String(),
 	})
 	if err != nil {
 		return err
@@ -46,7 +43,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 	logger.Info("validation runner started",
 		"run_id", metadata.RunID,
 		"cases", len(cases),
-		"parallelism", parallelism,
+		"parallelism", options.parallel,
 		"repeat_count", repeat,
 		"total_tasks", len(cases)*repeat,
 	)
@@ -66,7 +63,7 @@ func runValidation(ctx context.Context, inputs []string, parallelism, repeat int
 		caseByKey[item.Scenario.ID+"/"+item.ID] = item
 	}
 	var validationErrors []error
-	runErr := executeRun(ctx, store, terminal, tasks, parallelism, func(outcome executor.Outcome) (bool, error) {
+	runErr := options.execute(ctx, store, tasks, func(outcome executor.Outcome) (bool, error) {
 		item, exists := caseByKey[outcome.ScenarioID+"/"+outcome.CaseID]
 		if !exists {
 			validationErrors = append(validationErrors, fmt.Errorf("validation outcome has unknown case %s/%s", outcome.ScenarioID, outcome.CaseID))
