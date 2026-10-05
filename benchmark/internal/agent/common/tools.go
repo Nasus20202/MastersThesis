@@ -21,6 +21,11 @@ type ToolResult struct {
 	Error   error
 }
 
+// Failed reports err to the model and records it with optional details.
+func Failed(err error, details any) ToolResult {
+	return ToolResult{Content: err.Error(), Details: details, Error: err}
+}
+
 // Shell is the sandbox boundary used by shell-backed tools.
 type Shell interface {
 	Exec(context.Context, command.Spec) (command.Result, error)

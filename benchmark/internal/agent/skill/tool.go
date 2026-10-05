@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -20,20 +21,18 @@ const (
 	loadReferenceToolName = "load_reference"
 )
 
-const (
-	routingPromptFormat     = "%s\n\nAvailable skills:\n%s"
-	routingSkillEntryFormat = "- %s: %s"
-)
-
-type skillTool struct {
-	files fs.FS
-}
-
 type skillMetadata struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 }
 
+type skillEvidence struct {
+	Skill     string `json:"skill"`
+	Reference string `json:"reference,omitempty"`
+}
+
+// routingSystemPrompt appends the name and description of every skill to the
+// base prompt.
 func routingSystemPrompt(basePrompt string, files fs.FS) (string, error) {
 	if strings.TrimSpace(basePrompt) == "" {
 		return "", errors.New("skill system prompt is required")
@@ -43,16 +42,17 @@ func routingSystemPrompt(basePrompt string, files fs.FS) (string, error) {
 		return "", err
 	}
 	entries := make([]string, 0, len(paths))
-	for _, name := range skillNames(paths) {
+	for _, name := range slices.Sorted(maps.Keys(paths)) {
 		metadata, _, err := readSkillDocument(files, name)
 		if err != nil {
 			return "", err
 		}
-		entry := fmt.Sprintf(routingSkillEntryFormat, metadata.Name, metadata.Description)
-		entries = append(entries, entry)
+		entries = append(entries, fmt.Sprintf("- %s: %s", metadata.Name, metadata.Description))
 	}
-	return fmt.Sprintf(routingPromptFormat, basePrompt, strings.Join(entries, "\n")), nil
+	return fmt.Sprintf("%s\n\nAvailable skills:\n%s", basePrompt, strings.Join(entries, "\n")), nil
 }
+
+type skillTool struct{ files fs.FS }
 
 func (skillTool) Definition() inference.Tool {
 	return inference.Tool{
@@ -62,13 +62,28 @@ func (skillTool) Definition() inference.Tool {
 	}
 }
 
-type skillToolArguments struct {
-	Name string `json:"name"`
+func (t skillTool) Execute(_ context.Context, call inference.ToolCall) common.ToolResult {
+	var arguments struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
+		return common.Failed(fmt.Errorf("malformed load_skill arguments: %w", err), nil)
+	}
+	name := strings.ToLower(strings.TrimSpace(arguments.Name))
+	if name == "" {
+		return common.Failed(errors.New("skill name is required"), nil)
+	}
+	_, body, err := readSkillDocument(t.files, name)
+	if err != nil {
+		if owner, reference, ok := findReferenceOwner(t.files, name); ok {
+			err = fmt.Errorf("skill %q is not available; %q is a reference of skill %q: call load_reference with {\"skill\":%q,\"reference\":%q} instead", name, reference, owner, owner, reference)
+		}
+		return common.Failed(err, nil)
+	}
+	return common.ToolResult{Content: body, Details: skillEvidence{Skill: name}}
 }
 
-type referenceTool struct {
-	files fs.FS
-}
+type referenceTool struct{ files fs.FS }
 
 func (referenceTool) Definition() inference.Tool {
 	return inference.Tool{
@@ -78,67 +93,27 @@ func (referenceTool) Definition() inference.Tool {
 	}
 }
 
-type skillEvidence struct {
-	Skill     string `json:"skill"`
-	Reference string `json:"reference,omitempty"`
-}
-
-func (t skillTool) Execute(_ context.Context, call inference.ToolCall) common.ToolResult {
-	var arguments skillToolArguments
-	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-		err = fmt.Errorf("malformed load_skill arguments: %w", err)
-		return common.ToolResult{Content: err.Error(), Error: err}
-	}
-
-	name := strings.ToLower(strings.TrimSpace(arguments.Name))
-	if name == "" {
-		err := errors.New("skill name is required")
-		return common.ToolResult{Content: err.Error(), Error: err}
-	}
-	_, body, err := readSkillDocument(t.files, name)
-	if err != nil {
-		if owner, reference, ok := findReferenceOwner(t.files, name); ok {
-			err = fmt.Errorf("skill %q is not available; %q is a reference of skill %q: call load_reference with {\"skill\":%q,\"reference\":%q} instead", name, reference, owner, owner, reference)
-		}
-		return common.ToolResult{Content: err.Error(), Error: err}
-	}
-	return common.ToolResult{
-		Content: body,
-		Details: skillEvidence{Skill: name},
-	}
-}
-
-type referenceToolArguments struct {
-	Skill     string `json:"skill"`
-	Reference string `json:"reference"`
-}
-
 func (t referenceTool) Execute(_ context.Context, call inference.ToolCall) common.ToolResult {
-	var arguments referenceToolArguments
-	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-		err = fmt.Errorf("malformed load_reference arguments: %w", err)
-		return common.ToolResult{Content: err.Error(), Error: err}
+	var arguments struct {
+		Skill     string `json:"skill"`
+		Reference string `json:"reference"`
 	}
-
+	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
+		return common.Failed(fmt.Errorf("malformed load_reference arguments: %w", err), nil)
+	}
 	name := strings.ToLower(strings.TrimSpace(arguments.Skill))
 	if name == "" {
-		err := errors.New("skill name is required")
-		return common.ToolResult{Content: err.Error(), Error: err}
+		return common.Failed(errors.New("skill name is required"), nil)
 	}
 	reference := strings.ToLower(strings.TrimSpace(arguments.Reference))
 	if reference == "" {
-		err := errors.New("reference filename is required")
-		return common.ToolResult{Content: err.Error(), Error: err}
+		return common.Failed(errors.New("reference filename is required"), nil)
 	}
-
 	content, err := readReference(t.files, name, reference)
 	if err != nil {
-		return common.ToolResult{Content: err.Error(), Error: err}
+		return common.Failed(err, nil)
 	}
-	return common.ToolResult{
-		Content: content,
-		Details: skillEvidence{Skill: name, Reference: reference},
-	}
+	return common.ToolResult{Content: content, Details: skillEvidence{Skill: name, Reference: reference}}
 }
 
 func readReference(files fs.FS, name, reference string) (string, error) {
@@ -163,6 +138,7 @@ func readReference(files fs.FS, name, reference string) (string, error) {
 	return string(data), nil
 }
 
+// discoverSkillPaths maps each skill directory name to its SKILL.md.
 func discoverSkillPaths(files fs.FS) (map[string]string, error) {
 	root := skillRoot(files)
 	entries, err := fs.ReadDir(files, root)
@@ -190,15 +166,7 @@ func discoverSkillPaths(files fs.FS) (map[string]string, error) {
 	return paths, nil
 }
 
-func skillNames(paths map[string]string) []string {
-	result := make([]string, 0, len(paths))
-	for name := range paths {
-		result = append(result, name)
-	}
-	sort.Strings(result)
-	return result
-}
-
+// discoverReferences maps each reference file name of a skill to its path.
 func discoverReferences(files fs.FS, name string) (map[string]string, error) {
 	directory := path.Join(skillRoot(files), name, "references")
 	entries, err := fs.ReadDir(files, directory)
@@ -210,14 +178,15 @@ func discoverReferences(files fs.FS, name string) (map[string]string, error) {
 	}
 	references := make(map[string]string, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+		if !entry.IsDir() {
+			references[entry.Name()] = directory + "/" + entry.Name()
 		}
-		references[entry.Name()] = directory + "/" + entry.Name()
 	}
 	return references, nil
 }
 
+// skillRoot accepts both the embedded tree, which keeps the skills directory,
+// and a configured skills directory.
 func skillRoot(files fs.FS) string {
 	if info, err := fs.Stat(files, "skills"); err == nil && info.IsDir() {
 		return "skills"
@@ -225,26 +194,19 @@ func skillRoot(files fs.FS) string {
 	return "."
 }
 
-func referenceNames(references map[string]string) []string {
-	result := make([]string, 0, len(references))
-	for reference := range references {
-		result = append(result, reference)
-	}
-	sort.Strings(result)
-	return result
-}
-
+// findReferenceOwner finds the skill whose reference the model asked for as a
+// skill name, with or without the .md extension.
 func findReferenceOwner(files fs.FS, query string) (skill, reference string, ok bool) {
 	paths, err := discoverSkillPaths(files)
 	if err != nil {
 		return "", "", false
 	}
-	for _, name := range skillNames(paths) {
+	for _, name := range slices.Sorted(maps.Keys(paths)) {
 		references, err := discoverReferences(files, name)
 		if err != nil {
 			continue
 		}
-		for _, reference := range referenceNames(references) {
+		for _, reference := range slices.Sorted(maps.Keys(references)) {
 			if lowered := strings.ToLower(reference); lowered == query || lowered == query+".md" {
 				return name, reference, true
 			}
@@ -260,8 +222,7 @@ func readSkillDocument(files fs.FS, name string) (skillMetadata, string, error) 
 	}
 	path, ok := paths[name]
 	if !ok {
-		err := fmt.Errorf("skill %q is not available; choose one of %s", name, strings.Join(skillNames(paths), ", "))
-		return skillMetadata{}, "", err
+		return skillMetadata{}, "", fmt.Errorf("skill %q is not available; choose one of %s", name, strings.Join(slices.Sorted(maps.Keys(paths)), ", "))
 	}
 	data, err := fs.ReadFile(files, path)
 	if err != nil {
@@ -274,20 +235,14 @@ func readSkillDocument(files fs.FS, name string) (skillMetadata, string, error) 
 	return metadata, body, nil
 }
 
+// parseSkillDocument splits SKILL.md into its YAML front matter and body.
 func parseSkillDocument(content, name string) (skillMetadata, string, error) {
 	lines := strings.Split(content, "\n")
 	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
 		return skillMetadata{}, "", errors.New("SKILL.md must start with YAML front matter")
 	}
-
-	closing := -1
-	for index := 1; index < len(lines); index++ {
-		if strings.TrimSpace(lines[index]) == "---" {
-			closing = index
-			break
-		}
-	}
-	if closing < 0 {
+	closing := slices.IndexFunc(lines[1:], func(line string) bool { return strings.TrimSpace(line) == "---" }) + 1
+	if closing == 0 {
 		return skillMetadata{}, "", errors.New("SKILL.md front matter is not closed")
 	}
 

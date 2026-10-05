@@ -54,11 +54,10 @@ func (t bashTool) Execute(ctx context.Context, call inference.ToolCall) ToolResu
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-		return ToolResult{Content: fmt.Sprintf("malformed bash arguments: %v", err), Error: fmt.Errorf("malformed bash arguments: %w", err)}
+		return Failed(fmt.Errorf("malformed bash arguments: %w", err), nil)
 	}
 	if strings.TrimSpace(arguments.Command) == "" {
-		err := errors.New("bash command is required")
-		return ToolResult{Content: err.Error(), Error: err}
+		return Failed(errors.New("bash command is required"), nil)
 	}
 
 	commandResult, execErr := t.shell.Exec(ctx, command.Spec{

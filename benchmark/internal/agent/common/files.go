@@ -99,10 +99,6 @@ func decodeFileArguments(call inference.ToolCall, target any) (string, error) {
 	return path.Path, nil
 }
 
-func failed(err error, details any) ToolResult {
-	return ToolResult{Content: err.Error(), Details: details, Error: err}
-}
-
 type readFileTool struct{ fileTools }
 
 func (readFileTool) Definition() inference.Tool {
@@ -117,11 +113,11 @@ func (t readFileTool) Execute(ctx context.Context, call inference.ToolCall) Tool
 	var arguments struct{}
 	path, err := decodeFileArguments(call, &arguments)
 	if err != nil {
-		return failed(err, nil)
+		return Failed(err, nil)
 	}
 	content, evidence, err := t.read(ctx, path)
 	if err != nil {
-		return failed(err, evidence)
+		return Failed(err, evidence)
 	}
 	if content == "" {
 		content = "(empty file)"
@@ -145,14 +141,14 @@ func (t writeFileTool) Execute(ctx context.Context, call inference.ToolCall) Too
 	}
 	path, err := decodeFileArguments(call, &arguments)
 	if err != nil {
-		return failed(err, nil)
+		return Failed(err, nil)
 	}
 	if arguments.Content == nil {
-		return failed(errors.New("write_file content is required"), nil)
+		return Failed(errors.New("write_file content is required"), nil)
 	}
 	evidence, err := t.write(ctx, path, *arguments.Content)
 	if err != nil {
-		return failed(err, evidence)
+		return Failed(err, evidence)
 	}
 	return ToolResult{Content: fmt.Sprintf("wrote %d bytes to %s", evidence.Bytes, path), Details: evidence}
 }
@@ -174,25 +170,25 @@ func (t editFileTool) Execute(ctx context.Context, call inference.ToolCall) Tool
 	}
 	path, err := decodeFileArguments(call, &arguments)
 	if err != nil {
-		return failed(err, nil)
+		return Failed(err, nil)
 	}
 	if arguments.OldString == "" || arguments.NewString == nil {
-		return failed(errors.New("edit_file old_string and new_string are required"), nil)
+		return Failed(errors.New("edit_file old_string and new_string are required"), nil)
 	}
 	content, evidence, err := t.read(ctx, path)
 	if err != nil {
-		return failed(err, evidence)
+		return Failed(err, evidence)
 	}
 	switch count := strings.Count(content, arguments.OldString); count {
 	case 0:
-		return failed(fmt.Errorf("old_string was not found in %s; read the file and copy the text exactly", path), evidence)
+		return Failed(fmt.Errorf("old_string was not found in %s; read the file and copy the text exactly", path), evidence)
 	case 1:
 	default:
-		return failed(fmt.Errorf("old_string occurs %d times in %s; include more surrounding text so it matches once", count, path), evidence)
+		return Failed(fmt.Errorf("old_string occurs %d times in %s; include more surrounding text so it matches once", count, path), evidence)
 	}
 	evidence, err = t.write(ctx, path, strings.Replace(content, arguments.OldString, *arguments.NewString, 1))
 	if err != nil {
-		return failed(err, evidence)
+		return Failed(err, evidence)
 	}
 	return ToolResult{Content: "replaced 1 occurrence in " + path, Details: evidence}
 }
