@@ -306,6 +306,12 @@ func criterionRates(attempts, reference []RunAttempt) []CriterionRate {
 	return rates
 }
 
+// Macro is the mean of per-scenario mean scores.
+func Macro(attempts []RunAttempt) float64 {
+	macro, _, _ := outcome(attempts)
+	return macro
+}
+
 // outcome returns the macro score, full-success count and scenario count.
 func outcome(attempts []RunAttempt) (float64, int, int) {
 	means := scenarioMeans(attempts)

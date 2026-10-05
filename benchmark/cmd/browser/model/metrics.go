@@ -4,14 +4,20 @@
 // rates per scenario.
 package model
 
-import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+import (
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/analysis"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+)
 
+// Metrics summarizes a set of attempts. MeanScore weighs every attempt
+// equally; Macro, as in analyze, averages per-scenario mean scores.
 type Metrics struct {
 	Attempts  int
 	Full      int
 	Partial   int
 	Failed    int
 	MeanScore float64
+	Macro     float64
 
 	Durations   []float64
 	Turns       []int
@@ -42,12 +48,13 @@ type ref struct {
 
 func gather(store *Store, refs []ref) Metrics {
 	metrics := Metrics{Terminations: make(map[string]int)}
+	var attempts []analysis.RunAttempt
 	for _, item := range refs {
 		attempt, err := store.RunAttempt(item.runID, item.ref)
 		if err != nil {
 			continue
 		}
-		metrics.Attempts++
+		attempts = append(attempts, attempt)
 		switch {
 		case attempt.FullSuccess:
 			metrics.Full++
@@ -79,9 +86,11 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.Terminations["error"]++
 		}
 	}
+	metrics.Attempts = len(attempts)
 	if metrics.Attempts > 0 {
 		metrics.MeanScore /= float64(metrics.Attempts)
 	}
+	metrics.Macro = analysis.Macro(attempts)
 	return metrics
 }
 

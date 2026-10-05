@@ -59,6 +59,7 @@ func (v *View) buildTotals(width int) []string {
 			components.MetricCard("partial", fmt.Sprintf("%d", metrics.Partial), ui.Warning),
 			components.MetricCard("failed", fmt.Sprintf("%d", metrics.Failed), ui.Danger),
 			components.MetricCard("full success", ui.Rate(rate), ui.Outcome(rate >= 1, rate)),
+			components.MetricCard("macro score", ui.Rate(metrics.Macro), ui.Outcome(metrics.Macro >= 1, metrics.Macro)),
 			components.MetricCard("mean score", ui.Rate(metrics.MeanScore), ui.Outcome(metrics.MeanScore >= 1, metrics.MeanScore)),
 		}, contentWidth),
 		"",

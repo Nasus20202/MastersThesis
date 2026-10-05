@@ -30,6 +30,22 @@ func TestRunMetricsAggregatesOutcomeAndDuration(t *testing.T) {
 	assert.Equal(t, []float64{10, 45}, metrics.Durations)
 }
 
+func TestRunMetricsMacroAveragesScenarios(t *testing.T) {
+	root := t.TempDir()
+	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha", "beta"}, Parallelism: 1, RepeatCount: 2})
+	require.NoError(t, err)
+	require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("alpha", true, 1, 10, 2)))
+	require.NoError(t, store.WriteAttempt(2, "skill", attemptResult("alpha", true, 1, 10, 2)))
+	require.NoError(t, store.WriteAttempt(1, "skill", attemptResult("beta", false, 0, 10, 2)))
+
+	read := NewStore(StoreConfig{ResultsRoot: root})
+	require.NoError(t, read.Reload())
+
+	metrics := RunMetrics(read, "run-1", "", "")
+	assert.InDelta(t, 2.0/3, metrics.MeanScore, 1e-9)
+	assert.InDelta(t, 0.5, metrics.Macro, 1e-9)
+}
+
 func attemptResult(scenario string, full bool, score, duration float64, turns int) orchestration.RunResult {
 	return orchestration.RunResult{
 		ScenarioID: scenario, Condition: "skill",

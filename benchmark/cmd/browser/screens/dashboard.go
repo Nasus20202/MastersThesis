@@ -80,6 +80,7 @@ func (v *View) vitals(metrics model.Metrics) []string {
 	cards := []string{
 		components.MetricCard("attempts", fmt.Sprintf("%d", metrics.Attempts), ui.Section),
 		components.MetricCard("full success", ui.Rate(rate), ui.Outcome(rate >= 1, rate)),
+		components.MetricCard("macro score", ui.Rate(metrics.Macro), ui.Outcome(metrics.Macro >= 1, metrics.Macro)),
 		components.MetricCard("mean score", ui.Rate(metrics.MeanScore), ui.Outcome(metrics.MeanScore >= 1, metrics.MeanScore)),
 	}
 	if len(metrics.Durations) > 0 {

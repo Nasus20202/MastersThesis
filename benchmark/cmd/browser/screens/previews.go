@@ -64,7 +64,7 @@ func (v *View) runPreview(run results.RunRef, metrics model.Metrics, scoped bool
 		} else {
 			body = append(body, fmt.Sprintf("attempts %d/%d · errors %d", run.Summary.AttemptsRecorded, run.Summary.ExpectedAttempts, run.Summary.ErrorCount))
 		}
-		body = append(body, fmt.Sprintf("full success %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.MeanScore)))
+		body = append(body, fmt.Sprintf("full success %s · macro %s · mean %s", ui.Rate(model.OutcomeRate(metrics)), ui.Rate(metrics.Macro), ui.Rate(metrics.MeanScore)))
 	}
 	return components.Panel("", strings.Join(body, "\n"), width, ui.Border)
 }
