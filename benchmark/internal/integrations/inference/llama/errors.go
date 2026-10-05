@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
 const maxErrorBodyBytes = 8 << 10
@@ -20,6 +22,15 @@ func (e *HTTPError) Error() string {
 		return fmt.Sprintf("llama server returned %s", e.Status)
 	}
 	return fmt.Sprintf("llama server returned %s: %s", e.Status, e.Body)
+}
+
+// Unwrap maps llama-server's context-size rejection to
+// inference.ErrContextOverflow.
+func (e *HTTPError) Unwrap() error {
+	if strings.Contains(e.Body, "exceed_context_size_error") {
+		return inference.ErrContextOverflow
+	}
+	return nil
 }
 
 func newHTTPError(response *http.Response) *HTTPError {

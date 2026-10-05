@@ -20,7 +20,9 @@ func TestAttemptHeadShowsThroughputCards(t *testing.T) {
 	result := orchestration.RunResult{
 		ScenarioID: "alpha", Condition: "skill",
 		Agent: &common.Result{
-			Termination: common.TerminationCompleted,
+			Termination:     common.TerminationCompleted,
+			TokenUsage:      common.TokenUsage{PeakContextTokens: 31234},
+			ContextOverflow: true,
 			Responses: []common.ResponseEvidence{
 				{Response: inference.Result{Timings: &inference.Timings{PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
 				{Response: inference.Result{Timings: &inference.Timings{PredictedN: 40, PredictedMS: 3000, DraftN: 20, DraftNAccepted: 13}}},
@@ -39,6 +41,9 @@ func TestAttemptHeadShowsThroughputCards(t *testing.T) {
 	assert.Contains(t, out, "25.0")
 	assert.Contains(t, out, "draft accept %")
 	assert.Contains(t, out, "50%")
+	assert.Contains(t, out, "peak ctx")
+	assert.Contains(t, out, "31234")
+	assert.Contains(t, out, "ctx overflow")
 }
 
 func TestAttemptHeadOmitsThroughputWithoutTimings(t *testing.T) {

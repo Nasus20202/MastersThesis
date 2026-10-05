@@ -122,15 +122,21 @@ type ResponseEvidence struct {
 }
 
 // TokenUsage contains the aggregate token usage reported by all model
-// responses in one loop run.
+// responses in one loop run. PeakContextTokens is the largest prompt plus
+// completion of a single response: the most context the attempt occupied.
 type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-	CachedTokens     int `json:"cached_tokens,omitempty"`
+	PromptTokens      int `json:"prompt_tokens"`
+	CompletionTokens  int `json:"completion_tokens"`
+	TotalTokens       int `json:"total_tokens"`
+	CachedTokens      int `json:"cached_tokens,omitempty"`
+	PeakContextTokens int `json:"peak_context_tokens"`
 }
 
-// Result is the complete model-loop evidence produced by Run.
+// Result is the complete model-loop evidence produced by Run. ContextOverflow
+// marks an attempt that ran out of model context: the server rejected a
+// request as too long, or generation stopped at the length limit without a
+// configured max_tokens being reached. A rejected request reports no usage, so
+// TokenUsage.PeakContextTokens then underestimates the context.
 type Result struct {
 	Condition       string              `json:"condition,omitempty"`
 	Task            string              `json:"task"`
@@ -146,6 +152,7 @@ type Result struct {
 	Termination     string              `json:"termination"`
 	Error           string              `json:"error,omitempty"`
 	DurationSeconds float64             `json:"duration_seconds"`
+	ContextOverflow bool                `json:"context_overflow,omitempty"`
 }
 
 func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
@@ -201,6 +208,10 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 			result.TokenUsage.CompletionTokens += response.Usage.CompletionTokens
 			result.TokenUsage.TotalTokens += response.Usage.TotalTokens
 			result.TokenUsage.CachedTokens += response.Usage.CachedTokens
+			result.TokenUsage.PeakContextTokens = max(result.TokenUsage.PeakContextTokens, response.Usage.PromptTokens+response.Usage.CompletionTokens)
+		}
+		if l.contextOverflow(response, chatErr) {
+			result.ContextOverflow = true
 		}
 		if chatErr != nil {
 			logger.ErrorContext(runCtx, "inference response failed",
@@ -350,6 +361,16 @@ func (l *Loop) finishContext(result *Result, ctxErr error) (Result, error) {
 		termination = TerminationTimeout
 	}
 	return l.finish(result, termination, ctxErr)
+}
+
+func (l *Loop) contextOverflow(response inference.Result, chatErr error) bool {
+	if errors.Is(chatErr, inference.ErrContextOverflow) {
+		return true
+	}
+	if chatErr != nil || strings.TrimSpace(response.FinishReason) != "length" {
+		return false
+	}
+	return l.config.MaxTokens == nil || (response.Usage != nil && response.Usage.CompletionTokens < *l.config.MaxTokens)
 }
 
 func terminationForFinishReason(reason string) string {

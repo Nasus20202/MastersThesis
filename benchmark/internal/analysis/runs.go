@@ -55,6 +55,8 @@ type RunAttempt struct {
 	Turns         int      `json:"turns"`
 	Prompt        int      `json:"prompt_tokens"`
 	Completion    int      `json:"completion_tokens"`
+	PeakContext   int      `json:"peak_context_tokens"`
+	Overflow      bool     `json:"context_overflow,omitempty"`
 	Criteria      []Check  `json:"criteria"`
 	FirstChange   int      `json:"first_change"`
 	Changes       int      `json:"changes"`
@@ -165,6 +167,8 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 	attempt.Turns = result.Agent.Turns
 	attempt.Prompt = result.Agent.TokenUsage.PromptTokens
 	attempt.Completion = result.Agent.TokenUsage.CompletionTokens
+	attempt.PeakContext = result.Agent.TokenUsage.PeakContextTokens
+	attempt.Overflow = result.Agent.ContextOverflow
 	for index, call := range result.Agent.ToolCalls {
 		switch call.Call.Name {
 		case "bash":

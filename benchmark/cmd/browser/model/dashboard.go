@@ -19,6 +19,10 @@ type Metrics struct {
 	Completion  []int
 	Cached      []int
 	CacheRatios []float64
+	// PeakContext is each attempt's largest single-response context;
+	// Overflows counts attempts that ran out of context.
+	PeakContext []int
+	Overflows   int
 
 	// Decoding throughput summed over responses, so long responses weigh more
 	// than short ones. Draft counters are zero when speculation is disabled.
@@ -80,6 +84,10 @@ func gather(store *Store, refs []ref) Metrics {
 			metrics.Completion = append(metrics.Completion, agent.TokenUsage.CompletionTokens)
 			metrics.Cached = append(metrics.Cached, agent.TokenUsage.CachedTokens)
 			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens))
+			metrics.PeakContext = append(metrics.PeakContext, agent.TokenUsage.PeakContextTokens)
+			if agent.ContextOverflow {
+				metrics.Overflows++
+			}
 			metrics.Terminations[agent.Termination]++
 			predicted, seconds, draft, accepted := attemptTimings(attempt)
 			metrics.PredictedTokens += predicted

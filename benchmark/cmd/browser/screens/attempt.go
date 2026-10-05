@@ -62,6 +62,8 @@ func (v *View) buildDetailsHead(route *Route, width int) string {
 			components.MetricCard("out", fmt.Sprintf("%d", agent.TokenUsage.CompletionTokens), ui.Section),
 			components.MetricCard("cached", fmt.Sprintf("%d", agent.TokenUsage.CachedTokens), ui.Section),
 			components.MetricCard("cache %", fmt.Sprintf("%.2f%%", model.CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens)*100), ui.Section),
+			components.MetricCard("peak ctx", fmt.Sprintf("%d", agent.TokenUsage.PeakContextTokens), ui.Section),
+			components.MetricCard("ctx overflow", fmt.Sprintf("%t", agent.ContextOverflow), overflowStyle(agent.ContextOverflow)),
 			components.MetricCard("termination", agent.Termination, ui.Termination(agent.Termination)),
 		}
 		if rate := model.AttemptTokensPerSecond(attempt); rate > 0 {

@@ -30,6 +30,13 @@ func errorStyle(errors string) lipgloss.Style {
 	return ui.Danger
 }
 
+func overflowStyle(overflow bool) lipgloss.Style {
+	if overflow {
+		return ui.Danger
+	}
+	return ui.Section
+}
+
 // runLabel is a short, sortable label for a run in comparison lists.
 func runLabel(run results.RunRef) string {
 	if !run.Metadata.StartedAt.IsZero() {

@@ -23,7 +23,7 @@ func TestTotalsAggregateEveryRun(t *testing.T) {
 			Agent: &common.Result{
 				Termination:     common.TerminationCompleted,
 				DurationSeconds: 10,
-				TokenUsage:      common.TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, CachedTokens: 25},
+				TokenUsage:      common.TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, CachedTokens: 25, PeakContextTokens: 12345},
 			},
 			Grading: orchestration.GradingResult{Score: 1, FullSuccess: true},
 		}
@@ -39,5 +39,8 @@ func TestTotalsAggregateEveryRun(t *testing.T) {
 	assert.Contains(t, out, "attempts")
 	assert.Contains(t, out, "300")
 	assert.Contains(t, out, "Tokens")
+	assert.Contains(t, out, "max peak ctx")
+	assert.Contains(t, out, "12,345")
+	assert.Contains(t, out, "ctx overflows")
 	assert.Contains(t, out, "Termination")
 }

@@ -73,7 +73,7 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 		ScenarioID: "service-port",
 		Attempt:    2,
 		Grading:    orchestration.GradingResult{Score: 1, FullSuccess: true},
-		Agent: &common.Result{Termination: "completed", ToolCalls: []common.ToolCallEvidence{
+		Agent: &common.Result{Termination: "completed", ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
 			{Call: inference.ToolCall{Name: "bash", Arguments: `{"command":"kubectl get svc"}`}},
 			{Call: inference.ToolCall{Name: SearchToolName}, Details: hits("other.md", "service.md")},
 			{Call: inference.ToolCall{Name: "bash", Arguments: `{"command":"kubectl patch svc app -p '{}'"}`}},
@@ -105,7 +105,7 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 	result := results.AttemptResult{
 		ScenarioID: "app",
 		Grading:    orchestration.GradingResult{Score: 0.5},
-		Agent: &common.Result{Termination: "completed", ToolCalls: []common.ToolCallEvidence{
+		Agent: &common.Result{Termination: "completed", ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
 			bash("kubectl edit deployment app", 1),
 			bash("kubectl patch deployment app --type merge -p '{}'", 1),
 			bash("kubectl set image deployment/app app=nginx && kubectl rollout status deployment/app --timeout=50s", 0),
@@ -119,9 +119,11 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 	assert.Equal(t, 2, attempt.FailedChanges)
 	assert.Equal(t, 1, attempt.Edits)
 	assert.True(t, attempt.RolloutStatus)
+	assert.Equal(t, 31000, attempt.PeakContext)
+	assert.True(t, attempt.Overflow)
 
 	usage := Summarize("prompt", []RunAttempt{attempt}, nil).Usage
-	assert.Equal(t, Usage{Attempts: 1, Changes: 3, FailedChanges: 2, Edits: 1, RolloutStatus: 1, Unconfirmed: 1}, usage)
+	assert.Equal(t, Usage{Attempts: 1, PeakContext: 31000, MaxPeakContext: 31000, Overflows: 1, Changes: 3, FailedChanges: 2, Edits: 1, RolloutStatus: 1, Unconfirmed: 1}, usage)
 }
 
 func TestSummarizeGroupsAttemptsAndMatchesReferenceScenarios(t *testing.T) {
@@ -171,8 +173,8 @@ func TestSummarizeGroupsAttemptsAndMatchesReferenceScenarios(t *testing.T) {
 
 func TestSummarizeReportsUsageAndCriteriaAgainstReference(t *testing.T) {
 	attempts := []RunAttempt{
-		{Scenario: "a", AgentRan: true, Turns: 4, Prompt: 1000, Completion: 100, Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc", Passed: false}}},
-		{Scenario: "a", AgentRan: true, Turns: 6, Prompt: 3000, Completion: 300, Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc", Passed: true}}},
+		{Scenario: "a", AgentRan: true, Turns: 4, Prompt: 1000, Completion: 100, PeakContext: 600, Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc", Passed: false}}},
+		{Scenario: "a", AgentRan: true, Turns: 6, Prompt: 3000, Completion: 300, PeakContext: 1000, Overflow: true, Criteria: []Check{{ID: "ready", Passed: true}, {ID: "svc", Passed: true}}},
 		{Scenario: "a", Criteria: []Check{{ID: "ready", Passed: false}}},
 	}
 	reference := []RunAttempt{
@@ -182,7 +184,7 @@ func TestSummarizeReportsUsageAndCriteriaAgainstReference(t *testing.T) {
 
 	summary := Summarize("rag", attempts, reference)
 
-	assert.Equal(t, Usage{Attempts: 2, Turns: 5, Prompt: 2000, Completion: 200}, summary.Usage)
+	assert.Equal(t, Usage{Attempts: 2, Turns: 5, Prompt: 2000, Completion: 200, PeakContext: 800, MaxPeakContext: 1000, Overflows: 1}, summary.Usage)
 	require.NotNil(t, summary.ReferenceUsage)
 	assert.Equal(t, Usage{Attempts: 1, Turns: 10, Prompt: 500, Completion: 50}, *summary.ReferenceUsage)
 	assert.Equal(t, []CriterionRate{

@@ -86,7 +86,8 @@ func TestRunMetricsAggregatesTokenUsage(t *testing.T) {
 	store, err := results.New(root, results.RunMetadata{RunID: "run-1", Agents: []string{"skill"}, Scenarios: []string{"alpha"}, Parallelism: 1, RepeatCount: 1})
 	require.NoError(t, err)
 	result := attemptResult("alpha", true, 1, 10, 2)
-	result.Agent.TokenUsage = common.TokenUsage{PromptTokens: 25, CompletionTokens: 5, TotalTokens: 30, CachedTokens: 10}
+	result.Agent.TokenUsage = common.TokenUsage{PromptTokens: 25, CompletionTokens: 5, TotalTokens: 30, CachedTokens: 10, PeakContextTokens: 20}
+	result.Agent.ContextOverflow = true
 	require.NoError(t, store.WriteAttempt(1, "skill", result))
 
 	read := NewStore(StoreConfig{ResultsRoot: root})
@@ -98,6 +99,8 @@ func TestRunMetricsAggregatesTokenUsage(t *testing.T) {
 	assert.Equal(t, []int{5}, metrics.Completion)
 	assert.Equal(t, []int{10}, metrics.Cached)
 	assert.Equal(t, []float64{0.4}, metrics.CacheRatios)
+	assert.Equal(t, []int{20}, metrics.PeakContext)
+	assert.Equal(t, 1, metrics.Overflows)
 }
 
 func TestRunMetricsAggregatesDecodingThroughput(t *testing.T) {

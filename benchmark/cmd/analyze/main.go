@@ -152,6 +152,7 @@ func printRunSummary(output io.Writer, summary analysis.RunSummary, reference st
 func printUsage(output io.Writer, summary analysis.RunSummary) {
 	mean := func(label string, usage analysis.Usage) {
 		fmt.Fprintf(output, "%s: %d agent attempts, mean %.1f turns, %.0f prompt tokens, %.0f completion tokens\n", label, usage.Attempts, usage.Turns, usage.Prompt, usage.Completion)
+		fmt.Fprintf(output, "  peak context: mean %.0f, max %d tokens; %d attempts ran out of context\n", usage.PeakContext, usage.MaxPeakContext, usage.Overflows)
 		fmt.Fprintf(output, "  %d kubectl changes, %d failed, %d kubectl edit; rollout status in %d attempts; %d completed without full success\n", usage.Changes, usage.FailedChanges, usage.Edits, usage.RolloutStatus, usage.Unconfirmed)
 	}
 	mean("usage", summary.Usage)

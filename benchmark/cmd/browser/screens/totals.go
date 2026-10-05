@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/model"
@@ -69,6 +70,9 @@ func (v *View) buildTotals(width int) []string {
 			components.MetricCard("out", ui.Count(model.SumInts(metrics.Completion)), ui.Section),
 			components.MetricCard("cached", ui.Count(model.SumInts(metrics.Cached)), ui.Section),
 			components.MetricCard("mean cache %", fmt.Sprintf("%.2f%%", model.Mean(metrics.CacheRatios)*100), ui.Section),
+			components.MetricCard("max peak ctx", ui.Count(slices.Max(metrics.PeakContext)), ui.Section),
+			components.MetricCard("mean peak ctx", fmt.Sprintf("%.0f", model.MeanInts(metrics.PeakContext)), ui.Section),
+			components.MetricCard("ctx overflows", fmt.Sprintf("%d", metrics.Overflows), overflowStyle(metrics.Overflows > 0)),
 		}
 		if throughput := model.PredictedTokensPerSecond(metrics); throughput > 0 {
 			cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", throughput), ui.Section))
