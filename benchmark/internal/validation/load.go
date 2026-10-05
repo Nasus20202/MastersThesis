@@ -15,10 +15,12 @@ func Load(path string) (Definition, error) {
 	if err != nil {
 		return Definition{}, err
 	}
-	definition.sourceDir = dir
-	for scenarioIndex := range definition.Scenarios {
-		definition.Scenarios[scenarioIndex].sourceDir = definition.sourceDir
-		definition.Scenarios[scenarioIndex].RepairDirs()
+	for index := range definition.Scenarios {
+		item := &definition.Scenarios[index]
+		item.sourceDir = dir
+		for _, validationCase := range item.Cases {
+			validationCase.Repair.SetDir(dir)
+		}
 	}
 	return definition, nil
 }
@@ -66,12 +68,6 @@ func (d Definition) Validate() error {
 		}
 	}
 	return nil
-}
-
-func (s *Scenario) RepairDirs() {
-	for caseIndex := range s.Cases {
-		s.Cases[caseIndex].Repair.SetDir(s.sourceDir)
-	}
 }
 
 func (s Scenario) ScenarioPath() string {

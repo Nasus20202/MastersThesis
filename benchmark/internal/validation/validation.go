@@ -15,7 +15,6 @@ import (
 
 type Definition struct {
 	Scenarios []Scenario `yaml:"scenarios" validate:"required,min=1,dive"`
-	sourceDir string
 }
 
 type Scenario struct {

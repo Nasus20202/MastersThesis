@@ -17,9 +17,9 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// IDPattern matches the kebab-case identifiers used for scenario, criterion,
+// idPattern matches the kebab-case identifiers used for scenario, criterion,
 // and validation-case IDs.
-var IDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+var idPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 // Validatable is implemented by the decoded value types so Parse can run
 // struct- and cross-field validation right after decoding.
@@ -56,14 +56,14 @@ func Parse[T Validatable](data []byte, kind string) (T, error) {
 
 	var value T
 	if err := decoder.Decode(&value); err != nil {
-		return zero, FormatYAMLError(kind, err)
+		return zero, formatYAMLError(kind, err)
 	}
 
 	var extraDocument any
 	if err := decoder.Decode(&extraDocument); err == nil {
 		return zero, fmt.Errorf("%s YAML must contain exactly one document", kind)
 	} else if !errors.Is(err, io.EOF) {
-		return zero, FormatYAMLError(kind, err)
+		return zero, formatYAMLError(kind, err)
 	}
 
 	if err := value.Validate(); err != nil {
@@ -160,7 +160,7 @@ func NewValidator(idTag string) *validator.Validate {
 		panic(fmt.Sprintf("register notblank validator for %s: %v", idTag, err))
 	}
 	if err := validate.RegisterValidation(idTag, func(field validator.FieldLevel) bool {
-		return IDPattern.MatchString(field.Field().String())
+		return idPattern.MatchString(field.Field().String())
 	}); err != nil {
 		panic(fmt.Sprintf("register %s validator: %v", idTag, err))
 	}
@@ -183,8 +183,8 @@ func FormatValidationError(kind string, err error) error {
 	return fmt.Errorf("invalid %s: %s", kind, strings.Join(messages, "; "))
 }
 
-// FormatYAMLError wraps a YAML decode error with an "invalid <kind> YAML: ..."
+// formatYAMLError wraps a YAML decode error with an "invalid <kind> YAML: ..."
 // message that includes the go-yaml pretty-printed error.
-func FormatYAMLError(kind string, err error) error {
+func formatYAMLError(kind string, err error) error {
 	return fmt.Errorf("invalid %s YAML: %s", kind, yaml.FormatError(err, false, true))
 }
