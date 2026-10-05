@@ -138,20 +138,19 @@ func (v *View) attemptsTable(route *Route, width, height int) string {
 	rows := make([][]string, len(refs))
 	styles := make([]lipgloss.Style, len(refs))
 	for index, ref := range refs {
-		attempt, err := v.store.Attempt(route.RunID, ref)
+		attempt, err := v.store.RunAttempt(route.RunID, ref)
 		if err != nil {
 			rows[index] = []string{fmt.Sprintf("%d", ref.Attempt), ref.Group, "–", "–", "–"}
 			styles[index] = ui.Danger
 			continue
 		}
-		grading := attempt.Grading()
-		styles[index] = ui.Outcome(grading.FullSuccess, grading.Score)
+		styles[index] = ui.Outcome(attempt.FullSuccess, attempt.Score)
 		rows[index] = []string{
 			fmt.Sprintf("%d", ref.Attempt),
 			ref.Group,
-			ui.Rate(grading.Score),
-			ui.YesNo(grading.FullSuccess),
-			ui.Seconds(model.AttemptDuration(attempt)),
+			ui.Rate(attempt.Score),
+			ui.YesNo(attempt.FullSuccess),
+			ui.Seconds(attempt.Duration),
 		}
 	}
 	styleFor := func(index int) lipgloss.Style { return styles[index] }

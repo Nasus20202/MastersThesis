@@ -59,6 +59,7 @@ func (v *View) buildTotals(width int) []string {
 			components.MetricCard("partial", fmt.Sprintf("%d", metrics.Partial), ui.Warning),
 			components.MetricCard("failed", fmt.Sprintf("%d", metrics.Failed), ui.Danger),
 			components.MetricCard("full success", ui.Rate(rate), ui.Outcome(rate >= 1, rate)),
+			components.MetricCard("macro score", ui.Rate(metrics.Macro), ui.Outcome(metrics.Macro >= 1, metrics.Macro)),
 			components.MetricCard("mean score", ui.Rate(metrics.MeanScore), ui.Outcome(metrics.MeanScore >= 1, metrics.MeanScore)),
 		}, contentWidth),
 		"",
@@ -77,10 +78,10 @@ func (v *View) buildTotals(width int) []string {
 			components.MetricCard("mean peak ctx", fmt.Sprintf("%.0f", model.Mean(metrics.PeakContext)), ui.Section),
 			components.MetricCard("ctx overflows", fmt.Sprintf("%d", metrics.Overflows), overflowStyle(metrics.Overflows > 0)),
 		}
-		if throughput := model.PredictedTokensPerSecond(metrics); throughput > 0 {
+		if throughput := model.TokensPerSecond(metrics.PredictedTokens, metrics.PredictedSeconds); throughput > 0 {
 			cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", throughput), ui.Section))
 		}
-		if acceptance, ok := model.DraftAcceptanceRate(metrics); ok {
+		if acceptance, ok := model.AcceptanceRate(metrics.DraftAccepted, metrics.DraftTokens); ok {
 			cards = append(cards, components.MetricCard("draft accept %", fmt.Sprintf("%.0f%%", acceptance*100), ui.Section))
 		}
 		lines = append(lines, components.Section(width, "Tokens"), components.CardRow(cards, contentWidth), "")

@@ -4,14 +4,20 @@
 // rates per scenario.
 package model
 
-import "github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+import (
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/analysis"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+)
 
+// Metrics summarizes a set of attempts. MeanScore weighs every attempt
+// equally; Macro, as in analyze, averages per-scenario mean scores.
 type Metrics struct {
 	Attempts  int
 	Full      int
 	Partial   int
 	Failed    int
 	MeanScore float64
+	Macro     float64
 
 	Durations   []float64
 	Turns       []int
@@ -42,49 +48,49 @@ type ref struct {
 
 func gather(store *Store, refs []ref) Metrics {
 	metrics := Metrics{Terminations: make(map[string]int)}
+	var attempts []analysis.RunAttempt
 	for _, item := range refs {
-		attempt, err := store.Attempt(item.runID, item.ref)
+		attempt, err := store.RunAttempt(item.runID, item.ref)
 		if err != nil {
 			continue
 		}
-		grading := attempt.Grading()
-		metrics.Attempts++
+		attempts = append(attempts, attempt)
 		switch {
-		case grading.FullSuccess:
+		case attempt.FullSuccess:
 			metrics.Full++
-		case grading.Score > 0:
+		case attempt.Score > 0:
 			metrics.Partial++
 		default:
 			metrics.Failed++
 		}
-		metrics.MeanScore += grading.Score
-		metrics.Durations = append(metrics.Durations, AttemptDuration(attempt))
-		if attempt.Benchmark != nil && attempt.Benchmark.Agent != nil {
-			agent := attempt.Benchmark.Agent
-			metrics.Turns = append(metrics.Turns, agent.Turns)
-			metrics.Tokens = append(metrics.Tokens, agent.TokenUsage.TotalTokens)
-			metrics.Prompt = append(metrics.Prompt, agent.TokenUsage.PromptTokens)
-			metrics.Completion = append(metrics.Completion, agent.TokenUsage.CompletionTokens)
-			metrics.Cached = append(metrics.Cached, agent.TokenUsage.CachedTokens)
-			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(agent.TokenUsage.PromptTokens, agent.TokenUsage.CachedTokens))
-			metrics.PeakContext = append(metrics.PeakContext, agent.TokenUsage.PeakContextTokens)
-			if agent.ContextOverflow {
+		metrics.MeanScore += attempt.Score
+		metrics.Durations = append(metrics.Durations, attempt.Duration)
+		if attempt.AgentRan {
+			metrics.Turns = append(metrics.Turns, attempt.Turns)
+			metrics.Tokens = append(metrics.Tokens, attempt.Tokens)
+			metrics.Prompt = append(metrics.Prompt, attempt.Prompt)
+			metrics.Completion = append(metrics.Completion, attempt.Completion)
+			metrics.Cached = append(metrics.Cached, attempt.Cached)
+			metrics.CacheRatios = append(metrics.CacheRatios, CacheRatio(attempt.Prompt, attempt.Cached))
+			metrics.PeakContext = append(metrics.PeakContext, attempt.PeakContext)
+			if attempt.Overflow {
 				metrics.Overflows++
 			}
-			metrics.Terminations[agent.Termination]++
-			predicted, seconds, draft, accepted := attemptTimings(attempt)
-			metrics.PredictedTokens += predicted
-			metrics.PredictedSeconds += seconds
-			metrics.DraftTokens += draft
-			metrics.DraftAccepted += accepted
+			metrics.Terminations[attempt.Termination]++
+			metrics.PredictedTokens += attempt.Predicted
+			metrics.PredictedSeconds += attempt.PredictedTime
+			metrics.DraftTokens += attempt.Drafted
+			metrics.DraftAccepted += attempt.DraftAccepted
 		}
-		if attempt.ErrorMessage() != "" || attempt.Failure() != nil {
+		if attempt.Error {
 			metrics.Terminations["error"]++
 		}
 	}
+	metrics.Attempts = len(attempts)
 	if metrics.Attempts > 0 {
 		metrics.MeanScore /= float64(metrics.Attempts)
 	}
+	metrics.Macro = analysis.Macro(attempts)
 	return metrics
 }
 

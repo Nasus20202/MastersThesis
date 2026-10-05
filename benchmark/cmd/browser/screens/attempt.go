@@ -46,8 +46,9 @@ func (v *View) buildDetailsHead(route *Route, width int) string {
 		return title + "\n" + ui.Danger.Render(err.Error())
 	}
 	grading := attempt.Grading()
+	record, _ := v.store.RunAttempt(route.RunID, route.Ref())
 	summary := ui.OutcomeBadge(grading.FullSuccess, grading.Score) + "  " +
-		ui.MutedStyle.Render(fmt.Sprintf("score %s · duration %s", ui.Rate(grading.Score), ui.Seconds(model.AttemptDuration(attempt))))
+		ui.MutedStyle.Render(fmt.Sprintf("score %s · duration %s", ui.Rate(grading.Score), ui.Seconds(record.Duration)))
 	if attempt.ErrorMessage() != "" {
 		summary += "  " + ui.BadgeDanger.Render("ERROR") + " " + ui.Danger.Render(ui.FirstLine(attempt.ErrorMessage()))
 	}
@@ -66,10 +67,10 @@ func (v *View) buildDetailsHead(route *Route, width int) string {
 			components.MetricCard("ctx overflow", fmt.Sprintf("%t", agent.ContextOverflow), overflowStyle(agent.ContextOverflow)),
 			components.MetricCard("termination", agent.Termination, ui.Termination(agent.Termination)),
 		}
-		if rate := model.AttemptTokensPerSecond(attempt); rate > 0 {
+		if rate := model.TokensPerSecond(record.Predicted, record.PredictedTime); rate > 0 {
 			cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", rate), ui.Section))
 		}
-		if rate, ok := model.AttemptDraftAcceptanceRate(attempt); ok {
+		if rate, ok := model.AcceptanceRate(record.DraftAccepted, record.Drafted); ok {
 			cards = append(cards, components.MetricCard("draft accept %", fmt.Sprintf("%.0f%%", rate*100), ui.Section))
 		}
 	} else if attempt.Validation != nil {

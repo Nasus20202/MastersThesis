@@ -35,8 +35,10 @@ type Check struct {
 	Passed bool   `json:"passed"`
 }
 
-// RunAttempt joins one benchmark attempt with its scenario's evaluator-only
-// source reference. FirstChange is the 0-based tool-call index of the first
+// RunAttempt flattens one recorded attempt and joins it with its scenario's
+// evaluator-only source reference. Duration is the agent's wall-clock time, or
+// the summed grading time when no agent ran. Predicted and draft counters sum
+// llama.cpp's generation timings over the attempt's responses. FirstChange is the 0-based tool-call index of the first
 // Bash command that changes the cluster, or -1. Changes counts such commands
 // and FailedChanges those that exited non-zero; Edits counts `kubectl edit`,
 // which cannot work without an editor, and RolloutStatus records whether the
@@ -56,8 +58,15 @@ type RunAttempt struct {
 	Turns         int      `json:"turns"`
 	Prompt        int      `json:"prompt_tokens"`
 	Completion    int      `json:"completion_tokens"`
+	Tokens        int      `json:"total_tokens"`
+	Cached        int      `json:"cached_tokens"`
 	PeakContext   int      `json:"peak_context_tokens"`
 	Overflow      bool     `json:"context_overflow,omitempty"`
+	Duration      float64  `json:"duration_seconds"`
+	Predicted     int      `json:"predicted_tokens"`
+	PredictedTime float64  `json:"predicted_seconds"`
+	Drafted       int      `json:"draft_tokens,omitempty"`
+	DraftAccepted int      `json:"draft_tokens_accepted,omitempty"`
 	Criteria      []Check  `json:"criteria"`
 	FirstChange   int      `json:"first_change"`
 	Changes       int      `json:"changes"`
@@ -131,7 +140,11 @@ func LoadRunAttempts(root, runID string, sources map[string]string) ([]RunAttemp
 		if loaded.Benchmark == nil {
 			return nil, fmt.Errorf("run %s is not a benchmark run", runID)
 		}
-		attempt, err := newRunAttempt(runID, *loaded.Benchmark, sources)
+		source, ok := sources[loaded.Benchmark.ScenarioID]
+		if !ok {
+			return nil, fmt.Errorf("scenario %s has no source reference", loaded.Benchmark.ScenarioID)
+		}
+		attempt, err := NewRunAttempt(runID, loaded, source)
 		if err != nil {
 			return nil, err
 		}
@@ -140,25 +153,32 @@ func LoadRunAttempts(root, runID string, sources map[string]string) ([]RunAttemp
 	return attempts, nil
 }
 
-func newRunAttempt(runID string, result results.AttemptResult, sources map[string]string) (RunAttempt, error) {
-	source, ok := sources[result.ScenarioID]
-	if !ok {
-		return RunAttempt{}, fmt.Errorf("scenario %s has no source reference", result.ScenarioID)
-	}
+// NewRunAttempt flattens one loaded attempt. Validation attempts carry only
+// grading. Searches are ranked against source, the scenario's source path.
+func NewRunAttempt(runID string, loaded results.Attempt, source string) (RunAttempt, error) {
+	grading := loaded.Grading()
 	attempt := RunAttempt{
 		Run:         runID,
-		Condition:   result.Condition,
-		Scenario:    result.ScenarioID,
-		Attempt:     result.Attempt,
-		Score:       result.Grading.Score,
-		FullSuccess: result.Grading.FullSuccess,
-		Error:       result.Error != "",
+		Score:       grading.Score,
+		FullSuccess: grading.FullSuccess,
+		Error:       loaded.ErrorMessage() != "",
 		FirstChange: -1,
 		Source:      source,
 	}
-	for _, criterion := range result.Grading.Criteria {
+	for _, criterion := range grading.Criteria {
 		attempt.Criteria = append(attempt.Criteria, Check{ID: criterion.ID, Passed: criterion.Passed})
+		attempt.Duration += criterion.DurationSeconds
 	}
+	if loaded.Validation != nil {
+		attempt.Condition = loaded.Validation.Condition
+		attempt.Scenario = loaded.Validation.ScenarioID
+		attempt.Attempt = loaded.Validation.Attempt
+		return attempt, nil
+	}
+	result := loaded.Benchmark
+	attempt.Condition = result.Condition
+	attempt.Scenario = result.ScenarioID
+	attempt.Attempt = result.Attempt
 	if result.Agent == nil {
 		return attempt, nil
 	}
@@ -169,8 +189,19 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 	attempt.Turns = result.Agent.Turns
 	attempt.Prompt = result.Agent.TokenUsage.PromptTokens
 	attempt.Completion = result.Agent.TokenUsage.CompletionTokens
+	attempt.Tokens = result.Agent.TokenUsage.TotalTokens
+	attempt.Cached = result.Agent.TokenUsage.CachedTokens
 	attempt.PeakContext = result.Agent.TokenUsage.PeakContextTokens
 	attempt.Overflow = result.Agent.ContextOverflow
+	attempt.Duration = result.Agent.DurationSeconds
+	for _, response := range result.Agent.Responses {
+		if timings := response.Response.Timings; timings != nil {
+			attempt.Predicted += timings.PredictedN
+			attempt.PredictedTime += timings.PredictedMS / 1000
+			attempt.Drafted += timings.DraftN
+			attempt.DraftAccepted += timings.DraftNAccepted
+		}
+	}
 	for index, call := range result.Agent.ToolCalls {
 		switch call.Call.Name {
 		case "bash":
@@ -188,7 +219,7 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 			}
 			attempt.observeCommand(index, arguments.Command, output.ExitCode)
 		case SearchToolName:
-			search, err := newSearch(index, call.Details, source)
+			search, err := newSearch(index, call.Details, attempt.Source)
 			if err != nil {
 				return RunAttempt{}, fmt.Errorf("%s attempt %d: %w", result.ScenarioID, result.Attempt, err)
 			}

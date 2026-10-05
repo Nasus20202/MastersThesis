@@ -80,6 +80,7 @@ func (v *View) vitals(metrics model.Metrics) []string {
 	cards := []string{
 		components.MetricCard("attempts", fmt.Sprintf("%d", metrics.Attempts), ui.Section),
 		components.MetricCard("full success", ui.Rate(rate), ui.Outcome(rate >= 1, rate)),
+		components.MetricCard("macro score", ui.Rate(metrics.Macro), ui.Outcome(metrics.Macro >= 1, metrics.Macro)),
 		components.MetricCard("mean score", ui.Rate(metrics.MeanScore), ui.Outcome(metrics.MeanScore >= 1, metrics.MeanScore)),
 	}
 	if len(metrics.Durations) > 0 {
@@ -97,7 +98,7 @@ func (v *View) vitals(metrics model.Metrics) []string {
 	if len(metrics.Completion) > 0 {
 		cards = append(cards, components.MetricCard("mean out", fmt.Sprintf("%.0f", model.Mean(metrics.Completion)), ui.Section))
 	}
-	if rate := model.PredictedTokensPerSecond(metrics); rate > 0 {
+	if rate := model.TokensPerSecond(metrics.PredictedTokens, metrics.PredictedSeconds); rate > 0 {
 		cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", rate), ui.Section))
 	}
 	if len(metrics.Cached) > 0 {
@@ -106,7 +107,7 @@ func (v *View) vitals(metrics model.Metrics) []string {
 	if len(metrics.CacheRatios) > 0 {
 		cards = append(cards, components.MetricCard("mean cache %", fmt.Sprintf("%.2f%%", model.Mean(metrics.CacheRatios)*100), ui.Section))
 	}
-	if rate, ok := model.DraftAcceptanceRate(metrics); ok {
+	if rate, ok := model.AcceptanceRate(metrics.DraftAccepted, metrics.DraftTokens); ok {
 		cards = append(cards, components.MetricCard("draft accept %", fmt.Sprintf("%.0f%%", rate*100), ui.Section))
 	}
 	return cards
