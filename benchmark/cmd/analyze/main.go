@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -50,7 +51,7 @@ func run(args []string, output, logOutput io.Writer) error {
 	flags.Var(&references, "reference", "RUN_ID/CONDITION compared on the same scenarios, e.g. the prompt agent; may be repeated and is pooled")
 	byModel := flags.Bool("by-model", false, "pool the conditions and report each model and the mean over models")
 	resultsRoot := flags.String("results", "results", "benchmark results directory")
-	scenarios := flags.String("scenarios", "scenarios", "scenario corpus with evaluator-only source.md files")
+	scenarios := flags.String("scenarios", "scenarios", "scenario corpus; each scenario's sources define retrieval hits")
 	out := flags.String("out", "", "directory for attempts.jsonl and summary.json")
 	subset := flags.String("subset", "", "file listing scenario paths, one per line; restricts every condition to those scenarios")
 	if err := flags.Parse(args); err != nil {
@@ -62,6 +63,8 @@ func run(args []string, output, logOutput io.Writer) error {
 	if len(conditions) == 0 {
 		return errors.New("--condition is required")
 	}
+	// Keep the report free of the scenario loader's per-file info logs.
+	slog.SetLogLoggerLevel(slog.LevelWarn)
 	sources, err := analysis.LoadSources(*scenarios)
 	if err != nil {
 		return err

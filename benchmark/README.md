@@ -16,7 +16,6 @@ scenarios/<area>/<scenario-id>/
   manifests/
   scripts/
   kind/
-  source.md
 ```
 
 ```yaml
@@ -27,6 +26,10 @@ tags:
   task_type: troubleshooting
   knowledge: documentation-dependent
   area: workloads
+sources:
+  - path: content/en/docs/concepts/workloads/controllers/deployment.md
+    sections:
+      - Rolling Back a Deployment
 task: Restore the application to its healthy state.
 
 cluster:
@@ -62,6 +65,12 @@ repair), grades the result and deletes the cluster. `inject_fault` and
 `verify_fault` are independently optional, so a scenario can be a
 troubleshooting task or a constructive one such as deploying resources.
 Command, manifest and Kind config paths resolve relative to the scenario file.
+
+`sources` lists the evaluator-only documentation pages a scenario is grounded
+in: each `path` is relative to the corpus repository root and `sections` are
+heading paths joined with `>`. They are never shown to the model;
+`--check-corpus` requires at least one, and `analyze` uses them to score RAG
+retrieval.
 
 ### Cluster profiles and registry cache
 
@@ -154,7 +163,7 @@ filters by model and scenario tags.
 the macro score, full successes, mean turns and tokens, failed `kubectl`
 changes, use of `kubectl edit` and `kubectl rollout status`, and per-criterion
 pass rates; for the RAG condition, also search use and whether each search
-returned the scenario's `source.md` page. `--reference` compares on the same
+returned one of the scenario's source pages. `--reference` compares on the same
 scenarios with a paired bootstrap interval for the macro difference.
 
 ```sh

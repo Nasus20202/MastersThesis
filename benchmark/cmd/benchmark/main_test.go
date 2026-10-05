@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
@@ -105,11 +106,15 @@ func TestValidationScenarioIDsAreUniqueAndOrdered(t *testing.T) {
 	assert.Equal(t, []string{"first", "second"}, validationScenarioIDs(cases))
 }
 
+const corpusSourcesYAML = `sources:
+  - path: docs/page.md
+`
+
 const corpusScenarioYAML = `
 id: %s
 title: Corpus scenario
 task: Restore the workload.
-prepare:
+` + corpusSourcesYAML + `prepare:
   - program: prepare
 verify_clean:
   - program: verify-clean
@@ -169,6 +174,20 @@ func TestRunCorpusCheck(t *testing.T) {
 				writeCorpusValidation(t, filepath.Join(root, "wrong"))
 			},
 			want: "does not match directory name",
+		},
+		{
+			name: "missing sources",
+			prepare: func(t *testing.T, root string) {
+				t.Helper()
+				dir := filepath.Join(root, "good")
+				writeCorpusScenario(t, dir, "good")
+				writeCorpusValidation(t, dir)
+				path := filepath.Join(dir, "scenario.yaml")
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(path, []byte(strings.Replace(string(data), corpusSourcesYAML, "", 1)), 0o600))
+			},
+			want: "scenario has no sources",
 		},
 	}
 
