@@ -3,8 +3,10 @@ package model
 import (
 	"io"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
@@ -22,6 +24,7 @@ type Store struct {
 	scenariosRoot string
 	catalog       map[string]scenario.Definition
 	selector      scenario.TagFilter
+	models        []string
 
 	runs     []results.RunRef
 	visible  []results.RunRef
@@ -31,9 +34,13 @@ type Store struct {
 	attempts map[string]attemptEntry
 }
 
+// attemptEntry caches a parsed attempt file. Attempt files are written once,
+// so entries survive reloads and are re-read only when the file's modification
+// time changes, e.g. after a rerun replaced it.
 type attemptEntry struct {
 	attempt results.Attempt
 	err     error
+	modTime time.Time
 }
 
 // New returns an empty store; call Reload to populate it.
@@ -55,16 +62,53 @@ func (s *Store) Reload() error {
 	}
 	s.runs = runs
 	s.snapshot = make(map[string]results.RunSnapshot)
-	s.attempts = make(map[string]attemptEntry)
 	s.recompute()
 	return nil
 }
 
-// recompute rebuilds the tag-filtered views from the full run list.
+// recompute rebuilds the model- and tag-filtered views from the full run list.
 func (s *Store) recompute() {
-	s.visible = s.filterRuns(s.runs)
-	s.agents = results.RollupAgents(s.runs, s.matchesTags)
-	s.tasks = results.RollupTasks(s.runs, s.matchesTags)
+	byModel := s.runs
+	if len(s.models) > 0 {
+		byModel = make([]results.RunRef, 0, len(s.runs))
+		for _, run := range s.runs {
+			if containsString(s.models, run.Model) {
+				byModel = append(byModel, run)
+			}
+		}
+	}
+	s.visible = s.filterRuns(byModel)
+	s.agents = results.RollupAgents(byModel, s.matchesTags)
+	s.tasks = results.RollupTasks(byModel, s.matchesTags)
+}
+
+// SetModelFilter keeps only runs of the given models; none keeps all.
+func (s *Store) SetModelFilter(models []string) {
+	s.models = models
+	s.recompute()
+}
+
+func (s *Store) ModelFilter() []string { return s.models }
+
+// ModelOptions returns the sorted models of all discovered runs.
+func (s *Store) ModelOptions() []string {
+	var models []string
+	for _, run := range s.runs {
+		if run.Model != "" && !containsString(models, run.Model) {
+			models = append(models, run.Model)
+		}
+	}
+	sort.Strings(models)
+	return models
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // Runs returns every discovered run that matches the active tag filter, newest first.
@@ -187,7 +231,11 @@ func (s *Store) EnsureSnapshot(runID string) error {
 
 // Attempt loads and caches one attempt artifact.
 func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, error) {
-	if entry, ok := s.attempts[ref.Path]; ok {
+	var modTime time.Time
+	if info, err := os.Stat(ref.Path); err == nil {
+		modTime = info.ModTime()
+	}
+	if entry, ok := s.attempts[ref.Path]; ok && entry.modTime.Equal(modTime) {
 		return entry.attempt, entry.err
 	}
 	var runType results.RunType
@@ -195,7 +243,7 @@ func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, 
 		runType = snapshot.Metadata.RunType
 	}
 	attempt, err := results.LoadAttempt(ref, runType)
-	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err}
+	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err, modTime: modTime}
 	return attempt, err
 }
 
@@ -334,4 +382,83 @@ func loadCatalog(root string) map[string]scenario.Definition {
 		catalog[definition.ID] = definition
 	}
 	return catalog
+}
+
+// AgentModelMatrix holds each condition's results on each model.
+type AgentModelMatrix struct {
+	Agents []string
+	Models []string
+	// Cells is keyed by agent, then model.
+	Cells map[string]map[string]results.Rollup
+}
+
+// AgentModelMatrix rolls up every visible run's conditions by run model from
+// the run summaries, counting only scenarios matching the tag filter. Runs of
+// an unknown model are left out.
+func (s *Store) AgentModelMatrix() AgentModelMatrix {
+	type totals struct {
+		attempts, full int
+		score          float64
+	}
+	sums := map[string]map[string]*totals{}
+	var agents, models []string
+	for _, run := range s.visible {
+		if run.Model == "" || run.Summary == nil {
+			continue
+		}
+		for agent, condition := range run.Summary.ByCondition {
+			for scenarioID, scenario := range condition.Scenarios {
+				if scenario.AttemptCount == 0 || !s.matchesTags(scenarioID) {
+					continue
+				}
+				if sums[agent] == nil {
+					sums[agent] = map[string]*totals{}
+					agents = append(agents, agent)
+				}
+				cell := sums[agent][run.Model]
+				if cell == nil {
+					cell = &totals{}
+					sums[agent][run.Model] = cell
+				}
+				if !containsString(models, run.Model) {
+					models = append(models, run.Model)
+				}
+				cell.attempts += scenario.AttemptCount
+				cell.full += scenario.FullSuccessCount
+				cell.score += scenario.MeanScore * float64(scenario.AttemptCount)
+			}
+		}
+	}
+	sort.Strings(agents)
+	sort.Strings(models)
+	matrix := AgentModelMatrix{Agents: agents, Models: models, Cells: map[string]map[string]results.Rollup{}}
+	for agent, byModel := range sums {
+		matrix.Cells[agent] = map[string]results.Rollup{}
+		for model, cell := range byModel {
+			matrix.Cells[agent][model] = results.Rollup{
+				Attempts:         cell.attempts,
+				FullSuccessCount: cell.full,
+				FullSuccessRate:  float64(cell.full) / float64(cell.attempts),
+				MeanScore:        cell.score / float64(cell.attempts),
+			}
+		}
+	}
+	return matrix
+}
+
+// ModelRollups sums each model's conditions in the agent-by-model matrix into
+// summary-level metrics, without loading attempt files.
+func (s *Store) ModelRollups() map[string]Metrics {
+	matrix := s.AgentModelMatrix()
+	metrics := make(map[string]Metrics, len(matrix.Models))
+	for _, byModel := range matrix.Cells {
+		for model, cell := range byModel {
+			item := metrics[model]
+			item.MeanScore = (item.MeanScore*float64(item.Attempts) + cell.MeanScore*float64(cell.Attempts)) / float64(item.Attempts+cell.Attempts)
+			item.Attempts += cell.Attempts
+			item.Full += cell.FullSuccessCount
+			metrics[model] = item
+		}
+	}
+	return metrics
 }

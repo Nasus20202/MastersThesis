@@ -44,6 +44,7 @@ type Check struct {
 type RunAttempt struct {
 	Run           string   `json:"run"`
 	Condition     string   `json:"condition"`
+	Model         string   `json:"model,omitempty"`
 	Scenario      string   `json:"scenario"`
 	Attempt       int      `json:"attempt"`
 	Score         float64  `json:"score"`
@@ -162,6 +163,7 @@ func newRunAttempt(runID string, result results.AttemptResult, sources map[strin
 		return attempt, nil
 	}
 	attempt.AgentRan = true
+	attempt.Model = result.Agent.Inference.Model
 	attempt.Termination = result.Agent.Termination
 	attempt.ToolCalls = len(result.Agent.ToolCalls)
 	attempt.Turns = result.Agent.Turns

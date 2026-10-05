@@ -73,7 +73,7 @@ func TestNewRunAttemptOrdersSearchesAgainstFirstChange(t *testing.T) {
 		ScenarioID: "service-port",
 		Attempt:    2,
 		Grading:    orchestration.GradingResult{Score: 1, FullSuccess: true},
-		Agent: &common.Result{Termination: "completed", ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
+		Agent: &common.Result{Termination: "completed", Inference: inference.Metadata{Model: "gemma"}, ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
 			{Call: inference.ToolCall{Name: "bash", Arguments: `{"command":"kubectl get svc"}`}},
 			{Call: inference.ToolCall{Name: SearchToolName}, Details: hits("other.md", "service.md")},
 			{Call: inference.ToolCall{Name: "bash", Arguments: `{"command":"kubectl patch svc app -p '{}'"}`}},
@@ -105,7 +105,7 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 	result := results.AttemptResult{
 		ScenarioID: "app",
 		Grading:    orchestration.GradingResult{Score: 0.5},
-		Agent: &common.Result{Termination: "completed", ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
+		Agent: &common.Result{Termination: "completed", Inference: inference.Metadata{Model: "gemma"}, ContextOverflow: true, TokenUsage: common.TokenUsage{PeakContextTokens: 31000}, ToolCalls: []common.ToolCallEvidence{
 			bash("kubectl edit deployment app", 1),
 			bash("kubectl patch deployment app --type merge -p '{}'", 1),
 			bash("kubectl set image deployment/app app=nginx && kubectl rollout status deployment/app --timeout=50s", 0),
@@ -119,6 +119,7 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 	assert.Equal(t, 2, attempt.FailedChanges)
 	assert.Equal(t, 1, attempt.Edits)
 	assert.True(t, attempt.RolloutStatus)
+	assert.Equal(t, "gemma", attempt.Model)
 	assert.Equal(t, 31000, attempt.PeakContext)
 	assert.True(t, attempt.Overflow)
 

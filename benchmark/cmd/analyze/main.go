@@ -14,7 +14,11 @@ import (
 )
 
 const usage = `Usage:
-  analyze --condition RUN_ID/CONDITION ... [--reference RUN_ID/CONDITION] [--results DIR] [--scenarios DIR] [--subset FILE] [--out DIR]`
+  analyze --condition RUN_ID/CONDITION ... [--reference RUN_ID/CONDITION ...] [--by-model] [--results DIR] [--scenarios DIR] [--subset FILE] [--out DIR]
+
+With --by-model, all --condition runs are pooled and split by the model that
+ran them, each model is compared with the reference attempts of the same
+model, and the mean over models is reported.`
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil && !errors.Is(err, flag.ErrHelp) {
@@ -42,7 +46,9 @@ func run(args []string, output, logOutput io.Writer) error {
 	}
 	var conditions stringList
 	flags.Var(&conditions, "condition", "RUN_ID/CONDITION to analyze; may be repeated")
-	reference := flags.String("reference", "", "RUN_ID/CONDITION compared on the same scenarios, e.g. the prompt agent")
+	var references stringList
+	flags.Var(&references, "reference", "RUN_ID/CONDITION compared on the same scenarios, e.g. the prompt agent; may be repeated and is pooled")
+	byModel := flags.Bool("by-model", false, "pool the conditions and report each model and the mean over models")
 	resultsRoot := flags.String("results", "results", "benchmark results directory")
 	scenarios := flags.String("scenarios", "scenarios", "scenario corpus with evaluator-only source.md files")
 	out := flags.String("out", "", "directory for attempts.jsonl and summary.json")
@@ -89,11 +95,14 @@ func run(args []string, output, logOutput io.Writer) error {
 		return selected, nil
 	}
 	var referenceAttempts []analysis.RunAttempt
-	if *reference != "" {
-		if referenceAttempts, err = load(*reference); err != nil {
+	for _, label := range references {
+		attempts, err := load(label)
+		if err != nil {
 			return err
 		}
+		referenceAttempts = append(referenceAttempts, attempts...)
 	}
+	reference := references.String()
 	var summaries []analysis.RunSummary
 	var analyzed []analysis.RunAttempt
 	for _, label := range conditions {
@@ -102,15 +111,70 @@ func run(args []string, output, logOutput io.Writer) error {
 			return err
 		}
 		analyzed = append(analyzed, attempts...)
-		summaries = append(summaries, analysis.Summarize(label, attempts, referenceAttempts))
+		if !*byModel {
+			summaries = append(summaries, analysis.Summarize(label, attempts, referenceAttempts))
+		}
+	}
+	var mean *analysis.ModelMean
+	if *byModel {
+		models, groups := analysis.ByModel(analyzed)
+		_, referenceGroups := analysis.ByModel(referenceAttempts)
+		for _, model := range models {
+			summaries = append(summaries, analysis.Summarize(modelLabel(model), groups[model], referenceGroups[model]))
+		}
+		value := analysis.MeanOverModels(analyzed, referenceAttempts)
+		mean = &value
 	}
 	for _, summary := range summaries {
-		printRunSummary(output, summary, *reference)
+		printRunSummary(output, summary, reference)
+	}
+	if mean != nil {
+		printModelMean(output, summaries, *mean)
 	}
 	if *out == "" {
 		return nil
 	}
-	return analysis.WriteRunAnalysis(*out, summaries, analyzed)
+	if err := analysis.WriteRunAnalysis(*out, summaries, analyzed); err != nil {
+		return err
+	}
+	if mean != nil {
+		return analysis.WriteModelMean(*out, *mean)
+	}
+	return nil
+}
+
+func modelLabel(model string) string {
+	if model == "" {
+		return "unknown model"
+	}
+	return model
+}
+
+func printModelMean(output io.Writer, summaries []analysis.RunSummary, mean analysis.ModelMean) {
+	table := tabwriter.NewWriter(output, 0, 0, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintf(table, "model\tattempts\tmacro\tfull\treference macro\tdifference\t95%% CI\t\n")
+	for index, summary := range summaries {
+		referenceMacro, difference, interval := "-", "-", "-"
+		if value, ok := mean.ReferenceMacros[mean.Models[index]]; ok {
+			referenceMacro = fmt.Sprintf("%.3f", value)
+		}
+		if d := summary.MacroDifference; d != nil {
+			difference = fmt.Sprintf("%+.3f", d.Mean)
+			interval = fmt.Sprintf("[%+.3f, %+.3f]", d.Low, d.High)
+		}
+		fmt.Fprintf(table, "%s\t%d\t%.3f\t%d/%d\t%s\t%s\t%s\t\n", summary.Label, summary.Attempts, summary.Macro, summary.FullSuccess, summary.Attempts, referenceMacro, difference, interval)
+	}
+	referenceMacro, difference, interval := "-", "-", "-"
+	if mean.ReferenceMacro != nil {
+		referenceMacro = fmt.Sprintf("%.3f", *mean.ReferenceMacro)
+	}
+	if d := mean.Difference; d != nil {
+		difference = fmt.Sprintf("%+.3f", d.Mean)
+		interval = fmt.Sprintf("[%+.3f, %+.3f]", d.Low, d.High)
+	}
+	fmt.Fprintf(table, "mean over %d models\t\t%.3f\t\t%s\t%s\t%s\t\n", len(mean.Models), mean.Macro, referenceMacro, difference, interval)
+	_ = table.Flush()
+	fmt.Fprintln(output)
 }
 
 func printRunSummary(output io.Writer, summary analysis.RunSummary, reference string) {

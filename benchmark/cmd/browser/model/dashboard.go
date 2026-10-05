@@ -150,6 +150,26 @@ func TotalMetrics(store *Store) Metrics {
 	return gather(store, refs)
 }
 
+// ModelMetrics gathers the attempts of the visible runs grouped by the run's
+// model, optionally restricted to one condition and one scenario. Runs of an
+// unknown model are left out.
+func ModelMetrics(store *Store, filterAgent, filterTask string) map[string]Metrics {
+	groups := make(map[string][]ref)
+	for _, run := range store.Runs() {
+		if run.Model == "" {
+			continue
+		}
+		groups[run.Model] = append(groups[run.Model], runRefs(store, run.RunID, filterAgent, filterTask)...)
+	}
+	metrics := make(map[string]Metrics, len(groups))
+	for name, groupRefs := range groups {
+		if len(groupRefs) > 0 {
+			metrics[name] = gather(store, groupRefs)
+		}
+	}
+	return metrics
+}
+
 // TaskAgentMetrics gathers one scenario's attempts across all runs grouped by
 // condition.
 func TaskAgentMetrics(store *Store, task string) map[string]Metrics {

@@ -383,3 +383,48 @@ func TestTagFilterOverlayMouseWheelMovesCursor(t *testing.T) {
 	model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp, X: 2, Y: 5})
 	assert.Equal(t, 0, model.filterCursor)
 }
+
+func TestFilterOverlayListsModelsFirstAndAppliesThem(t *testing.T) {
+	root := t.TempDir()
+	for _, model := range []string{"gemma", "qwen"} {
+		store, err := results.New(root, results.RunMetadata{
+			RunID: "run-" + model, Agents: []string{"skill"}, Parallelism: 1, RepeatCount: 1,
+			Scenarios: []string{"easy-task"}, Sampling: &results.SamplingProvenance{Model: model},
+		})
+		require.NoError(t, err)
+		require.NoError(t, store.WriteAttempt(1, "skill", orchestration.RunResult{
+			ScenarioID: "easy-task", Condition: "skill",
+			Agent:   &common.Result{Turns: 1, Termination: common.TerminationCompleted},
+			Grading: orchestration.GradingResult{Score: 1, FullSuccess: true},
+		}))
+	}
+	scenarios := t.TempDir()
+	writeTestScenario(t, scenarios, "easy-task", "easy")
+	model := New(Config{ResultsRoot: root, ScenariosRoot: scenarios})
+	model.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	require.NoError(t, model.err)
+
+	model.Update(press("/"))
+	require.GreaterOrEqual(t, len(model.filterOptions), 3)
+	assert.Equal(t, filterOption{key: "model", value: "gemma", model: true}, model.filterOptions[0])
+	assert.Contains(t, model.renderFilter(), "model")
+
+	model.Update(press("down"))
+	model.Update(press("space"))
+	model.Update(press("esc"))
+	assert.Equal(t, []string{"qwen"}, model.view.Store().ModelFilter())
+	assert.True(t, model.view.Store().TagFilter().Empty())
+	require.Len(t, model.store.Runs(), 1)
+	assert.Contains(t, model.View().Content, "model=qwen")
+}
+
+func TestTotalsFrameFitsTheTerminal(t *testing.T) {
+	model := newTestModel(t)
+	model.Update(tea.WindowSizeMsg{Width: 200, Height: 30})
+	model.Update(press("4"))
+	lines := strings.Split(model.View().Content, "\n")
+	assert.LessOrEqual(t, len(lines), 30)
+
+	model.Update(press("end"))
+	assert.LessOrEqual(t, len(strings.Split(model.View().Content, "\n")), 30)
+}
