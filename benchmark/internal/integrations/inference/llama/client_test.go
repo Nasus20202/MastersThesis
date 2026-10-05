@@ -181,3 +181,26 @@ func TestEmbedRejectsIncompleteResponse(t *testing.T) {
 	_, err = client.Embed(context.Background(), []string{"first", "second"})
 	assert.ErrorContains(t, err, "invalid embedding index 1")
 }
+
+func TestSamplingReadsModelProps(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "Qwen3.5-9B-Q4_K_M",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			assert.Equal(t, http.MethodGet, request.Method)
+			assert.Equal(t, "/props", request.URL.Path)
+			assert.Equal(t, "Qwen3.5-9B-Q4_K_M", request.URL.Query().Get("model"))
+			return testResponse(http.StatusOK, `{"default_generation_settings": {"params": {
+                "temperature": 1.0, "top_k": 20, "top_p": 0.95, "min_p": 0.0,
+                "presence_penalty": 1.5, "frequency_penalty": 0.0, "repeat_penalty": 1.0, "seed": 4294967295
+            }}}`)
+		})},
+	})
+	require.NoError(t, err)
+
+	sampling, err := client.Sampling(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, inference.Sampling{Temperature: 1, TopK: 20, TopP: 0.95, PresencePenalty: 1.5, RepeatPenalty: 1}, sampling)
+}

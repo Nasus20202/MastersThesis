@@ -24,6 +24,10 @@ func (a Adapter) Metadata() inference.Metadata {
 	return a.client.Metadata()
 }
 
+func (a Adapter) Sampling(ctx context.Context) (inference.Sampling, error) {
+	return a.client.Sampling(ctx)
+}
+
 func (a Adapter) Chat(ctx context.Context, messages []inference.Message, tools []inference.Tool, options inference.Options) (inference.Result, error) {
 	response, err := a.client.Chat(ctx, ChatRequest{
 		Messages:    toLlamaMessages(messages),
