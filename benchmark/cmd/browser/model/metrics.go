@@ -121,18 +121,7 @@ func RunAgentMetrics(store *Store, runID, filterAgent, filterTask string) map[st
 func AgentMetrics(store *Store, agent string) Metrics {
 	var refs []ref
 	for _, run := range store.RunsForAgent(agent) {
-		if err := store.EnsureSnapshot(run.RunID); err != nil {
-			continue
-		}
-		snapshot, ok := store.Snapshot(run.RunID)
-		if !ok {
-			continue
-		}
-		for _, item := range snapshot.Attempts {
-			if item.Group == agent && store.matchesTags(item.ScenarioID) {
-				refs = append(refs, ref{runID: run.RunID, ref: item})
-			}
-		}
+		refs = append(refs, runRefs(store, run.RunID, agent, "")...)
 	}
 	return gather(store, refs)
 }

@@ -42,29 +42,12 @@ func (m *Model) SetOffset(offset int) {
 	m.inner.SetYOffset(offset)
 }
 
-func (m *Model) Offset() int { return m.inner.YOffset() }
-
-func (m *Model) Total() int { return m.inner.TotalLineCount() }
-
-func (m *Model) Visible() int { return m.height }
-
 // View renders the visible slice with a scrollbar column.
 func (m *Model) View() string {
 	if m.height <= 0 {
 		return ""
 	}
-	cells := scrollbarCells(m.height, m.Total(), m.Offset(), m.Visible())
-	rows := strings.Split(m.inner.View(), "\n")
-	out := make([]string, m.height)
-	contentWidth := max(1, m.width-1)
-	for index := 0; index < m.height; index++ {
-		line := ""
-		if index < len(rows) {
-			line = rows[index]
-		}
-		out[index] = ui.PadRight(line, contentWidth) + cells[index]
-	}
-	return strings.Join(out, "\n")
+	return Frame(m.inner.View(), max(1, m.width-1), m.height, m.inner.TotalLineCount(), m.inner.YOffset(), m.height)
 }
 
 // Frame pads content to height and appends a one-column scrollbar driven by an

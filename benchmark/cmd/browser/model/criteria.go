@@ -37,16 +37,7 @@ func ScenarioCriteria(store *Store, runID, scenarioID string) CriteriaMatrix {
 // TaskCriteria builds the criterion × condition matrix for one scenario across
 // every run that contains it.
 func TaskCriteria(store *Store, scenarioID string) CriteriaMatrix {
-	var refs []ref
-	for _, run := range store.RunsForTask(scenarioID) {
-		if err := store.EnsureSnapshot(run.RunID); err != nil {
-			continue
-		}
-		for _, item := range store.AttemptsFor(run.RunID, scenarioID, "") {
-			refs = append(refs, ref{runID: run.RunID, ref: item})
-		}
-	}
-	return criteriaFromRefs(store, refs)
+	return criteriaFromRefs(store, taskRefs(store, scenarioID))
 }
 
 func criteriaFromRefs(store *Store, refs []ref) CriteriaMatrix {
