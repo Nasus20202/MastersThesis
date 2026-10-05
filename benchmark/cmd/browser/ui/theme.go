@@ -1,6 +1,9 @@
 package ui
 
-import "charm.land/lipgloss/v2"
+import (
+	"charm.land/lipgloss/v2"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+)
 
 var (
 	Accent   = lipgloss.Color("63")
@@ -95,9 +98,9 @@ func OutcomeBadge(fullSuccess bool, score float64) string {
 
 func Termination(reason string) lipgloss.Style {
 	switch reason {
-	case "completed":
+	case common.TerminationCompleted:
 		return Success
-	case "cancellation", "timeout", "inference":
+	case common.TerminationCancellation, common.TerminationTimeout, common.TerminationInference:
 		return Danger
 	default:
 		return Warning
