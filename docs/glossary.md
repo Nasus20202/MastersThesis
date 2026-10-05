@@ -38,6 +38,8 @@
 
 - **Partial score** — a deterministic score representing how many independently verifiable scenario criteria were restored. See [benchmark.md](benchmark.md).
 
+- **Peak context** — the largest prompt plus completion of a single model response in an attempt: the most model context the attempt occupied. See [benchmark.md](benchmark.md).
+
 - **Prompt condition** — the benchmark condition that adds an approved system prompt to the baseline capabilities. See [research-design.md](research-design.md) and [Wikipedia: Prompt engineering](https://en.wikipedia.org/wiki/Prompt_engineering).
 
 - **Pull-through registry cache** — a local cache that mirrors upstream container registries for the kind clusters. See [tech-stack.md](tech-stack.md) and [Wikipedia: Cache (computing)](https://en.wikipedia.org/wiki/Cache_%28computing%29).

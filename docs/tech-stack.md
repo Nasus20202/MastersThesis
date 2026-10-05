@@ -34,17 +34,29 @@ The RAG condition searches the frozen corpus through SQLite indexes built by `be
 
 Embeddings are produced by EmbeddingGemma 300M, served by a separate `llama-embedding` llama.cpp service (port 8081, same pinned image as the model router), so embedding does not occupy a model-router slot. The model, revision and hash are pinned in `benchmark/retrieval.env`. Indexes are gitignored, rebuilt with `make retrieval-index`, and record the corpus revision and embedding artifact they were built from. The selected configuration is described in [the retrieval design study](research/retrieval-design/README.md).
 
-## Primary model
+## Models
 
-Gemma 4 E4B is the primary model for the current experiment.
+The research uses four models, each selected by a profile under `benchmark/model-profiles/` (D-037):
 
-The conceptual instruction-tuned checkpoint is [google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it). The served artifact is the [unsloth Gemma 4 E4B QAT GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF), a quantization of the Google QAT unquantized weights. Exact repositories, revisions and file hashes are pinned in the model profiles, and the runtime configuration is maintained in `benchmark/config.env`. This artifact remains provisional for final evaluation and may be superseded through a recorded decision.
+| Profile       | Model       | Served artifact                                                                        |
+| ------------- | ----------- | -------------------------------------------------------------------------------------- |
+| `gemma-4-e2b` | Gemma 4 E2B | [unsloth Gemma 4 E2B QAT GGUF](https://huggingface.co/unsloth/gemma-4-E2B-it-qat-GGUF) |
+| `gemma-4-e4b` | Gemma 4 E4B | [unsloth Gemma 4 E4B QAT GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF) |
+| `qwen35-4b`   | Qwen3.5 4B  | [unsloth Qwen3.5 4B MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF)      |
+| `qwen35-9b`   | Qwen3.5 9B  | [unsloth Qwen3.5 9B MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF)      |
 
-## Conditional alternatives
+Not every run must use all four. Results are reported per model and never mixed silently across models. Exact repositories, revisions and file hashes are pinned in the profiles, and the shared runtime configuration is maintained in `benchmark/config.env`. The artifacts remain provisional for final evaluation and may be superseded through a recorded decision.
 
-If Gemma 4 E4B cannot reliably use the required execution or tool-calling interface after the model template, llama.cpp support and the Go integration have been checked, the project may evaluate an alternative model, such as Qwen 3.5 4B, Qwen 3.5 9B or Gemma 4 12B, as a separately approved fallback.
+## Sampling
 
-A fallback does not change Gemma 4 E4B as the primary model. A model change must be recorded as a research decision, and results from another model must not be mixed silently with the primary comparison.
+Each model uses its vendor's recommended sampling, the same in every condition (D-038). The values are set per model in the router preset `benchmark/models-preset.ini`; parameters the vendor does not name are disabled rather than left to llama.cpp defaults.
+
+| Model   | Temperature | Top-p | Top-k | Min-p | Presence penalty | Source                                                       |
+| ------- | ----------: | ----: | ----: | ----: | ---------------: | ------------------------------------------------------------ |
+| Gemma 4 |         1.0 |  0.95 |    64 |     0 |                0 | Model card "Sampling Parameters"                             |
+| Qwen3.5 |         1.0 |  0.95 |    20 |     0 |              1.5 | Model card "Best Practices", thinking mode for general tasks |
+
+Before the first attempt, a benchmark run reads the values llama-server applies to the profile's model from `/props` and stores them in `run.json`, so a run records the sampling it actually used. The router reads the preset at startup: after changing it, recreate the server with `make llama-stop llama-start`.
 
 ## Kubernetes environment
 
@@ -63,6 +75,10 @@ The shared caches are local benchmark infrastructure declared in the benchmark D
 Model commands run in a disposable Docker sandbox.
 
 Bash is exposed to the model as the primary raw execution interface. The sandbox provides the command-line tools required by the relevant benchmark condition, including `kubectl` for Kubernetes interaction.
+
+The sandbox has no interactive editor. `KUBE_EDITOR` points at a script that makes `kubectl edit` fail at once with a hint to export the manifest, change it and apply it (D-041). The optional `read_file`, `write_file` and `edit_file` tools run through the same sandbox boundary as bash.
+
+The sandbox image is built only when it is missing; after changing its Dockerfile, remove the image so the next run rebuilds it.
 
 The sandbox boundary should prevent access to the host environment.
 
