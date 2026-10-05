@@ -59,7 +59,6 @@ type Config struct {
 	Env            map[string]string
 	Mounts         []Mount
 	Security       SecurityConfig
-	Command        []string
 }
 
 type ImageConfig struct {
@@ -130,7 +129,8 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	if strings.TrimSpace(config.Image) == "" {
 		return nil, errors.New("sandbox image is required")
 	}
-	if strings.TrimSpace(config.KubeconfigPath) != "" && !filepath.IsAbs(config.KubeconfigPath) {
+	hasKubeconfig := strings.TrimSpace(config.KubeconfigPath) != ""
+	if hasKubeconfig && !filepath.IsAbs(config.KubeconfigPath) {
 		return nil, errors.New("sandbox kubeconfig path must be absolute")
 	}
 	if strings.TrimSpace(config.Network) == "" {
@@ -145,10 +145,10 @@ func New(executor command.Executor, config Config) (*Sandbox, error) {
 	if !filepath.IsAbs(config.Layout.Workdir) {
 		return nil, errors.New("sandbox image workdir must be absolute")
 	}
-	if strings.TrimSpace(config.KubeconfigPath) != "" && strings.TrimSpace(config.Layout.KubeconfigMountPath) == "" {
+	if hasKubeconfig && strings.TrimSpace(config.Layout.KubeconfigMountPath) == "" {
 		return nil, errors.New("sandbox kubeconfig mount path is required")
 	}
-	if strings.TrimSpace(config.KubeconfigPath) != "" && !filepath.IsAbs(config.Layout.KubeconfigMountPath) {
+	if hasKubeconfig && !filepath.IsAbs(config.Layout.KubeconfigMountPath) {
 		return nil, errors.New("sandbox kubeconfig mount path must be absolute")
 	}
 	for _, mount := range config.Mounts {
@@ -214,11 +214,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 		return fmt.Errorf("start sandbox %q: %w", s.config.Name, err)
 	}
 	if _, err := s.Exec(ctx, command.Spec{Program: "kubectl", Args: []string{"get", "nodes"}}); err != nil {
-		cleanupErr := s.Stop(context.Background())
-		if cleanupErr != nil {
-			return errors.Join(fmt.Errorf("validate sandbox Kubernetes access: %w", err), cleanupErr)
-		}
-		return fmt.Errorf("validate sandbox Kubernetes access: %w", err)
+		return errors.Join(fmt.Errorf("validate sandbox Kubernetes access: %w", err), s.Stop(context.Background()))
 	}
 	logger.InfoContext(ctx, "sandbox started")
 	return nil
@@ -262,13 +258,7 @@ func (s *Sandbox) runArgs() []string {
 		}
 		args = append(args, "--volume", mount.Source+":"+mount.Target+":"+mode)
 	}
-	args = append(args, s.config.Image)
-	if len(s.config.Command) == 0 {
-		args = append(args, "sleep", "infinity")
-	} else {
-		args = append(args, s.config.Command...)
-	}
-	return args
+	return append(args, s.config.Image, "sleep", "infinity")
 }
 
 func (s *Sandbox) Exec(ctx context.Context, spec command.Spec) (command.Result, error) {
@@ -297,18 +287,13 @@ func (s *Sandbox) Exec(ctx context.Context, spec command.Spec) (command.Result, 
 func (s *Sandbox) Stop(ctx context.Context) error {
 	logger := slog.With("sandbox", s.config.Name)
 	logger.InfoContext(ctx, "stopping sandbox")
-	var stopErr error
-	_, err := s.executor.Run(ctx, command.Spec{
+	var cleanupErrs []error
+	if _, err := s.executor.Run(ctx, command.Spec{
 		Program: dockerProgram,
 		Args:    []string{"stop", s.config.Name},
-	})
-	if err != nil {
+	}); err != nil {
 		logger.ErrorContext(ctx, "sandbox stop failed", "error", err)
-		stopErr = fmt.Errorf("stop sandbox %q: %w", s.config.Name, err)
-	}
-	var cleanupErrs []error
-	if stopErr != nil {
-		cleanupErrs = append(cleanupErrs, stopErr)
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("stop sandbox %q: %w", s.config.Name, err))
 	}
 	if s.config.NetworkTarget != "" {
 		if err := s.disconnectNetwork(ctx); err != nil {

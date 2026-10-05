@@ -38,9 +38,7 @@ func TestRunnerRunsPhasesAndCleansUp(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
-		kubeconfigCtx:          "kind-test",
 	}
 	executor := &recordingExecutor{events: &events}
 	var clusterName string
@@ -73,7 +71,6 @@ func TestRunnerRunsPhasesThroughSetupSandbox(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
 	}
 	host := &recordingExecutor{events: &events}
@@ -102,9 +99,7 @@ func TestRunnerStartsAndStopsSandboxAroundPhases(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
-		kubeconfigCtx:          "kind-test",
 	}
 	sandbox := &fakeSandbox{events: &events}
 	executor := &recordingExecutor{events: &events}
@@ -136,9 +131,7 @@ func TestRunnerUsesSharedSandboxImageBuilder(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
-		kubeconfigCtx:          "kind-test",
 	}
 	sandbox := &fakeSandbox{events: &events}
 	runner := Runner{
@@ -168,9 +161,7 @@ func TestRunnerRunsInjectedAgentAfterFaultVerification(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
-		kubeconfigCtx:          "kind-test",
 	}
 	sandbox := &fakeSandbox{events: &events}
 	agent := &fakeAgent{events: &events}
@@ -202,7 +193,6 @@ func TestRunnerPreservesAgentFailureAndStillCleansUp(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
 	}
 	sandbox := &fakeSandbox{events: &events}
@@ -230,7 +220,6 @@ func TestRunnerRequiresSandboxExecutorForAgent(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
 		events:                 &events,
-		kubeconfigPath:         "/tmp/test.kubeconfig",
 		internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
 	}
 	sandbox := &lifecycleOnlySandbox{events: &events}
@@ -261,7 +250,6 @@ func TestRunnerRejectsInvalidAgentFactoryResults(t *testing.T) {
 			events := []string{}
 			cluster := &fakeCluster{
 				events:                 &events,
-				kubeconfigPath:         "/tmp/test.kubeconfig",
 				internalKubeconfigPath: "/tmp/test.internal.kubeconfig",
 			}
 			sandbox := &fakeSandbox{events: &events}
@@ -296,7 +284,7 @@ func TestRunnerRequiresAgentFactoryForBaselineRun(t *testing.T) {
 
 func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {
 	events := []string{}
-	cluster := &fakeCluster{events: &events, kubeconfigPath: "/tmp/test.kubeconfig"}
+	cluster := &fakeCluster{events: &events}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		AgentFactory: rootagent.Factory(func(sandboxintegration.Executor) (rootagent.Agent, error) {
@@ -312,11 +300,7 @@ func TestRunnerRejectsAgentOnValidationRun(t *testing.T) {
 
 func TestRunnerSupportsScenarioWithoutFaultInjection(t *testing.T) {
 	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	cluster := &fakeCluster{events: &events}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
@@ -332,11 +316,7 @@ func TestRunnerSupportsScenarioWithoutFaultInjection(t *testing.T) {
 
 func TestRunnerSupportsVerifyOnlyFaultPhase(t *testing.T) {
 	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	cluster := &fakeCluster{events: &events}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
@@ -351,11 +331,7 @@ func TestRunnerSupportsVerifyOnlyFaultPhase(t *testing.T) {
 
 func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	cluster := &fakeCluster{events: &events}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
 		Executor:       &recordingExecutor{events: &events},
@@ -370,11 +346,7 @@ func TestRunnerRunsValidationRepairBeforeGrading(t *testing.T) {
 
 func TestRunnerPreservesFailedStepEvidence(t *testing.T) {
 	events := []string{}
-	cluster := &fakeCluster{
-		events:         &events,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
-	}
+	cluster := &fakeCluster{events: &events}
 	wantErr := errors.New("verification failed")
 	executor := &recordingExecutor{
 		events:   &events,
@@ -454,10 +426,8 @@ func TestClusterNamesHaveDifferentRandomSuffixes(t *testing.T) {
 func TestRunnerCleansUpAfterCreateFailure(t *testing.T) {
 	events := []string{}
 	cluster := &fakeCluster{
-		events:         &events,
-		createErr:      errors.New("create failed"),
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
+		events:    &events,
+		createErr: errors.New("create failed"),
 	}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },
@@ -473,10 +443,8 @@ func TestRunnerReturnsCleanupError(t *testing.T) {
 	events := []string{}
 	cleanupErr := errors.New("delete failed")
 	cluster := &fakeCluster{
-		events:         &events,
-		deleteErr:      cleanupErr,
-		kubeconfigPath: "/tmp/test.kubeconfig",
-		kubeconfigCtx:  "kind-test",
+		events:    &events,
+		deleteErr: cleanupErr,
 	}
 	runner := Runner{
 		ClusterFactory: func(string) (clusterintegration.Cluster, error) { return cluster, nil },

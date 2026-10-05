@@ -7,11 +7,22 @@ import (
 	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
+	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 const resultsDir = "results"
+
+// runOptions are the settings shared by benchmark and validation runs.
+type runOptions struct {
+	parallel int
+	repeat   int
+	tags     scenario.TagFilter
+	config   benchmarkconfig.Config
+	terminal *ui.Terminal
+}
 
 // startRun stamps the run identity and repository provenance onto metadata and
 // creates its result store.
@@ -23,17 +34,17 @@ func startRun(ctx context.Context, metadata results.RunMetadata) (*results.Store
 	return results.New(resultsDir, metadata)
 }
 
-// executeRun runs tasks behind a progress bar, passes each outcome to record and
+// execute runs tasks behind a progress bar, passes each outcome to record and
 // finalizes the store. record reports whether the attempt succeeded and any
 // error persisting it.
-func executeRun(ctx context.Context, store *results.Store, terminal *ui.Terminal, tasks []executor.Task, parallelism int, record func(executor.Outcome) (bool, error)) (err error) {
+func (o runOptions) execute(ctx context.Context, store *results.Store, tasks []executor.Task, record func(executor.Outcome) (bool, error)) (err error) {
 	defer func() {
 		err = errors.Join(err, store.Finalize(time.Now().UTC()))
 	}()
 	if len(tasks) == 0 {
 		return nil
 	}
-	progress, err := terminal.NewProgress(len(tasks), parallelism)
+	progress, err := o.terminal.NewProgress(len(tasks), o.parallel)
 	if err != nil {
 		return err
 	}
@@ -42,7 +53,7 @@ func executeRun(ctx context.Context, store *results.Store, terminal *ui.Terminal
 			slog.Error("progress display failed", "error", err)
 		}
 	}()
-	outcomes, executeErrors := executor.Execute(ctx, tasks, parallelism)
+	outcomes, executeErrors := executor.Execute(ctx, tasks, o.parallel)
 	var writeErr error
 	for outcome := range outcomes {
 		success, err := record(outcome)

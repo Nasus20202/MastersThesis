@@ -17,15 +17,8 @@ const (
 	FormatJSON Format = "json"
 )
 
-func New(w io.Writer, format Format, level slog.Level) (*slog.Logger, error) {
-	return newLogger(w, format, level, colorEnabled(w))
-}
-
-func NewWithColor(w io.Writer, format Format, level slog.Level, color bool) (*slog.Logger, error) {
-	return newLogger(w, format, level, color)
-}
-
-func newLogger(w io.Writer, format Format, level slog.Level, color bool) (*slog.Logger, error) {
+// New builds a logger; color applies only to the text format.
+func New(w io.Writer, format Format, level slog.Level, color bool) (*slog.Logger, error) {
 	if w == nil {
 		return nil, errors.New("log writer is required")
 	}

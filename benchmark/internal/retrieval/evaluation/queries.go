@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/jsonfile"
 )
 
 const QueriesPerProbe = 3
@@ -107,5 +108,5 @@ func WriteQuerySet(path string, set QuerySet) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	return writeJSON(path, set)
+	return jsonfile.Write(path, set)
 }

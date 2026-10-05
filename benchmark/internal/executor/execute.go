@@ -65,58 +65,35 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 		}
 	}
 
-	workerCount := min(parallelism, len(tasks))
 	jobs := make(chan int)
 	completed := make([]Outcome, len(tasks))
 	var workers sync.WaitGroup
-	workers.Add(workerCount)
-	emit := func(index int, result Outcome) {
-		completed[index] = result
-		outcomes <- result
-	}
-	for range workerCount {
+	for range min(parallelism, len(tasks)) {
+		workers.Add(1)
 		go func() {
 			defer workers.Done()
 			for index := range jobs {
-				task := tasks[index]
-				if err := ctx.Err(); err != nil {
+				if ctx.Err() != nil {
 					continue
 				}
-				attempt := task.Attempt
-				if attempt == 0 {
-					attempt = 1
-				}
+				task := tasks[index]
 				result, err := task.Run(ctx)
-				emit(index, outcome(task, attempt, result, err))
+				completed[index] = Outcome{
+					ScenarioID: task.ScenarioID,
+					CaseID:     task.CaseID,
+					Agent:      task.Agent,
+					Attempt:    max(task.Attempt, 1),
+					Result:     result,
+					Err:        err,
+				}
+				outcomes <- completed[index]
 			}
 		}()
 	}
-	dispatchDone := make(chan struct{})
-	var dispatchErr error
-	go func() {
-		defer close(dispatchDone)
-		defer close(jobs)
-	dispatch:
-		for index := range tasks {
-			if err := ctx.Err(); err != nil {
-				dispatchErr = err
-				break
-			}
-			select {
-			case jobs <- index:
-			case <-ctx.Done():
-				dispatchErr = ctx.Err()
-				break dispatch
-			}
-		}
-	}()
-	<-dispatchDone
+	dispatchErr := dispatch(ctx, jobs, len(tasks))
 	workers.Wait()
 
-	errs := make([]error, 0, 1)
-	if dispatchErr != nil {
-		errs = append(errs, dispatchErr)
-	}
+	errs := []error{dispatchErr}
 	for index, outcome := range completed {
 		if outcome.Err != nil {
 			label := outcome.ScenarioID
@@ -129,13 +106,18 @@ func execute(ctx context.Context, tasks []Task, parallelism int, outcomes chan<-
 	errorChannel <- errors.Join(errs...)
 }
 
-func outcome(task Task, attempt int, result orchestration.RunResult, err error) Outcome {
-	return Outcome{
-		ScenarioID: task.ScenarioID,
-		CaseID:     task.CaseID,
-		Agent:      task.Agent,
-		Attempt:    attempt,
-		Result:     result,
-		Err:        err,
+// dispatch hands out task indexes until all are taken or ctx ends.
+func dispatch(ctx context.Context, jobs chan<- int, count int) error {
+	defer close(jobs)
+	for index := range count {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		select {
+		case jobs <- index:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	return nil
 }

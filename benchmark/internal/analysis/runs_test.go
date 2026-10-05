@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -14,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestChangesCluster(t *testing.T) {
+func TestKubectlWrites(t *testing.T) {
 	for command, want := range map[string]bool{
 		"kubectl get pods -A":                                                     false,
 		"kubectl describe deployment app":                                         false,
@@ -28,7 +29,7 @@ func TestChangesCluster(t *testing.T) {
 		"kubectl get pods | grep delete":                                          false,
 		"kubectl auth can-i create pods --as system:anything":                     false,
 	} {
-		assert.Equal(t, want, ChangesCluster(command), command)
+		assert.Equal(t, want, slices.ContainsFunc(kubectlCommands(command), writes), command)
 	}
 }
 

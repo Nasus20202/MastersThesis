@@ -1,14 +1,13 @@
 package evaluation
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/jsonfile"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval"
 )
 
@@ -32,37 +31,13 @@ func WriteReport(dir string, metadata Metadata, report Report) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(dir, "metadata.json"), metadata); err != nil {
+	if err := jsonfile.Write(filepath.Join(dir, "metadata.json"), metadata); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(dir, "summary.json"), report); err != nil {
+	if err := jsonfile.Write(filepath.Join(dir, "summary.json"), report); err != nil {
 		return err
 	}
-	file, err := os.Create(filepath.Join(dir, "raw.jsonl"))
-	if err != nil {
-		return err
-	}
-	writer := bufio.NewWriter(file)
-	encoder := json.NewEncoder(writer)
-	for _, result := range report.Results {
-		if err := encoder.Encode(result); err != nil {
-			file.Close()
-			return err
-		}
-	}
-	if err := writer.Flush(); err != nil {
-		file.Close()
-		return err
-	}
-	return file.Close()
-}
-
-func writeJSON(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return jsonfile.WriteLines(filepath.Join(dir, "raw.jsonl"), report.Results)
 }
 
 func sha256Hex(data []byte) string {

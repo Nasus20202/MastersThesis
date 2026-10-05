@@ -47,14 +47,13 @@ func TestClusterRunsCreateAndDelete(t *testing.T) {
 	assert.NoError(t, cluster.Delete(context.Background()))
 
 	require.Len(t, executor.specs, 3)
-	kubeconfigPath := cluster.KubeconfigPath()
+	kubeconfigPath := cluster.kubeconfigPath
 	assert.Equal(t, program, executor.specs[0].Program)
 	assert.Equal(t, []string{"create", "cluster", "--name", "benchmark", "--kubeconfig", kubeconfigPath}, executor.specs[0].Args)
 	assert.Equal(t, program, executor.specs[1].Program)
 	assert.Equal(t, []string{"get", "kubeconfig", "--name", "benchmark", "--internal"}, executor.specs[1].Args)
 	assert.Equal(t, program, executor.specs[2].Program)
 	assert.Equal(t, []string{"delete", "cluster", "--name", "benchmark"}, executor.specs[2].Args)
-	assert.Equal(t, "kind-benchmark", cluster.KubeconfigContext())
 	assert.NotEqual(t, kubeconfigPath, cluster.InternalKubeconfigPath())
 }
 
@@ -96,7 +95,7 @@ func TestClusterUsesConfigFile(t *testing.T) {
 	assert.NoError(t, cluster.Create(context.Background()))
 
 	require.Len(t, executor.specs, 2)
-	kubeconfigPath := cluster.KubeconfigPath()
+	kubeconfigPath := cluster.kubeconfigPath
 	assert.Equal(t, program, executor.specs[0].Program)
 	assert.Equal(t, "/tmp", executor.specs[0].Dir)
 	assert.Equal(t, []string{"create", "cluster", "--name", "benchmark", "--kubeconfig", kubeconfigPath, "--config", "/tmp/kind.yaml"}, executor.specs[0].Args)

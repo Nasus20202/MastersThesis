@@ -72,17 +72,15 @@ func (t searchTool) Execute(ctx context.Context, call inference.ToolCall) common
 		Query string `json:"query"`
 	}
 	if err := json.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-		return common.ToolResult{Content: fmt.Sprintf("malformed %s arguments: %v", searchToolName, err), Error: fmt.Errorf("malformed %s arguments: %w", searchToolName, err)}
+		return common.Failed(fmt.Errorf("malformed %s arguments: %w", searchToolName, err), nil)
 	}
 	query := strings.TrimSpace(arguments.Query)
 	if query == "" {
-		err := errors.New("search query is required")
-		return common.ToolResult{Content: err.Error(), Error: err}
+		return common.Failed(errors.New("search query is required"), nil)
 	}
 	hits, err := t.search.Index.Search(ctx, t.search.Embedder, t.search.Mode, query, t.search.TopK)
 	if err != nil {
-		err = fmt.Errorf("search failed: %w", err)
-		return common.ToolResult{Content: err.Error(), Details: SearchEvidence{Query: query}, Error: err}
+		return common.Failed(fmt.Errorf("search failed: %w", err), SearchEvidence{Query: query})
 	}
 	content, truncated := retrieval.Render(hits, t.search.MaxBytes)
 	return common.ToolResult{Content: content, Details: SearchEvidence{Query: query, Truncated: truncated, Hits: hits}}

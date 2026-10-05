@@ -13,7 +13,7 @@ import (
 
 func TestNewFormatsMultilineTextLogs(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := New(&output, FormatText, slog.LevelInfo)
+	logger, err := New(&output, FormatText, slog.LevelInfo, false)
 	require.NoError(t, err)
 
 	logger.Info("inference message sent",
@@ -31,7 +31,7 @@ func TestNewFormatsMultilineTextLogs(t *testing.T) {
 
 func TestNewPadsLogLevelsToFiveCharacters(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := New(&output, FormatText, slog.LevelDebug)
+	logger, err := New(&output, FormatText, slog.LevelDebug, false)
 	require.NoError(t, err)
 
 	logger.Debug("debug", "value", "one")
@@ -48,7 +48,7 @@ func TestNewPadsLogLevelsToFiveCharacters(t *testing.T) {
 
 func TestNewAlignsStructuredOutputColumn(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := New(&output, FormatText, slog.LevelInfo)
+	logger, err := New(&output, FormatText, slog.LevelInfo, false)
 	require.NoError(t, err)
 
 	logger.Info("short", "first", "value")
@@ -65,7 +65,7 @@ func TestNewAlignsStructuredOutputColumn(t *testing.T) {
 
 func TestNewCanForceColorsForTextLogs(t *testing.T) {
 	var output bytes.Buffer
-	logger, err := NewWithColor(&output, FormatText, slog.LevelInfo, true)
+	logger, err := New(&output, FormatText, slog.LevelInfo, true)
 	require.NoError(t, err)
 
 	logger.Info("visible", "argument", "value")

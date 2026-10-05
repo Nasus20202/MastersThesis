@@ -71,19 +71,9 @@ func ListRuns(root string) ([]RunRef, error) {
 			}
 			return nil, err
 		}
-		summary, err := readSummary(runDir)
+		summary, err := runSummary(runDir, metadata)
 		if err != nil {
 			return nil, err
-		}
-		if summary == nil {
-			attempts, err := listAttempts(runDir)
-			if err != nil {
-				return nil, err
-			}
-			summary, err = deriveSummary(metadata, attempts)
-			if err != nil {
-				return nil, err
-			}
 		}
 		runs = append(runs, RunRef{RunID: metadata.RunID, Metadata: metadata, Summary: summary, Model: runModel(runDir, metadata)})
 	}
@@ -96,9 +86,7 @@ func ListRuns(root string) ([]RunRef, error) {
 	return runs, nil
 }
 
-// LoadRun reads one run's metadata, summary and attempt index. When the
-// summary file is missing, as in an interrupted run, it is rebuilt from the
-// persisted attempts.
+// LoadRun reads one run's metadata, summary and attempt index.
 func LoadRun(root, runID string) (RunSnapshot, error) {
 	runDir := filepath.Join(root, runID)
 	metadata, err := readRunMetadata(runDir)
@@ -112,15 +100,9 @@ func LoadRun(root, runID string) (RunSnapshot, error) {
 	if err != nil {
 		return RunSnapshot{}, err
 	}
-	summary, err := readSummary(runDir)
+	summary, err := runSummary(runDir, metadata)
 	if err != nil {
 		return RunSnapshot{}, err
-	}
-	if summary == nil {
-		summary, err = deriveSummary(metadata, attempts)
-		if err != nil {
-			return RunSnapshot{}, err
-		}
 	}
 	return RunSnapshot{
 		Root:     root,
@@ -216,15 +198,22 @@ func readRunMetadata(runDir string) (RunMetadata, error) {
 	return metadata, nil
 }
 
-func readSummary(runDir string) (*RunSummary, error) {
+// runSummary reads the run's summary or, when it is missing as in an
+// interrupted run, rebuilds it from the persisted attempts.
+func runSummary(runDir string, metadata RunMetadata) (*RunSummary, error) {
 	var summary RunSummary
-	if err := readJSON(filepath.Join(runDir, "results.json"), &summary); err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
+	err := readJSON(filepath.Join(runDir, "results.json"), &summary)
+	if err == nil {
+		return &summary, nil
+	}
+	if !os.IsNotExist(err) {
 		return nil, err
 	}
-	return &summary, nil
+	attempts, err := listAttempts(runDir)
+	if err != nil {
+		return nil, err
+	}
+	return deriveSummary(metadata, attempts)
 }
 
 func readJSON(path string, value any) error {

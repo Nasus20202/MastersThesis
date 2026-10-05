@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -75,7 +74,7 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 	inline := make([]renderedAttr, 0, len(attrs))
 	blocks := make([]renderedAttr, 0)
 	for _, attr := range attrs {
-		if isBlockAttribute(attr.key, attr.value) {
+		if isBlockAttribute(attr.value) {
 			blocks = append(blocks, attr)
 			continue
 		}
@@ -99,26 +98,20 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 	} else {
 		output.WriteString(record.Message)
 	}
-	for index, attr := range inline {
-		if index == 0 {
-			output.WriteByte(' ')
-		} else {
-			output.WriteString(prettyAttrSpacing)
-		}
-		output.WriteString(colorize(attr.key, colorDim, h.color))
+	separator := " "
+	writeAttr := func(key, value string) {
+		output.WriteString(separator)
+		separator = prettyAttrSpacing
+		output.WriteString(colorize(key, colorDim, h.color))
 		output.WriteString(colorize("=", colorDim, h.color))
-		output.WriteString(formatInline(attr.value))
+		output.WriteString(value)
+	}
+	for _, attr := range inline {
+		writeAttr(attr.key, formatInline(attr.value))
 	}
 	if h.options.AddSource && record.PC != 0 {
 		if source := sourceLocation(record.PC); source != "" {
-			if len(inline) == 0 {
-				output.WriteByte(' ')
-			} else {
-				output.WriteString(prettyAttrSpacing)
-			}
-			output.WriteString(colorize("source", colorDim, h.color))
-			output.WriteString(colorize("=", colorDim, h.color))
-			output.WriteString(source)
+			writeAttr("source", source)
 		}
 	}
 	for _, attr := range blocks {
@@ -126,15 +119,10 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 		output.WriteString("  ")
 		output.WriteString(colorize(attr.key, colorDim, h.color))
 		output.WriteString(":\n")
-		content := formatValue(attr.value)
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
+		for _, line := range strings.Split(formatValue(attr.value), "\n") {
 			output.WriteString("    ")
 			output.WriteString(line)
 			output.WriteByte('\n')
-		}
-		if len(lines) == 0 {
-			output.WriteString("    <empty>\n")
 		}
 	}
 	if len(blocks) == 0 {
@@ -201,7 +189,7 @@ func clonePrettyAttrs(attrs []prettyAttr) []prettyAttr {
 	return cloned
 }
 
-func isBlockAttribute(_ string, value slog.Value) bool {
+func isBlockAttribute(value slog.Value) bool {
 	return value.Kind() == slog.KindString && strings.Contains(value.String(), "\n")
 }
 
@@ -265,15 +253,6 @@ func colorize(value, color string, enabled bool) string {
 		return value
 	}
 	return color + value + colorReset
-}
-
-func colorEnabled(writer io.Writer) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func sourceLocation(pc uintptr) string {

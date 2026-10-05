@@ -1,11 +1,14 @@
 package orchestration
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
 
 type CriterionResult struct {
@@ -31,6 +34,27 @@ type RunResult struct {
 	Agent      *common.Result   `json:"agent,omitempty"`
 	Grading    GradingResult    `json:"grading"`
 	Failure    *FailureEvidence `json:"failure,omitempty"`
+}
+
+func (r Runner) runGrading(ctx context.Context, criteria []scenario.Criterion, kubeconfigPath string, executor command.Executor) (GradingResult, error) {
+	results := make([]CriterionResult, 0, len(criteria))
+	for _, criterion := range criteria {
+		result, err := executor.Run(ctx, withKubeconfig(criterion.Check.Spec(), kubeconfigPath))
+		criterionResult := CriterionResult{
+			ID:              criterion.ID,
+			Weight:          criterion.Weight,
+			Passed:          err == nil && result.ExitCode == 0,
+			Stdout:          result.Stdout,
+			Stderr:          result.Stderr,
+			ExitCode:        result.ExitCode,
+			DurationSeconds: result.Duration.Seconds(),
+		}
+		if err != nil {
+			criterionResult.Error = err.Error()
+		}
+		results = append(results, criterionResult)
+	}
+	return calculateGradingResult(results)
 }
 
 func calculateGradingResult(criteria []CriterionResult) (GradingResult, error) {
