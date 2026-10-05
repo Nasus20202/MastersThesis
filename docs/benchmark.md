@@ -87,7 +87,7 @@ The selected limits are preserved in each raw run result so later conditions can
 
 Each attempt records its peak context, the largest prompt plus completion of a single response, and whether it ran out of context: llama-server rejected a request as too long, or a response stopped at the length limit (D-040). A rejected request reports no usage, so the peak then underestimates the context.
 
-With `agents.loop.file_tools`, every condition gets `read_file`, `write_file` and an exact-string `edit_file` next to bash; they are off by default (D-041). `kubectl edit` always fails with a hint to export, change and apply the manifest, because the sandbox has no interactive editor.
+Every condition gets `read_file`, `write_file` and an exact-string `edit_file` next to bash (D-041); `agents.loop.file_tools: false` turns them off. `kubectl edit` always fails with a hint to export, change and apply the manifest, because the sandbox has no interactive editor.
 
 ## Model visibility
 

@@ -47,6 +47,7 @@ func DefaultConfig() Config {
 		MaxToolCalls:       50,
 		ToolTimeoutSeconds: 60,
 		TimeoutSeconds:     300,
+		FileTools:          true,
 	}
 }
 

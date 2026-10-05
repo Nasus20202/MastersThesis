@@ -85,7 +85,7 @@ func (t *blockingTool) Execute(ctx context.Context, _ inference.ToolCall) ToolRe
 }
 
 func TestDefaultConfig(t *testing.T) {
-	assert.Equal(t, Config{MaxTurns: 25, MaxToolCalls: 50, ToolTimeoutSeconds: 60, TimeoutSeconds: 300}, DefaultConfig())
+	assert.Equal(t, Config{MaxTurns: 25, MaxToolCalls: 50, ToolTimeoutSeconds: 60, TimeoutSeconds: 300, FileTools: true}, DefaultConfig())
 }
 
 func TestNewLoopValidatesDependenciesAndConfiguration(t *testing.T) {
