@@ -22,7 +22,6 @@ const (
 	chatCompletionsPath = "/v1/chat/completions"
 	embeddingsPath      = "/v1/embeddings"
 	propsPath           = "/props"
-	healthPath          = "/health"
 )
 
 type Config struct {

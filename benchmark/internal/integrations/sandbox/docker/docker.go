@@ -59,7 +59,6 @@ type Config struct {
 	Env            map[string]string
 	Mounts         []Mount
 	Security       SecurityConfig
-	Command        []string
 }
 
 type ImageConfig struct {
@@ -262,13 +261,7 @@ func (s *Sandbox) runArgs() []string {
 		}
 		args = append(args, "--volume", mount.Source+":"+mount.Target+":"+mode)
 	}
-	args = append(args, s.config.Image)
-	if len(s.config.Command) == 0 {
-		args = append(args, "sleep", "infinity")
-	} else {
-		args = append(args, s.config.Command...)
-	}
-	return args
+	return append(args, s.config.Image, "sleep", "infinity")
 }
 
 func (s *Sandbox) Exec(ctx context.Context, spec command.Spec) (command.Result, error) {

@@ -75,7 +75,7 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 	inline := make([]renderedAttr, 0, len(attrs))
 	blocks := make([]renderedAttr, 0)
 	for _, attr := range attrs {
-		if isBlockAttribute(attr.key, attr.value) {
+		if isBlockAttribute(attr.value) {
 			blocks = append(blocks, attr)
 			continue
 		}
@@ -126,15 +126,10 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 		output.WriteString("  ")
 		output.WriteString(colorize(attr.key, colorDim, h.color))
 		output.WriteString(":\n")
-		content := formatValue(attr.value)
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
+		for _, line := range strings.Split(formatValue(attr.value), "\n") {
 			output.WriteString("    ")
 			output.WriteString(line)
 			output.WriteByte('\n')
-		}
-		if len(lines) == 0 {
-			output.WriteString("    <empty>\n")
 		}
 	}
 	if len(blocks) == 0 {
@@ -201,7 +196,7 @@ func clonePrettyAttrs(attrs []prettyAttr) []prettyAttr {
 	return cloned
 }
 
-func isBlockAttribute(_ string, value slog.Value) bool {
+func isBlockAttribute(value slog.Value) bool {
 	return value.Kind() == slog.KindString && strings.Contains(value.String(), "\n")
 }
 

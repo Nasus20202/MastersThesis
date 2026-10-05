@@ -3,13 +3,12 @@ package cluster
 
 import "context"
 
-// Cluster is a disposable Kubernetes cluster and its kubeconfig.
+// Cluster is a disposable Kubernetes cluster. InternalKubeconfigPath reaches
+// its API server from containers on the kind network.
 type Cluster interface {
 	Create(context.Context) error
 	Delete(context.Context) error
-	KubeconfigPath() string
 	InternalKubeconfigPath() string
-	KubeconfigContext() string
 }
 
 // Factory creates a cluster with the given name.

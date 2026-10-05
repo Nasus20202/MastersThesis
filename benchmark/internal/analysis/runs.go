@@ -275,13 +275,9 @@ var flagsWithValue = map[string]bool{"-n": true, "--namespace": true, "--context
 
 var commandSeparator = regexp.MustCompile(`\|\||&&|[|;&\n]`)
 
-// ChangesCluster reports whether a Bash command runs a kubectl subcommand that
-// writes to the cluster. It is a heuristic over the command text, used only to
-// order searches against the first repair attempt and to count changes.
-func ChangesCluster(command string) bool {
-	return slices.ContainsFunc(kubectlCommands(command), writes)
-}
-
+// writes reports whether kubectl arguments change the cluster. It is a
+// heuristic over the command text, used only to order searches against the
+// first repair attempt and to count changes.
 func writes(args []string) bool {
 	return changeVerbs[args[0]] || args[0] == "rollout" && len(args) > 1 && (args[1] == "restart" || args[1] == "undo")
 }

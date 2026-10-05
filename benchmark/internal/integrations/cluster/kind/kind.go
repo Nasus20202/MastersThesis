@@ -14,10 +14,7 @@ import (
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 )
 
-const (
-	program           = "kind"
-	kindContextPrefix = "kind-"
-)
+const program = "kind"
 
 type Config struct {
 	Name       string
@@ -92,10 +89,6 @@ func (c *Cluster) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (c *Cluster) KubeconfigPath() string {
-	return c.kubeconfigPath
-}
-
 func (c *Cluster) InternalKubeconfigPath() string {
 	return c.internalKubeconfigPath
 }
@@ -115,20 +108,14 @@ func (c *Cluster) generateInternalKubeconfig(ctx context.Context) error {
 	return nil
 }
 
-func (c *Cluster) KubeconfigContext() string {
-	return kindContextPrefix + c.name
-}
-
 func (c *Cluster) run(ctx context.Context, args ...string) (command.Result, error) {
 	spec := command.Spec{Program: program, Args: args}
-	if c.configPath != "" && args[0] == "create" {
-		args = append(args, "--kubeconfig", c.kubeconfigPath)
-		args = append(args, "--config", c.configPath)
-		spec.Args = args
-		spec.Dir = filepath.Dir(c.configPath)
-	} else if args[0] == "create" {
-		args = append(args, "--kubeconfig", c.kubeconfigPath)
-		spec.Args = args
+	if args[0] == "create" {
+		spec.Args = append(spec.Args, "--kubeconfig", c.kubeconfigPath)
+		if c.configPath != "" {
+			spec.Args = append(spec.Args, "--config", c.configPath)
+			spec.Dir = filepath.Dir(c.configPath)
+		}
 	}
 	result, err := c.executor.Run(ctx, spec)
 	if err != nil {
