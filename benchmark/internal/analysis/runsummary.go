@@ -1,15 +1,13 @@
 package analysis
 
 import (
-	"bufio"
 	"cmp"
-	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/jsonfile"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
 )
 
@@ -178,6 +176,12 @@ func macroDifference(attempts, reference []RunAttempt) *Difference {
 			differences = append(differences, score-referenceScore)
 		}
 	}
+	return pairedDifference(differences)
+}
+
+// pairedDifference is the mean of per-scenario differences with its bootstrap
+// interval, or nil without differences.
+func pairedDifference(differences []float64) *Difference {
 	if len(differences) == 0 {
 		return nil
 	}
@@ -358,28 +362,8 @@ func WriteRunAnalysis(dir string, summaries []RunSummary, attempts []RunAttempt)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(dir, "summary.json"), summaries); err != nil {
+	if err := jsonfile.Write(filepath.Join(dir, "summary.json"), summaries); err != nil {
 		return err
 	}
-	file, err := os.Create(filepath.Join(dir, "attempts.jsonl"))
-	if err != nil {
-		return err
-	}
-	writer := bufio.NewWriter(file)
-	encoder := json.NewEncoder(writer)
-	for _, attempt := range attempts {
-		if err := encoder.Encode(attempt); err != nil {
-			_ = file.Close()
-			return err
-		}
-	}
-	return errors.Join(writer.Flush(), file.Close())
-}
-
-func writeJSON(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return jsonfile.WriteLines(filepath.Join(dir, "attempts.jsonl"), attempts)
 }

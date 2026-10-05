@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/jsonfile"
 )
 
 // ModelMean is a condition's macro score averaged over models, each model
@@ -68,9 +68,6 @@ func MeanOverModels(attempts, reference []RunAttempt) ModelMean {
 		mean := referenceTotal / float64(referenceModels)
 		result.ReferenceMacro = &mean
 	}
-	if len(differences) == 0 {
-		return result
-	}
 	values := make([]float64, 0, len(differences))
 	for _, perModel := range differences {
 		total := 0.0
@@ -79,19 +76,11 @@ func MeanOverModels(attempts, reference []RunAttempt) ModelMean {
 		}
 		values = append(values, total/float64(len(perModel)))
 	}
-	// Map iteration order is random; the seeded resampling needs a fixed order.
-	slices.Sort(values)
-	difference := &Difference{Scenarios: len(values)}
-	for _, value := range values {
-		difference.Mean += value
-	}
-	difference.Mean /= float64(len(values))
-	difference.Low, difference.High = evaluation.BootstrapInterval(values)
-	result.Difference = difference
+	result.Difference = pairedDifference(values)
 	return result
 }
 
 // WriteModelMean stores model_mean.json next to the per-model summaries.
 func WriteModelMean(dir string, mean ModelMean) error {
-	return writeJSON(filepath.Join(dir, "model_mean.json"), mean)
+	return jsonfile.Write(filepath.Join(dir, "model_mean.json"), mean)
 }
