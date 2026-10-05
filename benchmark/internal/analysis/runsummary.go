@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"cmp"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -324,9 +325,10 @@ func outcome(attempts []RunAttempt) (float64, int, int) {
 	if len(means) == 0 {
 		return 0, full, 0
 	}
+	// Summing in scenario order keeps the result identical between runs.
 	total := 0.0
-	for _, mean := range means {
-		total += mean
+	for _, scenario := range slices.Sorted(maps.Keys(means)) {
+		total += means[scenario]
 	}
 	return total / float64(len(means)), full, len(means)
 }

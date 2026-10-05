@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -242,4 +243,19 @@ func TestLoadRunAttemptsRequiresScenarioSources(t *testing.T) {
 
 	_, err = LoadRunAttempts(root, "run", map[string][]string{})
 	assert.EqualError(t, err, "scenario app has no sources")
+}
+
+func TestMacroIsIndependentOfMapOrder(t *testing.T) {
+	var attempts []RunAttempt
+	want := 0.0
+	for index := range 20 {
+		score := 0.1 * float64(index%7)
+		attempts = append(attempts, RunAttempt{Scenario: fmt.Sprintf("s%02d", index), Score: score})
+		want += score
+	}
+	want /= 20
+
+	for range 50 {
+		assert.Equal(t, want, Macro(attempts))
+	}
 }

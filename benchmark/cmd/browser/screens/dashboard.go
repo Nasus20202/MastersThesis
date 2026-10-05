@@ -2,6 +2,8 @@ package screens
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -43,10 +45,7 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 
 // rankGraphs renders mean score and full success per group, best first.
 func rankGraphs(title string, metrics map[string]model.Metrics, width int) string {
-	agents := make([]string, 0, len(metrics))
-	for agent := range metrics {
-		agents = append(agents, agent)
-	}
+	agents := slices.Sorted(maps.Keys(metrics))
 	sort.SliceStable(agents, func(i, j int) bool {
 		left, right := metrics[agents[i]], metrics[agents[j]]
 		if left.MeanScore != right.MeanScore {
@@ -122,10 +121,9 @@ func outcomes(metrics model.Metrics) []ui.Segment {
 }
 
 func terminationBars(width int, terminations map[string]int) string {
-	names := make([]string, 0, len(terminations))
+	names := slices.Sorted(maps.Keys(terminations))
 	maximum := 0
-	for name, count := range terminations {
-		names = append(names, name)
+	for _, count := range terminations {
 		maximum = max(maximum, count)
 	}
 	sort.SliceStable(names, func(i, j int) bool { return terminations[names[i]] > terminations[names[j]] })
