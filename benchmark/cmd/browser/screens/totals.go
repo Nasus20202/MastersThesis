@@ -77,10 +77,10 @@ func (v *View) buildTotals(width int) []string {
 			components.MetricCard("mean peak ctx", fmt.Sprintf("%.0f", model.Mean(metrics.PeakContext)), ui.Section),
 			components.MetricCard("ctx overflows", fmt.Sprintf("%d", metrics.Overflows), overflowStyle(metrics.Overflows > 0)),
 		}
-		if throughput := model.PredictedTokensPerSecond(metrics); throughput > 0 {
+		if throughput := model.TokensPerSecond(metrics.PredictedTokens, metrics.PredictedSeconds); throughput > 0 {
 			cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", throughput), ui.Section))
 		}
-		if acceptance, ok := model.DraftAcceptanceRate(metrics); ok {
+		if acceptance, ok := model.AcceptanceRate(metrics.DraftAccepted, metrics.DraftTokens); ok {
 			cards = append(cards, components.MetricCard("draft accept %", fmt.Sprintf("%.0f%%", acceptance*100), ui.Section))
 		}
 		lines = append(lines, components.Section(width, "Tokens"), components.CardRow(cards, contentWidth), "")

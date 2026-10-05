@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/analysis"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 )
@@ -35,13 +36,15 @@ type Store struct {
 	attempts map[string]attemptEntry
 }
 
-// attemptEntry caches a parsed attempt file. Attempt files are written once,
-// so entries survive reloads and are re-read only when the file's modification
-// time changes, e.g. after a rerun replaced it.
+// attemptEntry caches a parsed attempt file and its flattened record. Attempt
+// files are written once, so entries survive reloads and are re-read only when
+// the file's modification time changes, e.g. after a rerun replaced it.
 type attemptEntry struct {
-	attempt results.Attempt
-	err     error
-	modTime time.Time
+	attempt   results.Attempt
+	err       error
+	record    analysis.RunAttempt
+	recordErr error
+	modTime   time.Time
 }
 
 // New returns an empty store; call Reload to populate it.
@@ -127,20 +130,39 @@ func (s *Store) EnsureSnapshot(runID string) error {
 
 // Attempt loads and caches one attempt artifact.
 func (s *Store) Attempt(runID string, ref results.AttemptRef) (results.Attempt, error) {
+	entry := s.attempt(runID, ref)
+	return entry.attempt, entry.err
+}
+
+// RunAttempt returns one attempt flattened into the record analyze uses,
+// without a scenario source.
+func (s *Store) RunAttempt(runID string, ref results.AttemptRef) (analysis.RunAttempt, error) {
+	entry := s.attempt(runID, ref)
+	if entry.err != nil {
+		return analysis.RunAttempt{}, entry.err
+	}
+	return entry.record, entry.recordErr
+}
+
+func (s *Store) attempt(runID string, ref results.AttemptRef) attemptEntry {
 	var modTime time.Time
 	if info, err := os.Stat(ref.Path); err == nil {
 		modTime = info.ModTime()
 	}
 	if entry, ok := s.attempts[ref.Path]; ok && entry.modTime.Equal(modTime) {
-		return entry.attempt, entry.err
+		return entry
 	}
 	var runType results.RunType
 	if snapshot, ok := s.snapshot[runID]; ok {
 		runType = snapshot.Metadata.RunType
 	}
-	attempt, err := results.LoadAttempt(ref, runType)
-	s.attempts[ref.Path] = attemptEntry{attempt: attempt, err: err, modTime: modTime}
-	return attempt, err
+	entry := attemptEntry{modTime: modTime}
+	entry.attempt, entry.err = results.LoadAttempt(ref, runType)
+	if entry.err == nil {
+		entry.record, entry.recordErr = analysis.NewRunAttempt(runID, entry.attempt, "")
+	}
+	s.attempts[ref.Path] = entry
+	return entry
 }
 
 func (s *Store) RunsForAgent(agent string) []results.RunRef {

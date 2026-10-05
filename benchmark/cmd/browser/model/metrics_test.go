@@ -123,8 +123,8 @@ func TestRunMetricsAggregatesDecodingThroughput(t *testing.T) {
 	assert.Equal(t, 4.0, metrics.PredictedSeconds)
 	assert.Equal(t, 50, metrics.DraftTokens)
 	assert.Equal(t, 25, metrics.DraftAccepted)
-	assert.Equal(t, 25.0, PredictedTokensPerSecond(metrics))
-	rate, ok := DraftAcceptanceRate(metrics)
+	assert.Equal(t, 25.0, TokensPerSecond(metrics.PredictedTokens, metrics.PredictedSeconds))
+	rate, ok := AcceptanceRate(metrics.DraftAccepted, metrics.DraftTokens)
 	require.True(t, ok)
 	assert.Equal(t, 0.5, rate)
 }
@@ -139,31 +139,8 @@ func TestRunMetricsOmitsThroughputWithoutTimings(t *testing.T) {
 	require.NoError(t, read.Reload())
 
 	metrics := RunMetrics(read, "run-1", "", "")
-	assert.Zero(t, PredictedTokensPerSecond(metrics))
-	_, ok := DraftAcceptanceRate(metrics)
-	assert.False(t, ok)
-}
-
-func TestAttemptTokensPerSecondSumsResponseTimings(t *testing.T) {
-	attempt := results.Attempt{Benchmark: &results.AttemptResult{Agent: &common.Result{Responses: []common.ResponseEvidence{
-		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 60, PredictedMS: 1000, DraftN: 30, DraftNAccepted: 12}}},
-		{Response: inference.Result{Timings: &inference.Timings{PredictedN: 40, PredictedMS: 3000, DraftN: 20, DraftNAccepted: 13}}},
-		{Response: inference.Result{}},
-	}}}}
-
-	assert.Equal(t, 25.0, AttemptTokensPerSecond(attempt))
-	rate, ok := AttemptDraftAcceptanceRate(attempt)
-	require.True(t, ok)
-	assert.Equal(t, 0.5, rate)
-}
-
-func TestAttemptThroughputWithoutTimings(t *testing.T) {
-	attempt := results.Attempt{Benchmark: &results.AttemptResult{Agent: &common.Result{}}}
-	assert.Zero(t, AttemptTokensPerSecond(attempt))
-	_, ok := AttemptDraftAcceptanceRate(attempt)
-	assert.False(t, ok)
-	assert.Zero(t, AttemptTokensPerSecond(results.Attempt{}))
-	_, ok = AttemptDraftAcceptanceRate(results.Attempt{})
+	assert.Zero(t, TokensPerSecond(metrics.PredictedTokens, metrics.PredictedSeconds))
+	_, ok := AcceptanceRate(metrics.DraftAccepted, metrics.DraftTokens)
 	assert.False(t, ok)
 }
 
