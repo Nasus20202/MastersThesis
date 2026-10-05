@@ -5,19 +5,13 @@ package screens
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
-
-	"charm.land/lipgloss/v2"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/model"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
-)
-
-const (
-	twoColumnWidth = 112
-	columnGap      = 2
 )
 
 type View struct {
@@ -39,15 +33,9 @@ type cachedLayout struct {
 }
 
 func NewView(store *model.Store) *View {
-	return &View{
-		store:       store,
-		previews:    make(map[string][]string),
-		heads:       make(map[string]string),
-		details:     make(map[string][]string),
-		detailHeads: make(map[string]string),
-		layouts:     make(map[string]cachedLayout),
-		totals:      make(map[int][]string),
-	}
+	view := &View{store: store}
+	view.Invalidate()
+	return view
 }
 
 func (v *View) Store() *model.Store { return v.store }
@@ -62,58 +50,6 @@ func (v *View) Invalidate() {
 	v.detailHeads = make(map[string]string)
 	v.layouts = make(map[string]cachedLayout)
 	v.totals = make(map[int][]string)
-}
-
-func TwoColumn(width int) bool { return width >= twoColumnWidth }
-
-func ColumnWidths(width int) (int, int) {
-	left := (width - columnGap) * 58 / 100
-	return left, width - columnGap - left
-}
-
-func PaneWidth(width int) int {
-	if TwoColumn(width) {
-		left, _ := ColumnWidths(width)
-		return left
-	}
-	return width
-}
-
-func PreviewWidth(width int) int {
-	if TwoColumn(width) {
-		_, right := ColumnWidths(width)
-		return right
-	}
-	return width
-}
-
-func ChatVisible(width, height int) int {
-	if TwoColumn(width) {
-		return max(1, height-1)
-	}
-	return max(1, height/2-1)
-}
-
-func DetailsHeight(width, height int) int {
-	if TwoColumn(width) {
-		return height
-	}
-	return max(1, height/2)
-}
-
-func Join(left, right string, width, height int) string {
-	leftWidth, rightWidth := ColumnWidths(width)
-	joined := lipgloss.JoinHorizontal(lipgloss.Top,
-		padBlock(left, leftWidth), strings.Repeat(" ", columnGap), padBlock(right, rightWidth))
-	return ui.FitHeight(joined, height)
-}
-
-func padBlock(content string, width int) string {
-	lines := strings.Split(content, "\n")
-	for index, line := range lines {
-		lines[index] = ui.PadRight(line, width)
-	}
-	return strings.Join(lines, "\n")
 }
 
 func (v *View) md(width int) *ui.Renderer {
@@ -180,13 +116,8 @@ func expandedKey(expanded map[int]bool) string {
 	if len(expanded) == 0 {
 		return ""
 	}
-	keys := make([]int, 0, len(expanded))
-	for key := range expanded {
-		keys = append(keys, key)
-	}
-	sort.Ints(keys)
 	var builder strings.Builder
-	for _, key := range keys {
+	for _, key := range slices.Sorted(maps.Keys(expanded)) {
 		fmt.Fprintf(&builder, "%d=%t,", key, expanded[key])
 	}
 	return builder.String()

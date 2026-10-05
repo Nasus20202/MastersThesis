@@ -69,7 +69,7 @@ func (v *View) scenarioPreview(row model.ScenarioRow, width int) string {
 		}
 	}
 	body = append(body, fmt.Sprintf("attempts %d · full %s · mean %s",
-		row.Attempts, ui.Rate(fullRate(row.FullSuccess, row.Attempts)), ui.Rate(row.MeanScore)))
+		row.Attempts, ui.Rate(model.Ratio(row.FullSuccess, row.Attempts)), ui.Rate(row.MeanScore)))
 	for _, agent := range row.Agents {
 		body = append(body, fmt.Sprintf("%s %s", ui.PadRight(agent, 10),
 			ui.Meter(row.MeanScore, 10, ui.Outcome(row.Attempts > 0 && row.FullSuccess == row.Attempts, row.MeanScore))))

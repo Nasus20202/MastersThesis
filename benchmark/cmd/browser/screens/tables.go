@@ -114,7 +114,7 @@ func (v *View) scenariosTable(route *Route, width, height int) string {
 		tableRows[index] = []string{
 			v.store.ScenarioTitle(scenario.ID),
 			fmt.Sprintf("%d", scenario.Attempts),
-			ui.Rate(fullRate(scenario.FullSuccess, scenario.Attempts)),
+			ui.Rate(model.Ratio(scenario.FullSuccess, scenario.Attempts)),
 			ui.Rate(scenario.MeanScore),
 			ui.Meter(scenario.MeanScore, 10, ui.Outcome(scenario.Attempts > 0 && scenario.FullSuccess == scenario.Attempts, scenario.MeanScore)),
 		}

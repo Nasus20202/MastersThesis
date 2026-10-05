@@ -1,19 +1,14 @@
 package screens
 
 import (
-	"charm.land/lipgloss/v2"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/model"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/ui"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 )
-
-func fullRate(full, total int) float64 {
-	if total == 0 {
-		return 0
-	}
-	return float64(full) / float64(total)
-}
 
 func overallRate(summary *results.RunSummary) float64 {
 	total, full := 0, 0
@@ -21,7 +16,7 @@ func overallRate(summary *results.RunSummary) float64 {
 		total += condition.AttemptCount
 		full += condition.FullSuccessCount
 	}
-	return fullRate(full, total)
+	return model.Ratio(full, total)
 }
 
 func errorStyle(errors string) lipgloss.Style {

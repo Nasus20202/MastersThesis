@@ -41,8 +41,6 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// agentRankGraphs renders one line per agent combining the mean-score and
-// full-success bars, best mean score first.
 // rankGraphs renders mean score and full success per group, best first.
 func rankGraphs(title string, metrics map[string]model.Metrics, width int) string {
 	agents := make([]string, 0, len(metrics))
