@@ -98,26 +98,20 @@ func (h *prettyHandler) Handle(_ context.Context, record slog.Record) error {
 	} else {
 		output.WriteString(record.Message)
 	}
-	for index, attr := range inline {
-		if index == 0 {
-			output.WriteByte(' ')
-		} else {
-			output.WriteString(prettyAttrSpacing)
-		}
-		output.WriteString(colorize(attr.key, colorDim, h.color))
+	separator := " "
+	writeAttr := func(key, value string) {
+		output.WriteString(separator)
+		separator = prettyAttrSpacing
+		output.WriteString(colorize(key, colorDim, h.color))
 		output.WriteString(colorize("=", colorDim, h.color))
-		output.WriteString(formatInline(attr.value))
+		output.WriteString(value)
+	}
+	for _, attr := range inline {
+		writeAttr(attr.key, formatInline(attr.value))
 	}
 	if h.options.AddSource && record.PC != 0 {
 		if source := sourceLocation(record.PC); source != "" {
-			if len(inline) == 0 {
-				output.WriteByte(' ')
-			} else {
-				output.WriteString(prettyAttrSpacing)
-			}
-			output.WriteString(colorize("source", colorDim, h.color))
-			output.WriteString(colorize("=", colorDim, h.color))
-			output.WriteString(source)
+			writeAttr("source", source)
 		}
 	}
 	for _, attr := range blocks {
