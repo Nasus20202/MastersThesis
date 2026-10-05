@@ -71,3 +71,11 @@ func TestCriteriaMatrixRendersCells(t *testing.T) {
 	assert.Contains(t, out, "0/1")
 	assert.Contains(t, out, "1/1")
 }
+
+func TestTerminationBarsOrderTiesByName(t *testing.T) {
+	for range 20 {
+		bars := terminationBars(40, map[string]int{"max_turns": 2, "error": 2, "completed": 1})
+		assert.Less(t, strings.Index(bars, "error"), strings.Index(bars, "max_turns"))
+		assert.Less(t, strings.Index(bars, "max_turns"), strings.Index(bars, "completed"))
+	}
+}
