@@ -15,17 +15,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
-const (
-	TerminationCompleted    = "completed"
-	TerminationTurnLimit    = "turn_limit"
-	TerminationToolLimit    = "tool_limit"
-	TerminationTokenLimit   = "token_limit"
-	TerminationFinishReason = "finish_reason"
-	TerminationInference    = "inference_error"
-	TerminationCancellation = "cancellation"
-	TerminationTimeout      = "timeout"
-)
-
 // Config controls the safety limits and generation settings for one model
 // loop. The limits apply to one call to Run. FileTools adds read_file,
 // write_file and edit_file next to bash (NewSandboxTools).
@@ -117,47 +106,6 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	return &Loop{client: client, tools: toolMap, definitions: definitions, config: config, metadata: metadata}, nil
 }
 
-// ResponseEvidence preserves the raw response and the client round-trip
-// duration for later result persistence.
-type ResponseEvidence struct {
-	Response        inference.Result `json:"response"`
-	DurationSeconds float64          `json:"duration_seconds"`
-}
-
-// TokenUsage contains the aggregate token usage reported by all model
-// responses in one loop run. PeakContextTokens is the largest prompt plus
-// completion of a single response: the most context the attempt occupied.
-type TokenUsage struct {
-	PromptTokens      int `json:"prompt_tokens"`
-	CompletionTokens  int `json:"completion_tokens"`
-	TotalTokens       int `json:"total_tokens"`
-	CachedTokens      int `json:"cached_tokens,omitempty"`
-	PeakContextTokens int `json:"peak_context_tokens"`
-}
-
-// Result is the complete model-loop evidence produced by Run. ContextOverflow
-// marks an attempt that ran out of model context: the server rejected a
-// request as too long, or generation stopped at the length limit without a
-// configured max_tokens being reached. A rejected request reports no usage, so
-// TokenUsage.PeakContextTokens then underestimates the context.
-type Result struct {
-	Condition       string              `json:"condition,omitempty"`
-	Task            string              `json:"task"`
-	Inference       inference.Metadata  `json:"inference"`
-	LoopConfig      Config              `json:"loop_config"`
-	Tools           []inference.Tool    `json:"tools"`
-	Messages        []inference.Message `json:"messages"`
-	Responses       []ResponseEvidence  `json:"responses"`
-	TokenUsage      TokenUsage          `json:"token_usage"`
-	ToolCalls       []ToolCallEvidence  `json:"tool_calls"`
-	Turns           int                 `json:"turns"`
-	ToolCallCount   int                 `json:"tool_call_count"`
-	Termination     string              `json:"termination"`
-	Error           string              `json:"error,omitempty"`
-	DurationSeconds float64             `json:"duration_seconds"`
-	ContextOverflow bool                `json:"context_overflow,omitempty"`
-}
-
 func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
 	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
 }
@@ -181,57 +129,21 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 	logger := slog.With("component", "agent")
 	for result.Turns < l.config.MaxTurns {
 		if ctxErr := runCtx.Err(); ctxErr != nil {
-			return l.finishContext(&result, ctxErr)
+			return result.finishContext(ctxErr)
 		}
 
-		requestMessages := cloneMessages(result.Messages)
-		requestTools := slices.Clone(l.definitions)
 		turn := result.Turns + 1
-		lastMessage := requestMessages[len(requestMessages)-1]
-		logger.InfoContext(runCtx, "inference message sent",
-			"turn", turn,
-			"message_count", len(requestMessages),
-			"message_role", lastMessage.Role,
-			"message_content_bytes", len(lastMessage.Content),
-			"message_tool_call_count", len(lastMessage.ToolCalls),
-		)
-		logger.DebugContext(runCtx, "inference message sent", "turn", turn, "message_content", lastMessage.Content)
-		responseStarted := time.Now()
-		response, chatErr := l.client.Chat(runCtx, requestMessages, requestTools, inference.Options{
-			Temperature: l.config.Temperature,
-			MaxTokens:   l.config.MaxTokens,
-		})
-		result.Turns++
-		result.Responses = append(result.Responses, ResponseEvidence{
-			Response:        response,
-			DurationSeconds: time.Since(responseStarted).Seconds(),
-		})
-		if response.Usage != nil {
-			result.TokenUsage.PromptTokens += response.Usage.PromptTokens
-			result.TokenUsage.CompletionTokens += response.Usage.CompletionTokens
-			result.TokenUsage.TotalTokens += response.Usage.TotalTokens
-			result.TokenUsage.CachedTokens += response.Usage.CachedTokens
-			result.TokenUsage.PeakContextTokens = max(result.TokenUsage.PeakContextTokens, response.Usage.PromptTokens+response.Usage.CompletionTokens)
-		}
-		if l.contextOverflow(response, chatErr) {
-			result.ContextOverflow = true
-		}
+		response, chatErr := l.chat(runCtx, logger, turn, &result)
 		if chatErr != nil {
-			logger.ErrorContext(runCtx, "inference response failed",
-				"turn", turn,
-				"duration_seconds", time.Since(responseStarted).Seconds(),
-				"error", chatErr,
-			)
 			if ctxErr := runCtx.Err(); ctxErr != nil {
-				return l.finishContext(&result, ctxErr)
+				return result.finishContext(ctxErr)
 			}
-			return l.finish(&result, TerminationInference, chatErr)
+			return result.finish(TerminationInference, chatErr)
 		}
-		logInferenceResponse(runCtx, logger, turn, response, time.Since(responseStarted))
 		message := response.Message
 		result.Messages = append(result.Messages, message)
 		if len(message.ToolCalls) == 0 {
-			return l.finish(&result, terminationForFinishReason(response.FinishReason), nil)
+			return result.finish(terminationForFinishReason(response.FinishReason), nil)
 		}
 
 		if result.ToolCallCount+len(message.ToolCalls) > l.config.MaxToolCalls {
@@ -247,36 +159,79 @@ func (l *Loop) run(ctx context.Context, task string, initialMessages []inference
 					Error: "maximum tool call limit reached",
 				})
 			}
-			return l.finish(&result, TerminationToolLimit, nil)
+			return result.finish(TerminationToolLimit, nil)
 		}
 
 		for _, call := range message.ToolCalls {
-			result.ToolCallCount++
-			logger.InfoContext(runCtx, "tool call started",
-				"turn", turn,
-				"tool_call_id", call.ID,
-				"tool", call.Name,
-				"tool_type", call.Type,
-				"arguments", call.Arguments,
-			)
-			toolMessage, evidence := l.executeToolCall(runCtx, call)
-			result.ToolCalls = append(result.ToolCalls, evidence)
-			result.Messages = append(result.Messages, toolMessage)
-			logger.InfoContext(runCtx, "tool call completed",
-				"turn", turn,
-				"tool_call_id", call.ID,
-				"tool", call.Name,
-				"duration_seconds", evidence.DurationSeconds,
-				"success", evidence.Error == "",
-				"error", evidence.Error,
-			)
+			l.callTool(runCtx, logger, turn, &result, call)
 			if ctxErr := runCtx.Err(); ctxErr != nil {
-				return l.finishContext(&result, ctxErr)
+				return result.finishContext(ctxErr)
 			}
 		}
 	}
 
-	return l.finish(&result, TerminationTurnLimit, nil)
+	return result.finish(TerminationTurnLimit, nil)
+}
+
+// chat sends the conversation so far and records the response, its token
+// usage and any context overflow.
+func (l *Loop) chat(ctx context.Context, logger *slog.Logger, turn int, result *Result) (inference.Result, error) {
+	requestMessages := cloneMessages(result.Messages)
+	lastMessage := requestMessages[len(requestMessages)-1]
+	logger.InfoContext(ctx, "inference message sent",
+		"turn", turn,
+		"message_count", len(requestMessages),
+		"message_role", lastMessage.Role,
+		"message_content_bytes", len(lastMessage.Content),
+		"message_tool_call_count", len(lastMessage.ToolCalls),
+	)
+	logger.DebugContext(ctx, "inference message sent", "turn", turn, "message_content", lastMessage.Content)
+	started := time.Now()
+	response, err := l.client.Chat(ctx, requestMessages, slices.Clone(l.definitions), inference.Options{
+		Temperature: l.config.Temperature,
+		MaxTokens:   l.config.MaxTokens,
+	})
+	result.Turns++
+	result.Responses = append(result.Responses, ResponseEvidence{
+		Response:        response,
+		DurationSeconds: time.Since(started).Seconds(),
+	})
+	result.TokenUsage.add(response.Usage)
+	if l.contextOverflow(response, err) {
+		result.ContextOverflow = true
+	}
+	if err != nil {
+		logger.ErrorContext(ctx, "inference response failed",
+			"turn", turn,
+			"duration_seconds", time.Since(started).Seconds(),
+			"error", err,
+		)
+		return response, err
+	}
+	logInferenceResponse(ctx, logger, turn, response, time.Since(started))
+	return response, nil
+}
+
+func (l *Loop) callTool(ctx context.Context, logger *slog.Logger, turn int, result *Result, call inference.ToolCall) {
+	result.ToolCallCount++
+	logger.InfoContext(ctx, "tool call started",
+		"turn", turn,
+		"tool_call_id", call.ID,
+		"tool", call.Name,
+		"tool_type", call.Type,
+		"arguments", call.Arguments,
+	)
+	message, evidence := l.executeToolCall(ctx, call)
+	result.ToolCalls = append(result.ToolCalls, evidence)
+	result.Messages = append(result.Messages, message)
+	logger.InfoContext(ctx, "tool call completed",
+		"turn", turn,
+		"tool_call_id", call.ID,
+		"tool", call.Name,
+		"duration_seconds", evidence.DurationSeconds,
+		"success", evidence.Error == "",
+		"error", evidence.Error,
+	)
 }
 
 func logInferenceResponse(ctx context.Context, logger *slog.Logger, turn int, response inference.Result, duration time.Duration) {
@@ -348,22 +303,6 @@ func (l *Loop) executeToolCall(ctx context.Context, call inference.ToolCall) (in
 		content = toolResult.Error.Error()
 	}
 	return toolMessage(call.ID, content), evidence
-}
-
-func (l *Loop) finish(result *Result, termination string, loopErr error) (Result, error) {
-	result.Termination = termination
-	if loopErr != nil {
-		result.Error = loopErr.Error()
-	}
-	return *result, loopErr
-}
-
-func (l *Loop) finishContext(result *Result, ctxErr error) (Result, error) {
-	termination := TerminationCancellation
-	if errors.Is(ctxErr, context.DeadlineExceeded) {
-		termination = TerminationTimeout
-	}
-	return l.finish(result, termination, ctxErr)
 }
 
 func (l *Loop) contextOverflow(response inference.Result, chatErr error) bool {
