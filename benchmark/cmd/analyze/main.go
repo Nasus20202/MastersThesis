@@ -154,27 +154,29 @@ func printModelMean(output io.Writer, summaries []analysis.RunSummary, mean anal
 	table := tabwriter.NewWriter(output, 0, 0, 2, ' ', tabwriter.AlignRight)
 	fmt.Fprintf(table, "model\tattempts\tmacro\tfull\treference macro\tdifference\t95%% CI\t\n")
 	for index, summary := range summaries {
-		referenceMacro, difference, interval := "-", "-", "-"
+		referenceMacro := "-"
 		if value, ok := mean.ReferenceMacros[mean.Models[index]]; ok {
 			referenceMacro = fmt.Sprintf("%.3f", value)
 		}
-		if d := summary.MacroDifference; d != nil {
-			difference = fmt.Sprintf("%+.3f", d.Mean)
-			interval = fmt.Sprintf("[%+.3f, %+.3f]", d.Low, d.High)
-		}
+		difference, interval := differenceColumns(summary.MacroDifference)
 		fmt.Fprintf(table, "%s\t%d\t%.3f\t%d/%d\t%s\t%s\t%s\t\n", summary.Label, summary.Attempts, summary.Macro, summary.FullSuccess, summary.Attempts, referenceMacro, difference, interval)
 	}
-	referenceMacro, difference, interval := "-", "-", "-"
+	referenceMacro := "-"
 	if mean.ReferenceMacro != nil {
 		referenceMacro = fmt.Sprintf("%.3f", *mean.ReferenceMacro)
 	}
-	if d := mean.Difference; d != nil {
-		difference = fmt.Sprintf("%+.3f", d.Mean)
-		interval = fmt.Sprintf("[%+.3f, %+.3f]", d.Low, d.High)
-	}
+	difference, interval := differenceColumns(mean.Difference)
 	fmt.Fprintf(table, "mean over %d models\t\t%.3f\t\t%s\t%s\t%s\t\n", len(mean.Models), mean.Macro, referenceMacro, difference, interval)
 	_ = table.Flush()
 	fmt.Fprintln(output)
+}
+
+// differenceColumns formats a macro difference and its interval, or dashes.
+func differenceColumns(difference *analysis.Difference) (string, string) {
+	if difference == nil {
+		return "-", "-"
+	}
+	return fmt.Sprintf("%+.3f", difference.Mean), fmt.Sprintf("[%+.3f, %+.3f]", difference.Low, difference.High)
 }
 
 func printRunSummary(output io.Writer, summary analysis.RunSummary, reference string) {
