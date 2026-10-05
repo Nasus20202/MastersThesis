@@ -10,11 +10,11 @@ import (
 const promptInstruction = "You are working in a Kubernetes troubleshooting environment. Use the bash tool to inspect and modify the environment as needed. Complete the task using only the available environment. When finished, provide a short final response."
 
 func New(client inference.Client, shell common.Shell, config common.Config) (*common.Condition, error) {
-	bash, err := common.NewBashTool(shell)
+	tools, err := common.NewSandboxTools(shell, config)
 	if err != nil {
 		return nil, err
 	}
-	return common.NewCondition("baseline", client, []common.Tool{bash}, config, "", baselinePrompt)
+	return common.NewCondition("baseline", client, tools, config, "", baselinePrompt)
 }
 
 func baselinePrompt(task string) string {

@@ -19,9 +19,9 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
 	if strings.TrimSpace(systemPrompt) == "" {
 		systemPrompt = defaultSystemPrompt
 	}
-	bash, err := common.NewBashTool(shell)
+	tools, err := common.NewSandboxTools(shell, config)
 	if err != nil {
 		return nil, err
 	}
-	return common.NewCondition("prompt", client, []common.Tool{bash}, config, systemPrompt, nil)
+	return common.NewCondition("prompt", client, tools, config, systemPrompt, nil)
 }

@@ -154,6 +154,9 @@ func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, err
 		}
 		result.TimeoutSeconds = *values.TimeoutSeconds
 	}
+	if values.FileTools != nil {
+		result.FileTools = *values.FileTools
+	}
 	return result, nil
 }
 

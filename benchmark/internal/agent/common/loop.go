@@ -27,7 +27,8 @@ const (
 )
 
 // Config controls the safety limits and generation settings for one model
-// loop. The limits apply to one call to Run.
+// loop. The limits apply to one call to Run. FileTools adds read_file,
+// write_file and edit_file next to bash (NewSandboxTools).
 type Config struct {
 	MaxTurns           int      `json:"max_turns"`
 	MaxToolCalls       int      `json:"max_tool_calls"`
@@ -35,6 +36,7 @@ type Config struct {
 	TimeoutSeconds     float64  `json:"timeout_seconds"`
 	Temperature        *float64 `json:"temperature,omitempty"`
 	MaxTokens          *int     `json:"max_tokens,omitempty"`
+	FileTools          bool     `json:"file_tools,omitempty"`
 }
 
 // DefaultConfig returns the approved development benchmark limits. Callers

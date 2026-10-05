@@ -31,10 +31,10 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
 	if err != nil {
 		return nil, err
 	}
-	bash, err := common.NewBashTool(shell)
+	tools, err := common.NewSandboxTools(shell, config)
 	if err != nil {
 		return nil, err
 	}
-	tools := []common.Tool{bash, skillTool{files: files}, referenceTool{files: files}}
+	tools = append(tools, skillTool{files: files}, referenceTool{files: files})
 	return common.NewCondition("skill", client, tools, config, prompt, nil)
 }

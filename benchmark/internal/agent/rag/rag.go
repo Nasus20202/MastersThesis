@@ -42,11 +42,11 @@ func New(client inference.Client, shell common.Shell, config common.Config, syst
 	if search == nil || search.Index == nil {
 		return nil, errors.New("rag search index is required")
 	}
-	bash, err := common.NewBashTool(shell)
+	tools, err := common.NewSandboxTools(shell, config)
 	if err != nil {
 		return nil, err
 	}
-	return common.NewCondition("rag", client, []common.Tool{bash, searchTool{search: search}}, config, systemPrompt, nil)
+	return common.NewCondition("rag", client, append(tools, searchTool{search: search}), config, systemPrompt, nil)
 }
 
 type searchTool struct{ search *Search }
