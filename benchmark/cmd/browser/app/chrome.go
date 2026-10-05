@@ -86,14 +86,10 @@ func (m *Model) renderHelp() string {
 		components.MetricCard("failed / error", "0%", ui.Danger),
 		components.MetricCard("running", "live", ui.Running),
 	}, m.width)
-	header := ui.JoinSides(ui.Title.Render("◆ Keys"), m.closeLabel(), m.width)
+	header := ui.JoinSides(ui.Title.Render("◆ Keys"), ui.Button(closeLabel), m.width)
 	return header + "\n\n" + groups + "\n\n" +
 		components.Section(m.width, "Legend") + "\n\n" + legend + "\n\n" +
 		ui.MutedStyle.Render("press ? or esc to close")
-}
-
-func (m *Model) closeLabel() string {
-	return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("× close") + ui.TabIdle.Render("]")
 }
 
 // headerTitle is the title and breadcrumb, shared by the renderer and the back
@@ -130,7 +126,7 @@ func (m *Model) filterControlLabel() string {
 		parts = append(parts, filter.String())
 	}
 	if len(parts) == 0 {
-		return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("⌕ filter") + ui.TabIdle.Render("]")
+		return ui.Button("⌕ filter")
 	}
 	return ui.TabActive.Render(" ⌕ " + ui.Truncate(strings.Join(parts, " "), 44) + " ")
 }
@@ -142,9 +138,7 @@ func (m *Model) filterControlAt(x int) bool {
 
 func (m *Model) canGoBack() bool { return len(m.stack) > 1 }
 
-func (m *Model) backLabel() string {
-	return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("← back") + ui.TabIdle.Render("]")
-}
+func (m *Model) backLabel() string { return ui.Button("← back") }
 
 // backRange returns the columns occupied by the header back button.
 func (m *Model) backRange() (int, int) {

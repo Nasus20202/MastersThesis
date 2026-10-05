@@ -4,7 +4,7 @@
 package app
 
 import (
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/model"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/screens"
