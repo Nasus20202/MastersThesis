@@ -3,8 +3,9 @@ package model
 import (
 	"io"
 	"log/slog"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,7 +73,7 @@ func (s *Store) recompute() {
 	if len(s.models) > 0 {
 		byModel = make([]results.RunRef, 0, len(s.runs))
 		for _, run := range s.runs {
-			if containsString(s.models, run.Model) {
+			if slices.Contains(s.models, run.Model) {
 				byModel = append(byModel, run)
 			}
 		}
@@ -82,35 +83,6 @@ func (s *Store) recompute() {
 	s.tasks = results.RollupTasks(byModel, s.matchesTags)
 }
 
-// SetModelFilter keeps only runs of the given models; none keeps all.
-func (s *Store) SetModelFilter(models []string) {
-	s.models = models
-	s.recompute()
-}
-
-func (s *Store) ModelFilter() []string { return s.models }
-
-// ModelOptions returns the sorted models of all discovered runs.
-func (s *Store) ModelOptions() []string {
-	var models []string
-	for _, run := range s.runs {
-		if run.Model != "" && !containsString(models, run.Model) {
-			models = append(models, run.Model)
-		}
-	}
-	sort.Strings(models)
-	return models
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
 // Runs returns every discovered run that matches the active tag filter, newest first.
 func (s *Store) Runs() []results.RunRef { return s.visible }
 
@@ -118,88 +90,12 @@ func (s *Store) Agents() []results.AgentRollup { return s.agents }
 
 func (s *Store) Tasks() []results.TaskRollup { return s.tasks }
 
-// SetTagFilter sets the active filter and recomputes the filtered views.
-func (s *Store) SetTagFilter(filter scenario.TagFilter) {
-	s.selector = filter
-	s.recompute()
-}
-
-func (s *Store) TagFilter() scenario.TagFilter { return s.selector }
-
-// TagOptions returns every catalogue tag key with its sorted, unique values.
-func (s *Store) TagOptions() map[string][]string {
-	values := make(map[string]map[string]struct{})
-	for _, definition := range s.catalog {
-		for key, value := range definition.Tags {
-			if values[key] == nil {
-				values[key] = make(map[string]struct{})
-			}
-			values[key][value] = struct{}{}
-		}
-	}
-	options := make(map[string][]string, len(values))
-	for key, set := range values {
-		keyValues := make([]string, 0, len(set))
-		for value := range set {
-			keyValues = append(keyValues, value)
-		}
-		sort.Strings(keyValues)
-		options[key] = keyValues
-	}
-	return options
-}
-
 // ScenarioTags returns a scenario's tags, or nil when it is unknown.
 func (s *Store) ScenarioTags(scenarioID string) map[string]string {
 	if definition, ok := s.catalog[scenarioID]; ok {
 		return definition.Tags
 	}
 	return nil
-}
-
-func (s *Store) matchesTags(scenarioID string) bool {
-	return s.selector.Matches(s.ScenarioTags(scenarioID))
-}
-
-// filterRuns keeps the runs that have attempts for a matching scenario. A run
-// without a summary cannot be evaluated and stays visible.
-func (s *Store) filterRuns(runs []results.RunRef) []results.RunRef {
-	if s.selector.Empty() {
-		return runs
-	}
-	filtered := make([]results.RunRef, 0, len(runs))
-	for _, run := range runs {
-		if s.runMatchesTags(run) {
-			filtered = append(filtered, run)
-		}
-	}
-	return filtered
-}
-
-func (s *Store) runMatchesTags(run results.RunRef) bool {
-	if run.Summary == nil {
-		return true
-	}
-	for _, condition := range run.Summary.ByCondition {
-		if s.conditionMatches(condition) {
-			return true
-		}
-	}
-	return false
-}
-
-// conditionMatches reports whether a condition has attempts from matching
-// scenarios; a summary without per-scenario detail falls back to its total.
-func (s *Store) conditionMatches(condition results.ConditionSummary) bool {
-	if len(condition.Scenarios) == 0 {
-		return condition.AttemptCount > 0
-	}
-	for scenarioID, scenario := range condition.Scenarios {
-		if scenario.AttemptCount > 0 && s.matchesTags(scenarioID) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Store) Catalog() map[string]scenario.Definition { return s.catalog }
@@ -352,12 +248,7 @@ func ConditionNames(summary *results.RunSummary) []string {
 	if summary == nil {
 		return nil
 	}
-	names := make([]string, 0, len(summary.ByCondition))
-	for name := range summary.ByCondition {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return slices.Sorted(maps.Keys(summary.ByCondition))
 }
 
 func loadCatalog(root string) map[string]scenario.Definition {
@@ -382,83 +273,4 @@ func loadCatalog(root string) map[string]scenario.Definition {
 		catalog[definition.ID] = definition
 	}
 	return catalog
-}
-
-// AgentModelMatrix holds each condition's results on each model.
-type AgentModelMatrix struct {
-	Agents []string
-	Models []string
-	// Cells is keyed by agent, then model.
-	Cells map[string]map[string]results.Rollup
-}
-
-// AgentModelMatrix rolls up every visible run's conditions by run model from
-// the run summaries, counting only scenarios matching the tag filter. Runs of
-// an unknown model are left out.
-func (s *Store) AgentModelMatrix() AgentModelMatrix {
-	type totals struct {
-		attempts, full int
-		score          float64
-	}
-	sums := map[string]map[string]*totals{}
-	var agents, models []string
-	for _, run := range s.visible {
-		if run.Model == "" || run.Summary == nil {
-			continue
-		}
-		for agent, condition := range run.Summary.ByCondition {
-			for scenarioID, scenario := range condition.Scenarios {
-				if scenario.AttemptCount == 0 || !s.matchesTags(scenarioID) {
-					continue
-				}
-				if sums[agent] == nil {
-					sums[agent] = map[string]*totals{}
-					agents = append(agents, agent)
-				}
-				cell := sums[agent][run.Model]
-				if cell == nil {
-					cell = &totals{}
-					sums[agent][run.Model] = cell
-				}
-				if !containsString(models, run.Model) {
-					models = append(models, run.Model)
-				}
-				cell.attempts += scenario.AttemptCount
-				cell.full += scenario.FullSuccessCount
-				cell.score += scenario.MeanScore * float64(scenario.AttemptCount)
-			}
-		}
-	}
-	sort.Strings(agents)
-	sort.Strings(models)
-	matrix := AgentModelMatrix{Agents: agents, Models: models, Cells: map[string]map[string]results.Rollup{}}
-	for agent, byModel := range sums {
-		matrix.Cells[agent] = map[string]results.Rollup{}
-		for model, cell := range byModel {
-			matrix.Cells[agent][model] = results.Rollup{
-				Attempts:         cell.attempts,
-				FullSuccessCount: cell.full,
-				FullSuccessRate:  float64(cell.full) / float64(cell.attempts),
-				MeanScore:        cell.score / float64(cell.attempts),
-			}
-		}
-	}
-	return matrix
-}
-
-// ModelRollups sums each model's conditions in the agent-by-model matrix into
-// summary-level metrics, without loading attempt files.
-func (s *Store) ModelRollups() map[string]Metrics {
-	matrix := s.AgentModelMatrix()
-	metrics := make(map[string]Metrics, len(matrix.Models))
-	for _, byModel := range matrix.Cells {
-		for model, cell := range byModel {
-			item := metrics[model]
-			item.MeanScore = (item.MeanScore*float64(item.Attempts) + cell.MeanScore*float64(cell.Attempts)) / float64(item.Attempts+cell.Attempts)
-			item.Attempts += cell.Attempts
-			item.Full += cell.FullSuccessCount
-			metrics[model] = item
-		}
-	}
-	return metrics
 }

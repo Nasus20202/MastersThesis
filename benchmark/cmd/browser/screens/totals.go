@@ -68,13 +68,13 @@ func (v *View) buildTotals(width int) []string {
 
 	if len(metrics.Tokens) > 0 {
 		cards := []string{
-			components.MetricCard("total", ui.Count(model.SumInts(metrics.Tokens)), ui.Section),
-			components.MetricCard("in", ui.Count(model.SumInts(metrics.Prompt)), ui.Section),
-			components.MetricCard("out", ui.Count(model.SumInts(metrics.Completion)), ui.Section),
-			components.MetricCard("cached", ui.Count(model.SumInts(metrics.Cached)), ui.Section),
+			components.MetricCard("total", ui.Count(model.Sum(metrics.Tokens)), ui.Section),
+			components.MetricCard("in", ui.Count(model.Sum(metrics.Prompt)), ui.Section),
+			components.MetricCard("out", ui.Count(model.Sum(metrics.Completion)), ui.Section),
+			components.MetricCard("cached", ui.Count(model.Sum(metrics.Cached)), ui.Section),
 			components.MetricCard("mean cache %", fmt.Sprintf("%.2f%%", model.Mean(metrics.CacheRatios)*100), ui.Section),
 			components.MetricCard("max peak ctx", ui.Count(slices.Max(metrics.PeakContext)), ui.Section),
-			components.MetricCard("mean peak ctx", fmt.Sprintf("%.0f", model.MeanInts(metrics.PeakContext)), ui.Section),
+			components.MetricCard("mean peak ctx", fmt.Sprintf("%.0f", model.Mean(metrics.PeakContext)), ui.Section),
 			components.MetricCard("ctx overflows", fmt.Sprintf("%d", metrics.Overflows), overflowStyle(metrics.Overflows > 0)),
 		}
 		if throughput := model.PredictedTokensPerSecond(metrics); throughput > 0 {
@@ -93,8 +93,8 @@ func (v *View) buildTotals(width int) []string {
 		}
 		if len(metrics.Turns) > 0 {
 			cards = append(cards,
-				components.MetricCard("total turns", fmt.Sprintf("%d", model.SumInts(metrics.Turns)), ui.Section),
-				components.MetricCard("mean turns", fmt.Sprintf("%.1f", model.MeanInts(metrics.Turns)), ui.Section),
+				components.MetricCard("total turns", fmt.Sprintf("%d", model.Sum(metrics.Turns)), ui.Section),
+				components.MetricCard("mean turns", fmt.Sprintf("%.1f", model.Mean(metrics.Turns)), ui.Section),
 			)
 		}
 		lines = append(lines, components.Section(width, "Time & turns"), components.CardRow(cards, contentWidth), "")

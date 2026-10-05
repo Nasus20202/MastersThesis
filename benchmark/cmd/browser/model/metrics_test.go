@@ -182,8 +182,8 @@ func TestTotalMetricsAggregatesAllRuns(t *testing.T) {
 
 	metrics := TotalMetrics(read)
 	assert.Equal(t, 2, metrics.Attempts)
-	assert.Equal(t, 300, SumInts(metrics.Tokens))
-	assert.Equal(t, 200, SumInts(metrics.Prompt))
+	assert.Equal(t, 300, Sum(metrics.Tokens))
+	assert.Equal(t, 200, Sum(metrics.Prompt))
 	assert.Equal(t, 20.0, Sum(metrics.Durations))
 }
 

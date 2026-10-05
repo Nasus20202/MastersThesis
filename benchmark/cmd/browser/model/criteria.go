@@ -1,7 +1,9 @@
 package model
 
 import (
-	"sort"
+	"maps"
+	"slices"
+	"strings"
 )
 
 // CriteriaMatrix compares grading criteria across conditions for one scenario.
@@ -11,6 +13,11 @@ import (
 type CriteriaMatrix struct {
 	Agents []string
 	Rows   []CriteriaRow
+}
+
+type CriterionStat struct {
+	Passed int
+	Total  int
 }
 
 // CriteriaRow is one criterion's pass counts, keyed by condition.
@@ -35,27 +42,18 @@ func ScenarioCriteria(store *Store, runID, scenarioID string) CriteriaMatrix {
 // TaskCriteria builds the criterion × condition matrix for one scenario across
 // every run that contains it.
 func TaskCriteria(store *Store, scenarioID string) CriteriaMatrix {
-	var refs []ref
-	for _, run := range store.RunsForTask(scenarioID) {
-		if err := store.EnsureSnapshot(run.RunID); err != nil {
-			continue
-		}
-		for _, item := range store.AttemptsFor(run.RunID, scenarioID, "") {
-			refs = append(refs, ref{runID: run.RunID, ref: item})
-		}
-	}
-	return criteriaFromRefs(store, refs)
+	return criteriaFromRefs(store, taskRefs(store, scenarioID))
 }
 
 func criteriaFromRefs(store *Store, refs []ref) CriteriaMatrix {
 	cells := make(map[string]map[string]CriterionStat)
-	agents := make(map[string]struct{})
+	agents := make(map[string]bool)
 	for _, item := range refs {
 		attempt, err := store.Attempt(item.runID, item.ref)
 		if err != nil {
 			continue
 		}
-		agents[item.ref.Group] = struct{}{}
+		agents[item.ref.Group] = true
 		for _, criterion := range attempt.Grading().Criteria {
 			if cells[criterion.ID] == nil {
 				cells[criterion.ID] = make(map[string]CriterionStat)
@@ -69,19 +67,10 @@ func criteriaFromRefs(store *Store, refs []ref) CriteriaMatrix {
 		}
 	}
 
-	matrix := CriteriaMatrix{Agents: sortedKeys(agents)}
+	matrix := CriteriaMatrix{Agents: slices.Sorted(maps.Keys(agents))}
 	for id, byAgent := range cells {
 		matrix.Rows = append(matrix.Rows, CriteriaRow{ID: id, Cells: byAgent})
 	}
-	sort.Slice(matrix.Rows, func(i, j int) bool { return matrix.Rows[i].ID < matrix.Rows[j].ID })
+	slices.SortFunc(matrix.Rows, func(a, b CriteriaRow) int { return strings.Compare(a.ID, b.ID) })
 	return matrix
-}
-
-func sortedKeys(values map[string]struct{}) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

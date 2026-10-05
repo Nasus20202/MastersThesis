@@ -41,8 +41,6 @@ func (v *View) dashboardView(metrics model.Metrics, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// agentRankGraphs renders one line per agent combining the mean-score and
-// full-success bars, best mean score first.
 // rankGraphs renders mean score and full success per group, best first.
 func rankGraphs(title string, metrics map[string]model.Metrics, width int) string {
 	agents := make([]string, 0, len(metrics))
@@ -88,22 +86,22 @@ func (v *View) vitals(metrics model.Metrics) []string {
 		cards = append(cards, components.MetricCard("mean time", ui.Seconds(model.Mean(metrics.Durations)), ui.Section))
 	}
 	if len(metrics.Turns) > 0 {
-		cards = append(cards, components.MetricCard("mean turns", fmt.Sprintf("%.1f", model.MeanInts(metrics.Turns)), ui.Section))
+		cards = append(cards, components.MetricCard("mean turns", fmt.Sprintf("%.1f", model.Mean(metrics.Turns)), ui.Section))
 	}
 	if len(metrics.Tokens) > 0 {
-		cards = append(cards, components.MetricCard("mean tokens", fmt.Sprintf("%.0f", model.MeanInts(metrics.Tokens)), ui.Section))
+		cards = append(cards, components.MetricCard("mean tokens", fmt.Sprintf("%.0f", model.Mean(metrics.Tokens)), ui.Section))
 	}
 	if len(metrics.Prompt) > 0 {
-		cards = append(cards, components.MetricCard("mean in", fmt.Sprintf("%.0f", model.MeanInts(metrics.Prompt)), ui.Section))
+		cards = append(cards, components.MetricCard("mean in", fmt.Sprintf("%.0f", model.Mean(metrics.Prompt)), ui.Section))
 	}
 	if len(metrics.Completion) > 0 {
-		cards = append(cards, components.MetricCard("mean out", fmt.Sprintf("%.0f", model.MeanInts(metrics.Completion)), ui.Section))
+		cards = append(cards, components.MetricCard("mean out", fmt.Sprintf("%.0f", model.Mean(metrics.Completion)), ui.Section))
 	}
 	if rate := model.PredictedTokensPerSecond(metrics); rate > 0 {
 		cards = append(cards, components.MetricCard("out t/s", fmt.Sprintf("%.1f", rate), ui.Section))
 	}
 	if len(metrics.Cached) > 0 {
-		cards = append(cards, components.MetricCard("mean cached", fmt.Sprintf("%.0f", model.MeanInts(metrics.Cached)), ui.Section))
+		cards = append(cards, components.MetricCard("mean cached", fmt.Sprintf("%.0f", model.Mean(metrics.Cached)), ui.Section))
 	}
 	if len(metrics.CacheRatios) > 0 {
 		cards = append(cards, components.MetricCard("mean cache %", fmt.Sprintf("%.2f%%", model.Mean(metrics.CacheRatios)*100), ui.Section))

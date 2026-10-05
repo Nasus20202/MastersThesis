@@ -30,6 +30,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	current := m.current()
 	inChat := current.Kind == screens.Attempt && current.Focus == screens.FocusSecondary
 	onPreview := screens.IsList(current.Kind) && current.Focus == screens.FocusSecondary
+	// byFocus runs the action for the focused pane.
+	byFocus := func(chat, preview, list func()) {
+		switch {
+		case inChat:
+			chat()
+		case onPreview:
+			preview()
+		default:
+			list()
+		}
+	}
 
 	switch key {
 	case "q":
@@ -50,60 +61,24 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "esc", "backspace", "h":
 		m.goBack()
-	case "up", "k":
-		switch {
-		case inChat:
-			m.moveChat(-1)
-		case onPreview:
-			m.scrollPreview(-1)
-		default:
-			m.move(-1)
+	case "up", "k", "down", "j":
+		delta := 1
+		if key == "up" || key == "k" {
+			delta = -1
 		}
-	case "down", "j":
-		switch {
-		case inChat:
-			m.moveChat(1)
-		case onPreview:
-			m.scrollPreview(1)
-		default:
-			m.move(1)
+		byFocus(func() { m.moveChat(delta) }, func() { m.scrollPreview(delta) }, func() { m.move(delta) })
+	case "pgup", "pgdown":
+		sign := 1
+		if key == "pgup" {
+			sign = -1
 		}
-	case "pgup":
-		switch {
-		case inChat:
-			m.scrollChat(-m.chatPage())
-		case onPreview:
-			m.scrollPreview(-m.previewPage())
-		default:
-			m.move(-m.pageSize())
+		byFocus(func() { m.scrollChat(sign * m.chatPage()) }, func() { m.scrollPreview(sign * m.previewPage()) }, func() { m.move(sign * m.pageSize()) })
+	case "home", "g", "end", "G":
+		index := 0
+		if key == "end" || key == "G" {
+			index = -1
 		}
-	case "pgdown":
-		switch {
-		case inChat:
-			m.scrollChat(m.chatPage())
-		case onPreview:
-			m.scrollPreview(m.previewPage())
-		default:
-			m.move(m.pageSize())
-		}
-	case "home", "g":
-		switch {
-		case inChat:
-			m.chatJump(0)
-		case onPreview:
-			m.previewJump(0)
-		default:
-			m.jump(0)
-		}
-	case "end", "G":
-		switch {
-		case inChat:
-			m.chatJump(-1)
-		case onPreview:
-			m.previewJump(-1)
-		default:
-			m.jump(-1)
-		}
+		byFocus(func() { m.chatJump(index) }, func() { m.previewJump(index) }, func() { m.jump(index) })
 	case "enter":
 		if inChat {
 			m.toggleSelectedChat()

@@ -43,6 +43,11 @@ var (
 	BadgeNeutral = lipgloss.NewStyle().Bold(true).Foreground(Text).Background(Border).Padding(0, 1)
 )
 
+// Button renders a clickable control such as [× close].
+func Button(label string) string {
+	return TabIdle.Render("[") + AccentStyle.Bold(true).Render(label) + TabIdle.Render("]")
+}
+
 // Outcome colors a value by how close to success it is.
 func Outcome(fullSuccess bool, score float64) lipgloss.Style {
 	switch {

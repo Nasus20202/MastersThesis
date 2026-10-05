@@ -2,7 +2,8 @@ package app
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -34,14 +35,8 @@ type filterRow struct {
 const filterChromeHeight = 3 // heading, spacer and help line
 
 func (m *Model) openFilter() {
-	options := m.view.Store().TagOptions()
-	keys := make([]string, 0, len(options))
-	for key := range options {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
 	store := m.view.Store()
+	options := store.TagOptions()
 	active := store.TagFilter()
 	m.filterOptions = m.filterOptions[:0]
 	for _, model := range store.ModelOptions() {
@@ -49,15 +44,15 @@ func (m *Model) openFilter() {
 			key:      modelFilterKey,
 			value:    model,
 			model:    true,
-			selected: containsValue(store.ModelFilter(), model),
+			selected: slices.Contains(store.ModelFilter(), model),
 		})
 	}
-	for _, key := range keys {
+	for _, key := range slices.Sorted(maps.Keys(options)) {
 		for _, value := range options[key] {
 			m.filterOptions = append(m.filterOptions, filterOption{
 				key:      key,
 				value:    value,
-				selected: containsValue(active[key], value),
+				selected: slices.Contains(active[key], value),
 			})
 		}
 	}
@@ -241,33 +236,20 @@ func (m *Model) renderFilter() string {
 	return strings.Join(lines, "\n")
 }
 
+const (
+	resetLabel = "↺ reset"
+	closeLabel = "× close"
+)
+
 func (m *Model) filterButtonsLabel() string {
-	return m.filterResetLabel() + " " + m.filterCloseLabel()
+	return ui.Button(resetLabel) + " " + ui.Button(closeLabel)
 }
 
-func (m *Model) filterResetLabel() string {
-	return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("↺ reset") + ui.TabIdle.Render("]")
-}
-
-func (m *Model) filterCloseLabel() string {
-	return ui.TabIdle.Render("[") + ui.AccentStyle.Bold(true).Render("× close") + ui.TabIdle.Render("]")
-}
-
+// filterButtons returns the columns of the reset and close buttons.
 func (m *Model) filterButtons() (resetStart, resetEnd, closeStart, closeEnd int) {
-	closeLabel := m.filterCloseLabel()
-	resetLabel := m.filterResetLabel()
 	closeEnd = m.width
-	closeStart = closeEnd - lipgloss.Width(closeLabel)
+	closeStart = closeEnd - lipgloss.Width(ui.Button(closeLabel))
 	resetEnd = closeStart - 1
-	resetStart = resetEnd - lipgloss.Width(resetLabel)
+	resetStart = resetEnd - lipgloss.Width(ui.Button(resetLabel))
 	return resetStart, resetEnd, closeStart, closeEnd
-}
-
-func containsValue(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

@@ -2,7 +2,8 @@ package screens
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/browser/components"
@@ -129,13 +130,8 @@ func tagsText(tags map[string]string) string {
 	if len(tags) == 0 {
 		return "none"
 	}
-	keys := make([]string, 0, len(tags))
-	for key := range tags {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
+	parts := make([]string, 0, len(tags))
+	for _, key := range slices.Sorted(maps.Keys(tags)) {
 		parts = append(parts, key+"="+tags[key])
 	}
 	return strings.Join(parts, " · ")
