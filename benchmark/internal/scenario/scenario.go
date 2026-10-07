@@ -69,6 +69,8 @@ type Definition struct {
 	InjectFault Step              `yaml:"inject_fault,omitempty" validate:"omitempty,dive"`
 	VerifyFault Step              `yaml:"verify_fault,omitempty" validate:"omitempty,dive"`
 	Grading     []Criterion       `yaml:"grading" validate:"required,min=1,dive"`
+	// Path is the file the definition was loaded from.
+	Path string `yaml:"-"`
 }
 
 func (d *Definition) setDir(dir string) {

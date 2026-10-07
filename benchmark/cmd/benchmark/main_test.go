@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,21 +24,23 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "missing mode", want: "scenario, validation or corpus path is required"},
+		{name: "missing mode", want: "scenario, validation, merge or corpus path is required"},
 		{name: "both modes", args: []string{"--scenario", "scenario.yaml", "--validate", "validation.yaml"}, want: "cannot be combined"},
 		{name: "corpus with scenario", args: []string{"--scenario", "scenario.yaml", "--check-corpus", "scenarios"}, want: "cannot be combined"},
+		{name: "merge with scenario", args: []string{"--scenario", "scenario.yaml", "--merge", "run-1"}, want: "cannot be combined"},
 		{name: "invalid parallelism", args: []string{"--scenario", "scenario.yaml", "--parallel", "0"}, want: "parallel must be at least 1"},
 		{name: "invalid repeat", args: []string{"--scenario", "scenario.yaml", "--repeat", "0"}, want: "repeat must be at least 1"},
 		{name: "invalid agent", args: []string{"--scenario", "scenario.yaml", "--agent", "unknown"}, want: "unsupported agent"},
 		{name: "agent with validation", args: []string{"--validate", "validation.yaml", "--agent", "prompt"}, want: "only supported with scenario runs"},
 		{name: "unexpected argument", args: []string{"--scenario", "scenario.yaml", "unexpected"}, want: "unexpected arguments"},
 		{name: "blank path", args: []string{"--scenario", ""}, want: "value must not be blank"},
+		{name: "list without scenarios", args: []string{"--validate", "validation.yaml", "--list"}, want: "list requires scenario paths"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var logs bytes.Buffer
-			err := run(context.Background(), test.args, &logs)
+			err := run(context.Background(), test.args, io.Discard, &logs)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, test.want)
 		})
@@ -46,7 +49,7 @@ func TestRunRejectsInvalidArgumentsBeforeExecution(t *testing.T) {
 
 func TestRunHelpListsModesAndParameters(t *testing.T) {
 	var logs bytes.Buffer
-	err := run(context.Background(), []string{"--help"}, &logs)
+	err := run(context.Background(), []string{"--help"}, io.Discard, &logs)
 
 	assert.ErrorIs(t, err, flag.ErrHelp)
 	assert.Contains(t, logs.String(), "benchmark --config PATH ... --scenario PATH")
@@ -216,4 +219,24 @@ func writeCorpusValidation(t *testing.T, dir string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "validation.yaml"), []byte(corpusValidationYAML), 0o600))
+}
+
+func TestRunListPrintsScenariosMatchingTags(t *testing.T) {
+	var output, logs bytes.Buffer
+	err := run(context.Background(), []string{"--scenario", "../../scenarios", "--tag", "difficulty=hard", "--list"}, &output, &logs)
+	require.NoError(t, err)
+
+	paths := strings.Fields(output.String())
+	require.NotEmpty(t, paths)
+	all, err := scenario.LoadInputs([]string{"../../scenarios"})
+	require.NoError(t, err)
+	assert.Less(t, len(paths), len(all))
+	for _, path := range paths {
+		definition, err := scenario.Load(path)
+		require.NoError(t, err)
+		assert.Equal(t, "hard", definition.Tags["difficulty"], path)
+	}
+
+	err = run(context.Background(), []string{"--scenario", "../../scenarios", "--tag", "difficulty=none", "--list"}, &output, &logs)
+	assert.ErrorContains(t, err, "no scenarios match")
 }

@@ -13,6 +13,7 @@ TAG ?=
 BENCHMARK_PARALLEL ?= 4
 VALIDATION_PARALLEL ?= 4
 RESUME ?=
+RUNS ?=
 BROWSER_RESULTS ?= results
 BROWSER_SCENARIOS ?= scenarios
 RETRIEVAL_CONFIG := $(BENCHMARK_DIR)/retrieval.env
@@ -22,6 +23,7 @@ CHUNKING ?= all
 Q ?=
 SEARCH_ARGS ?=
 ANALYZE_ARGS ?=
+LLAMA_DEVICE ?= vulkan
 
 include $(LLAMA_CONFIG)
 include $(RETRIEVAL_CONFIG)
@@ -33,7 +35,8 @@ else
 COMPOSE_ENV_FILES := --env-file $(LLAMA_CONFIG) --env-file $(RETRIEVAL_CONFIG)
 endif
 
-COMPOSE := docker compose $(COMPOSE_ENV_FILES) -f $(BENCHMARK_DIR)/docker-compose.yaml
+COMPOSE_FILES := -f $(BENCHMARK_DIR)/docker-compose.yaml -f $(BENCHMARK_DIR)/docker-compose.$(LLAMA_DEVICE).yaml
+COMPOSE := docker compose $(COMPOSE_ENV_FILES) $(COMPOSE_FILES)
 
 export LLAMA_MODEL_REPOSITORY LLAMA_MODEL_REVISION LLAMA_MODEL_FILE LLAMA_MODEL_QUANTIZATION LLAMA_MODEL_SHA256 LLAMA_MODEL_DIR LLAMA_MODEL_NAME
 export LLAMA_MODEL_DRAFT_REPOSITORY LLAMA_MODEL_DRAFT_REVISION LLAMA_MODEL_DRAFT_FILE LLAMA_MODEL_DRAFT_SHA256
@@ -41,7 +44,7 @@ export LLAMA_SPEC_TYPE LLAMA_DRAFT_DIR LLAMA_SPEC_DRAFT_N_MAX
 export LLAMA_KV_UNIFIED_PER_SLOT LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
 export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
 export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
-export LLAMA_REASONING LLAMA_REASONING_BUDGET
+export LLAMA_REASONING LLAMA_REASONING_BUDGET LLAMA_BASE_URL LLAMA_DEVICE EMBEDDING_BASE_URL
 export CORPUS_REPOSITORY CORPUS_REVISION CORPUS_SUBTREE CORPUS_DIR
 export EMBEDDING_MODEL_REPOSITORY EMBEDDING_MODEL_REVISION EMBEDDING_MODEL_FILE EMBEDDING_MODEL_QUANTIZATION
 export EMBEDDING_MODEL_SHA256 EMBEDDING_MODEL_NAME EMBEDDING_MODEL_DIR EMBEDDING_PORT EMBEDDING_CTX_SIZE
@@ -60,14 +63,18 @@ endif
 BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
 BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 BENCHMARK_TAG_ARGS := $(foreach tag,$(TAG),--tag $(tag))
+# LLAMA_BASE_URL and EMBEDDING_BASE_URL point at already running
+# OpenAI-compatible llama-servers instead of starting the local ones.
+BENCHMARK_LLAMA := $(if $(LLAMA_BASE_URL),,llama-start)
+EMBEDDING_START := $(if $(EMBEDDING_BASE_URL),,embedding-start)
 # The RAG agent embeds its search queries, so start the embedding service only
 # when it is selected.
 comma := ,
-BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),embedding-start)
+BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),$(EMBEDDING_START))
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search analyze-runs
+.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search analyze-runs benchmark-list benchmark-merge
 
 help:
 	@printf '%s\n' 'Available commands:'
@@ -94,17 +101,23 @@ help:
 		'make build' 'Build the benchmark, browser, retrieval and analyze executables.' \
 		'make browser' 'Browse benchmark run history in a terminal UI.' \
 		'make benchmark' 'Run the default benchmark scenario.' \
+		'make benchmark-list' 'Print the scenario files selected by SCENARIO and TAG.' \
+		'make benchmark-merge' 'Merge the RUNS of one configuration, e.g. shards or repeats, into a new run.' \
 		'make benchmark-validate' 'Validate benchmark scenarios with declared repairs.' \
 		'make check-corpus' 'Load every scenario and its validation cases.'
 	@printf '%s\n' 'Benchmark parameters:'
 	@printf '  %-28s %s\n' \
 		'MODEL_PROFILE=PATH' 'Overlay a model profile, e.g. benchmark/model-profiles/qwen35-4b.env.' \
+		'LLAMA_BASE_URL=URL' 'Use a running llama-server instead of starting one (default: unset).' \
+		'EMBEDDING_BASE_URL=URL' 'Use a running embedding server instead of starting one (default: unset).' \
+		'LLAMA_DEVICE=NAME' 'llama.cpp server device: vulkan, cuda or cpu (default: vulkan).' \
 		'SCENARIO=PATH...' 'Select scenario directories/files; space-separated (default: scenarios/).' \
 		'VALIDATION=PATH...' 'Select validation directories/files; space-separated (default: scenarios/).' \
 		'AGENT=NAME[,NAME]' 'Select all, baseline, prompt, skill, or rag benchmark agents (default: all).' \
 		'CONFIG=PATH' 'Overlay a benchmark YAML config file.' \
 		'TAG=SELECTOR' 'Filter scenarios by tag selector, e.g. difficulty=hard (default: none).' \
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
+		'RUNS=RUN_ID...' 'Runs merged by benchmark-merge; space-separated.' \
 		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).' \
@@ -155,16 +168,16 @@ embedding-start:
 embedding-stop:
 	$(COMPOSE) stop llama-embedding
 
-retrieval-index: embedding-start
+retrieval-index: $(EMBEDDING_START)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/retrieval build-index $(BENCHMARK_CONFIG_ARGS) --chunking $(CHUNKING)
 
 retrieval-queries: llama-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/retrieval generate-queries --probes $(PROBES) --out $(QUERIES)
 
-retrieval-evaluate: embedding-start
+retrieval-evaluate: $(EMBEDDING_START)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/retrieval evaluate $(BENCHMARK_CONFIG_ARGS) --queries $(QUERIES)
 
-retrieval-search: embedding-start
+retrieval-search: $(EMBEDDING_START)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/retrieval search $(BENCHMARK_CONFIG_ARGS) $(SEARCH_ARGS) "$(Q)"
 
 analyze-runs:
@@ -191,8 +204,14 @@ build:
 browser:
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/browser --results $(BROWSER_RESULTS) --scenarios $(BROWSER_SCENARIOS)
 
-benchmark: registry-start llama-start $(BENCHMARK_EMBEDDING)
+benchmark: registry-start $(BENCHMARK_LLAMA) $(BENCHMARK_EMBEDDING)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
+
+benchmark-list:
+	@cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --list
+
+benchmark-merge:
+	@cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(foreach run,$(RUNS),--merge $(run))
 
 benchmark-validate: registry-start
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_VALIDATION_ARGS) $(BENCHMARK_TAG_ARGS) --parallel $(VALIDATION_PARALLEL) --repeat $(REPEAT)

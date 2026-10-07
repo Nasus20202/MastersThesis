@@ -63,7 +63,13 @@ func TestModelArtifactAndRuntimeSettings(t *testing.T) {
 func TestNewEmbeddingClientRecordsArtifact(t *testing.T) {
 	t.Setenv(envEmbeddingModelName, "")
 	_, err := NewEmbeddingClient()
-	assert.ErrorContains(t, err, envEmbeddingModelName+" and "+envEmbeddingPort+" are required")
+	assert.ErrorContains(t, err, envEmbeddingModelName+" and "+envEmbeddingPort+" or "+envEmbeddingBaseURL+" are required")
+
+	t.Setenv(envEmbeddingModelName, "embeddinggemma")
+	t.Setenv(envEmbeddingPort, "")
+	t.Setenv(envEmbeddingBaseURL, "http://127.0.0.1:8090")
+	_, err = NewEmbeddingClient()
+	require.NoError(t, err)
 
 	t.Setenv(envEmbeddingModelName, "embeddinggemma")
 	t.Setenv(envEmbeddingPort, "8081")
@@ -73,4 +79,18 @@ func TestNewEmbeddingClientRecordsArtifact(t *testing.T) {
 	client, err := NewEmbeddingClient()
 	require.NoError(t, err)
 	assert.Equal(t, "ggml-org/embeddinggemma@revision/model.gguf", client.Metadata().Artifact)
+}
+
+func TestNewChatClientRecordsRuntimeSettingsOnlyForLocalServer(t *testing.T) {
+	t.Setenv(envLlamaModelName, "gemma")
+	t.Setenv(envLlamaKVUnified, "32768")
+
+	client, err := NewChatClient()
+	require.NoError(t, err)
+	assert.Equal(t, "32768", client.Metadata().RuntimeSettings[envLlamaKVUnified])
+
+	t.Setenv(envLlamaBaseURL, "http://127.0.0.1:8090")
+	client, err = NewChatClient()
+	require.NoError(t, err)
+	assert.Nil(t, client.Metadata().RuntimeSettings)
 }

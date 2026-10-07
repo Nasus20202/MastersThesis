@@ -1,0 +1,322 @@
+name: Benchmark on Kaggle
+
+# Runs the benchmark in shards against one KaggleInferenceServer session
+# (github.com/Nasus20202/KaggleInferenceServer), stopped after the last shard.
+# Requires the secrets KAGGLE_API_TOKEN, KIS_API_KEY and KIS_NTFY_TOPIC.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model profile in benchmark/model-profiles, also the preset in .github/kis/config.toml
+        type: choice
+        options: [gemma-4-e2b, gemma-4-e4b, qwen35-4b, qwen35-9b]
+        default: gemma-4-e4b
+      scenario:
+        description: SCENARIO paths, space-separated, relative to benchmark/
+        default: scenarios/
+      tag:
+        description: TAG selectors, space-separated, e.g. difficulty=hard area=networking
+        default: ""
+      agent:
+        description: AGENT (all, baseline, prompt, skill, rag; comma-separated)
+        default: all
+      repeat:
+        description: REPEAT per scenario and agent
+        type: number
+        default: 1
+      config:
+        description: CONFIG overlay, relative to the repository root
+        default: ""
+      benchmark_parallel:
+        description: BENCHMARK_PARALLEL per shard, also its LLAMA_PARALLEL
+        type: number
+        default: 2
+      shards:
+        description: Parallel benchmark jobs
+        type: number
+        default: 16
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# Kaggle runs one server session per account.
+concurrency:
+  group: benchmark-kaggle
+
+env:
+  MODEL_PROFILE: benchmark/model-profiles/${{ inputs.model }}.env
+  SCENARIO: ${{ inputs.scenario }}
+  TAG: ${{ inputs.tag }}
+  AGENT: ${{ inputs.agent }}
+  REPEAT: ${{ inputs.repeat }}
+  CONFIG: ${{ inputs.config }}
+  BENCHMARK_PARALLEL: ${{ inputs.benchmark_parallel }}
+  # Recorded with the session stats; the kis steps and services below name it too,
+  # as docker:// and services cannot read env.
+  KIS_IMAGE: ghcr.io/nasus20202/kaggleinferenceserver:latest
+  # The kis proxy service serves the chat and embedding models.
+  LLAMA_BASE_URL: http://127.0.0.1:8090
+  EMBEDDING_BASE_URL: http://127.0.0.1:8090
+
+jobs:
+  prepare:
+    name: Build images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      rag: ${{ steps.plan.outputs.rag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: benchmark/go.mod
+          cache-dependency-path: benchmark/go.sum
+
+      - name: Plan shards
+        id: plan
+        env:
+          SHARDS: ${{ inputs.shards }}
+        run: |
+          echo "shards=$(scripts/benchmark-shards.sh "$SHARDS")" | tee -a "$GITHUB_OUTPUT"
+          [[ ",$AGENT," =~ ,(all|rag), ]] && rag=true || rag=false
+          echo "rag=$rag" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build sandbox image
+        uses: docker/build-push-action@v7
+        with:
+          context: benchmark/docker/sandbox
+          file: benchmark/docker/sandbox/Dockerfile.ubuntu-26.04
+          tags: benchmark-sandbox:ubuntu-26.04
+          load: true
+          cache-from: type=gha,scope=benchmark-sandbox:ubuntu-26.04
+          cache-to: type=gha,mode=max,scope=benchmark-sandbox:ubuntu-26.04
+
+      - name: Build setup image
+        uses: docker/build-push-action@v7
+        with:
+          context: benchmark/docker/setup
+          file: benchmark/docker/setup/Dockerfile.ubuntu-26.04
+          tags: benchmark-setup:ubuntu-26.04
+          load: true
+          cache-from: type=gha,scope=benchmark-setup:ubuntu-26.04
+          cache-to: type=gha,mode=max,scope=benchmark-setup:ubuntu-26.04
+
+      - name: Export images
+        run: docker save benchmark-sandbox:ubuntu-26.04 benchmark-setup:ubuntu-26.04 | gzip -1 > benchmark-images.tar.gz
+
+      - name: Upload images
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-images
+          path: benchmark-images.tar.gz
+          compression-level: 0
+          retention-days: 1
+
+  # Runs alongside inference-up; on a cache miss it embeds the corpus on Kaggle.
+  index:
+    name: Build retrieval index
+    needs: prepare
+    if: needs.prepare.outputs.rag == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Follows the ntfy topic to the session; 503 until it serves.
+    services:
+      kis: &kis-proxy
+        image: ghcr.io/nasus20202/kaggleinferenceserver:latest
+        command: proxy --host 0.0.0.0 --port 8080
+        ports: ["127.0.0.1:8090:8080"]
+        env:
+          KIS_API_KEY: ${{ secrets.KIS_API_KEY }}
+          KIS_NTFY_TOPIC: ${{ secrets.KIS_NTFY_TOPIC }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Restore index
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: benchmark/corpus/rag-*.sqlite
+          key: retrieval-index-kaggle-${{ hashFiles('benchmark/retrieval.env', 'benchmark/config.yaml', 'benchmark/internal/retrieval/**', 'benchmark/cmd/retrieval/**', '.github/kis/config.toml') }}
+
+      - name: Set up Go
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: benchmark/go.mod
+          cache-dependency-path: benchmark/go.sum
+
+      - name: Build index
+        if: steps.cache.outputs.cache-hit != 'true'
+        timeout-minutes: 45
+        run: |
+          make corpus-download
+          .github/scripts/kis-wait.sh "$RUNNER_TEMP/server.json"
+          make retrieval-index CHUNKING="$(yq .retrieval.chunking benchmark/config.yaml)"
+
+      - name: Upload index
+        uses: actions/upload-artifact@v7
+        with:
+          name: retrieval-index
+          path: benchmark/corpus/rag-*.sqlite
+          retention-days: 1
+
+  inference-up:
+    name: Start Kaggle inference
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Start model
+        uses: docker://ghcr.io/nasus20202/kaggleinferenceserver:latest
+        with:
+          args: up ${{ inputs.model }}
+        env: &kis-env
+          KIS_CONFIG: /github/workspace/.github/kis/config.toml
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KIS_API_KEY: ${{ secrets.KIS_API_KEY }}
+          KIS_NTFY_TOPIC: ${{ secrets.KIS_NTFY_TOPIC }}
+          KAGGLE_CONFIG_DIR: /tmp/kaggle # the image's user cannot write /github/home
+
+  benchmark:
+    name: Shard ${{ strategy.job-index }}
+    # Runs alongside inference-up; each shard waits for the session.
+    needs: [prepare, index]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.index.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        scenarios: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    services:
+      kis: *kis-proxy
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: benchmark/go.mod
+          cache-dependency-path: benchmark/go.sum
+
+      - name: Install Kind and kubectl
+        uses: helm/kind-action@v1
+        with:
+          # renovate: datasource=github-releases depName=kubernetes-sigs/kind
+          version: v0.33.0
+          install_only: true
+          # renovate: datasource=github-releases depName=kubernetes/kubernetes
+          kubectl_version: v1.37.0
+
+      - name: Download images
+        uses: actions/download-artifact@v8
+        with:
+          name: benchmark-images
+
+      - name: Load images
+        run: gunzip -c benchmark-images.tar.gz | docker load && rm benchmark-images.tar.gz
+
+      - name: Download retrieval index
+        if: needs.prepare.outputs.rag == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: retrieval-index
+          path: benchmark/corpus
+
+      - name: Build benchmark
+        run: make build
+
+      - name: Wait for the model
+        timeout-minutes: 15
+        run: .github/scripts/kis-wait.sh "benchmark/results/server-${{ strategy.job-index }}.json"
+
+      # The shard's files are already tag-filtered; LLAMA_PARALLEL caps the
+      # concurrent agents.
+      - name: Run benchmark
+        env:
+          SCENARIO: ${{ matrix.scenarios }}
+          TAG: ""
+        run: make benchmark LLAMA_PARALLEL="$BENCHMARK_PARALLEL"
+
+      - name: Clean benchmark resources
+        if: always()
+        run: make docker-cleanup
+
+      - name: Upload shard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-results-${{ strategy.job-index }}
+          path: benchmark/results/
+          if-no-files-found: ignore
+
+  inference-down:
+    name: Stop Kaggle inference
+    needs: [inference-up, benchmark]
+    if: ${{ always() && needs.inference-up.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Stop model
+        uses: docker://ghcr.io/nasus20202/kaggleinferenceserver:latest
+        with:
+          args: down
+        env: *kis-env
+
+  aggregate:
+    name: Aggregate results
+    needs: [benchmark, inference-down]
+    if: ${{ always() && needs.benchmark.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: benchmark/go.mod
+          cache-dependency-path: benchmark/go.sum
+
+      - name: Download shard results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: benchmark-results-*
+          path: benchmark/results
+          merge-multiple: true
+
+      - name: Merge shard runs
+        id: merge
+        run: |
+          run=$(make -s benchmark-merge RUNS="$(cd benchmark/results && ls -d run-*)")
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          scripts/benchmark-summary.sh "benchmark/results/$run" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-results
+          path: |
+            benchmark/results/${{ steps.merge.outputs.run }}
+            benchmark/results/server-*.json
