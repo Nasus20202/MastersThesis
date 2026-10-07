@@ -18,6 +18,7 @@ const (
 	envLlamaSpecDraftNMax   = "LLAMA_SPEC_DRAFT_N_MAX"
 	envLlamaKVUnified       = "LLAMA_KV_UNIFIED_PER_SLOT"
 	envLlamaGPULayers       = "LLAMA_GPU_LAYERS"
+	envLlamaDevice          = "LLAMA_DEVICE"
 	envLlamaVulkanDevice    = "LLAMA_VULKAN_DEVICE"
 	envLlamaFlashAttention  = "LLAMA_FLASH_ATTN"
 	envLlamaCacheTypeK      = "LLAMA_CACHE_TYPE_K"
@@ -26,9 +27,11 @@ const (
 	envLlamaReasoning       = "LLAMA_REASONING"
 	envLlamaReasoningBudget = "LLAMA_REASONING_BUDGET"
 	envLlamaHost            = "LLAMA_HOST"
+	envLlamaBaseURL         = "LLAMA_BASE_URL"
 
 	envEmbeddingModelName  = "EMBEDDING_MODEL_NAME"
 	envEmbeddingPort       = "EMBEDDING_PORT"
+	envEmbeddingBaseURL    = "EMBEDDING_BASE_URL"
 	envEmbeddingRepository = "EMBEDDING_MODEL_REPOSITORY"
 	envEmbeddingRevision   = "EMBEDDING_MODEL_REVISION"
 	envEmbeddingFile       = "EMBEDDING_MODEL_FILE"
@@ -39,6 +42,7 @@ const (
 var llamaRuntimeEnvNames = [...]string{
 	envLlamaKVUnified,
 	envLlamaGPULayers,
+	envLlamaDevice,
 	envLlamaVulkanDevice,
 	envLlamaParallel,
 	envLlamaFlashAttention,

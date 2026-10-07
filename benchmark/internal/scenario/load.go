@@ -17,6 +17,7 @@ func Load(path string) (Definition, error) {
 		return Definition{}, err
 	}
 	definition.setDir(dir)
+	definition.Path = path
 	logger.Info("scenario loaded", "id", definition.ID)
 	return definition, nil
 }

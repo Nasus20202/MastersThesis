@@ -30,25 +30,34 @@ func NewChatClient() (llama.Adapter, error) {
 	if model == "" {
 		return llama.Adapter{}, fmt.Errorf("%s is required", envLlamaModelName)
 	}
+	metadata := inference.Metadata{
+		Model:        model,
+		Artifact:     artifact(envLlamaModelRepository, envLlamaModelRevision, envLlamaModelFile),
+		Quantization: env(envLlamaModelQuant),
+		SHA256:       env(envLlamaModelSHA256),
+	}
+	// A server at LLAMA_BASE_URL is started elsewhere, so the LLAMA_* runtime
+	// variables do not describe it.
+	if baseURL := env(envLlamaBaseURL); baseURL != "" {
+		return newAdapter(baseURL, metadata)
+	}
 	port := env(envLlamaPort)
 	if port == "" {
 		port = "8080"
 	}
-	return newAdapter(port, inference.Metadata{
-		Model:           model,
-		Artifact:        artifact(envLlamaModelRepository, envLlamaModelRevision, envLlamaModelFile),
-		Quantization:    env(envLlamaModelQuant),
-		SHA256:          env(envLlamaModelSHA256),
-		RuntimeSettings: runtimeSettings(),
-	})
+	metadata.RuntimeSettings = runtimeSettings()
+	return newAdapter(localURL(port), metadata)
 }
 
 func NewEmbeddingClient() (llama.Adapter, error) {
-	model, port := env(envEmbeddingModelName), env(envEmbeddingPort)
-	if model == "" || port == "" {
-		return llama.Adapter{}, fmt.Errorf("%s and %s are required", envEmbeddingModelName, envEmbeddingPort)
+	model, port, baseURL := env(envEmbeddingModelName), env(envEmbeddingPort), env(envEmbeddingBaseURL)
+	if model == "" || port == "" && baseURL == "" {
+		return llama.Adapter{}, fmt.Errorf("%s and %s or %s are required", envEmbeddingModelName, envEmbeddingPort, envEmbeddingBaseURL)
 	}
-	return newAdapter(port, inference.Metadata{
+	if baseURL == "" {
+		baseURL = localURL(port)
+	}
+	return newAdapter(baseURL, inference.Metadata{
 		Model:        model,
 		Artifact:     artifact(envEmbeddingRepository, envEmbeddingRevision, envEmbeddingFile),
 		Quantization: env(envEmbeddingQuant),
@@ -56,13 +65,17 @@ func NewEmbeddingClient() (llama.Adapter, error) {
 	})
 }
 
-func newAdapter(port string, metadata inference.Metadata) (llama.Adapter, error) {
+func localURL(port string) string {
 	host := env(envLlamaClientHost)
 	if host == "" {
 		host = "127.0.0.1"
 	}
+	return fmt.Sprintf("http://%s:%s", host, port)
+}
+
+func newAdapter(baseURL string, metadata inference.Metadata) (llama.Adapter, error) {
 	client, err := llama.NewClient(llama.Config{
-		BaseURL:  fmt.Sprintf("http://%s:%s", host, port),
+		BaseURL:  baseURL,
 		Model:    metadata.Model,
 		Metadata: metadata,
 	})
