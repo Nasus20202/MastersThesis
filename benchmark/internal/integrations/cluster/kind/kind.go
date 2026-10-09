@@ -110,8 +110,12 @@ func (c *Cluster) generateInternalKubeconfig(ctx context.Context) error {
 
 func (c *Cluster) run(ctx context.Context, args ...string) (command.Result, error) {
 	spec := command.Spec{Program: program, Args: args}
-	if args[0] == "create" {
+	// Without --kubeconfig, kind locks the shared ~/.kube/config, so parallel
+	// deletes collide on config.lock.
+	if args[0] == "create" || args[0] == "delete" {
 		spec.Args = append(spec.Args, "--kubeconfig", c.kubeconfigPath)
+	}
+	if args[0] == "create" {
 		if c.configPath != "" {
 			spec.Args = append(spec.Args, "--config", c.configPath)
 			spec.Dir = filepath.Dir(c.configPath)
