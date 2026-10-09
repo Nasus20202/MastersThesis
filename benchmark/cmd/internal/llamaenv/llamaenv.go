@@ -86,9 +86,10 @@ func newOpenAIChatClient() (ChatClient, error) {
 		return nil, fmt.Errorf("%s and %s are required when %s=%s", envOpenAIBaseURL, envOpenAIModel, envInferenceProvider, providerOpenAI)
 	}
 	client, err := openai.NewClient(openai.Config{
-		BaseURL: baseURL,
-		Model:   model,
-		APIKey:  env(envOpenAIAPIKey),
+		BaseURL:         baseURL,
+		Model:           model,
+		APIKey:          env(envOpenAIAPIKey),
+		ReasoningEffort: env(envOpenAIEffort),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create openai client for %s: %w", model, err)

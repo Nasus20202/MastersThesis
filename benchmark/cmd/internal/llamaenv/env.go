@@ -33,6 +33,7 @@ const (
 	envOpenAIBaseURL     = "OPENAI_BASE_URL"
 	envOpenAIAPIKey      = "OPENAI_API_KEY" //nolint:gosec // variable name, not a credential
 	envOpenAIModel       = "OPENAI_MODEL"
+	envOpenAIEffort      = "OPENAI_REASONING_EFFORT"
 
 	envEmbeddingModelName  = "EMBEDDING_MODEL_NAME"
 	envEmbeddingPort       = "EMBEDDING_PORT"

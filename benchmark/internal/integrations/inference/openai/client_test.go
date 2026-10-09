@@ -210,3 +210,25 @@ func TestParseRetryAfter(t *testing.T) {
 	assert.Zero(t, parseRetryAfter(""))
 	assert.Zero(t, parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT"))
 }
+
+func TestReasoningEffortIsSentAndRecorded(t *testing.T) {
+	t.Parallel()
+
+	var effort any
+	client, err := NewClient(Config{
+		BaseURL:         "https://api.test/v1",
+		Model:           "gpt-test",
+		ReasoningEffort: "low",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			effort = payload["reasoning_effort"]
+			return testResponse(http.StatusOK, `{"id":"ok","choices":[{"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}`)
+		})},
+	})
+	require.NoError(t, err)
+	_, err = client.Chat(context.Background(), []inference.Message{{Role: "user", Content: "hi"}}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "low", effort)
+	assert.Equal(t, map[string]string{"reasoning_effort": "low"}, client.Metadata().RuntimeSettings)
+}

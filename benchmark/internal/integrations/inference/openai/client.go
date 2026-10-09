@@ -27,10 +27,13 @@ const (
 
 type Config struct {
 	// BaseURL includes the API version prefix, e.g. https://api.openai.com/v1.
-	BaseURL    string
-	Model      string
-	APIKey     string
-	HTTPClient *http.Client
+	BaseURL string
+	Model   string
+	APIKey  string
+	// ReasoningEffort is sent as reasoning_effort when set (low, medium, high);
+	// empty leaves the provider default.
+	ReasoningEffort string
+	HTTPClient      *http.Client
 	// RetryBaseDelay is the first backoff between retries; it doubles on each
 	// retry. Zero means one second.
 	RetryBaseDelay time.Duration
@@ -41,6 +44,7 @@ type Client struct {
 	baseURL    *url.URL
 	model      string
 	apiKey     string
+	effort     string
 	httpClient *http.Client
 	retryDelay time.Duration
 }
@@ -74,11 +78,15 @@ func NewClient(cfg Config) (*Client, error) {
 	if retryDelay <= 0 {
 		retryDelay = time.Second
 	}
-	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, httpClient: httpClient, retryDelay: retryDelay}, nil
+	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, effort: cfg.ReasoningEffort, httpClient: httpClient, retryDelay: retryDelay}, nil
 }
 
 func (c *Client) Metadata() inference.Metadata {
-	return inference.Metadata{Provider: "openai", Model: c.model}
+	metadata := inference.Metadata{Provider: "openai", Model: c.model}
+	if c.effort != "" {
+		metadata.RuntimeSettings = map[string]string{"reasoning_effort": c.effort}
+	}
+	return metadata
 }
 
 // Chat sends a non-streaming chat completion request.
@@ -94,6 +102,7 @@ func (c *Client) Chat(ctx context.Context, messages []inference.Message, tools [
 		Temperature:         options.Temperature,
 		MaxCompletionTokens: options.MaxTokens,
 		Seed:                options.Seed,
+		ReasoningEffort:     c.effort,
 	}, &response)
 	if err != nil {
 		return inference.Result{}, err

@@ -50,6 +50,7 @@ type chatRequest struct {
 	Temperature         *float64  `json:"temperature,omitempty"`
 	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
 	Seed                *int      `json:"seed,omitempty"`
+	ReasoningEffort     string    `json:"reasoning_effort,omitempty"`
 }
 
 type chatResponse struct {
