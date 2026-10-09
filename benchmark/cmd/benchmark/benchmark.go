@@ -11,6 +11,7 @@ import (
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/inferenceenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
@@ -18,6 +19,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster/kind"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox/docker"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/orchestration"
@@ -180,12 +182,18 @@ func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.
 
 // readSampling records the sampler settings the inference server applies to
 // the profile's model. It also fails the run early when the server is down.
+// Providers that do not expose their sampler (OpenAI-compatible APIs) record
+// none.
 func readSampling(ctx context.Context) (*results.SamplingProvenance, error) {
-	client, err := llamaenv.NewChatClient()
+	client, err := inferenceenv.NewChatClient()
 	if err != nil {
 		return nil, err
 	}
-	sampling, err := client.Sampling(ctx)
+	reader, ok := client.(inference.SamplingReader)
+	if !ok {
+		return nil, nil
+	}
+	sampling, err := reader.Sampling(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read sampling settings: %w; start the server with make llama-start", err)
 	}

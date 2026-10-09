@@ -7,7 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/inferenceenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/retrieval/evaluation"
 )
 
@@ -34,7 +34,7 @@ func generateQueries(ctx context.Context, probesPath, outPath string) error {
 	if err != nil {
 		return err
 	}
-	client, err := llamaenv.NewChatClient()
+	client, err := inferenceenv.NewChatClient()
 	if err != nil {
 		return err
 	}

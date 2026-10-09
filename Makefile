@@ -44,6 +44,7 @@ export LLAMA_SPEC_TYPE LLAMA_DRAFT_DIR LLAMA_SPEC_DRAFT_N_MAX
 export LLAMA_KV_UNIFIED_PER_SLOT LLAMA_GPU_LAYERS LLAMA_VULKAN_DEVICE LLAMA_PARALLEL
 export LLAMA_FLASH_ATTN LLAMA_CACHE_TYPE_K LLAMA_CACHE_TYPE_V LLAMA_HOST LLAMA_PORT
 export LLAMA_PUBLISH_HOST LLAMA_MODELS_MAX LLAMA_CLIENT_HOST
+export INFERENCE_PROVIDER OPENAI_BASE_URL OPENAI_MODEL OPENAI_API_KEY OPENAI_REASONING_EFFORT
 export LLAMA_REASONING LLAMA_REASONING_BUDGET LLAMA_BASE_URL LLAMA_DEVICE EMBEDDING_BASE_URL
 export CORPUS_REPOSITORY CORPUS_REVISION CORPUS_SUBTREE CORPUS_DIR
 export EMBEDDING_MODEL_REPOSITORY EMBEDDING_MODEL_REVISION EMBEDDING_MODEL_FILE EMBEDDING_MODEL_QUANTIZATION
@@ -64,8 +65,9 @@ BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
 BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 BENCHMARK_TAG_ARGS := $(foreach tag,$(TAG),--tag $(tag))
 # LLAMA_BASE_URL and EMBEDDING_BASE_URL point at already running
-# OpenAI-compatible llama-servers instead of starting the local ones.
-BENCHMARK_LLAMA := $(if $(LLAMA_BASE_URL),,llama-start)
+# OpenAI-compatible llama-servers instead of starting the local ones. A profile
+# with INFERENCE_PROVIDER=openai talks to a hosted API, so no server starts.
+BENCHMARK_LLAMA := $(if $(or $(LLAMA_BASE_URL),$(filter openai,$(INFERENCE_PROVIDER))),,llama-start)
 EMBEDDING_START := $(if $(EMBEDDING_BASE_URL),,embedding-start)
 # The RAG agent embeds its search queries, so start the embedding service only
 # when it is selected.

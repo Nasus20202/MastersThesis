@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
-	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
+	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/inferenceenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/baseline"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
@@ -109,7 +109,7 @@ func NewFactory(name Name, benchmarkConfig benchmarkconfig.Config, search *ragag
 	default:
 		return nil, fmt.Errorf("unsupported agent %q", name)
 	}
-	inferenceClient, err := llamaenv.NewChatClient()
+	inferenceClient, err := inferenceenv.NewChatClient()
 	if err != nil {
 		return nil, err
 	}
