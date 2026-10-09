@@ -76,7 +76,7 @@ func toLlamaToolCalls(calls []inference.ToolCall) []ToolCall {
 		converted[index] = ToolCall{
 			ID:       call.ID,
 			Type:     call.Type,
-			Function: ToolCallFunction{Name: call.Name, Arguments: call.Arguments},
+			Function: ToolCallFunction{Name: call.Name, Arguments: call.ReplayArguments()},
 		}
 	}
 	return converted
