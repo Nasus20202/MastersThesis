@@ -49,7 +49,9 @@ func TestChatSendsRequestAndDecodesResponse(t *testing.T) {
 			messages := payload["messages"].([]any)
 			assistant := messages[1].(map[string]any)
 			assert.NotContains(t, assistant, "reasoning_content")
-			assert.Equal(t, "call-1", assistant["tool_calls"].([]any)[0].(map[string]any)["id"])
+			calls := assistant["tool_calls"].([]any)
+			assert.Equal(t, "call-1", calls[0].(map[string]any)["id"])
+			assert.Equal(t, "{}", calls[1].(map[string]any)["function"].(map[string]any)["arguments"])
 			tool := payload["tools"].([]any)[0].(map[string]any)
 			assert.Equal(t, "function", tool["type"])
 
@@ -69,7 +71,7 @@ func TestChatSendsRequestAndDecodesResponse(t *testing.T) {
 	result, err := client.Chat(context.Background(),
 		[]inference.Message{
 			{Role: "user", Content: "Inspect"},
-			{Role: "assistant", ReasoningContent: "secret", ToolCalls: []inference.ToolCall{{ID: "call-1", Type: "function", Name: "shell", Arguments: "{}"}}},
+			{Role: "assistant", ReasoningContent: "secret", ToolCalls: []inference.ToolCall{{ID: "call-1", Type: "function", Name: "shell", Arguments: "{}"}, {ID: "call-cut", Type: "function", Name: "shell", Arguments: `{"command":"kubectl get`}}},
 		},
 		[]inference.Tool{{Name: "shell", Parameters: json.RawMessage(`{"type":"object"}`)}},
 		inference.Options{MaxTokens: &maxTokens},

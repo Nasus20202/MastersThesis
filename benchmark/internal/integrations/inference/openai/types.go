@@ -79,7 +79,7 @@ func toMessages(messages []inference.Message) []message {
 			converted[i].ToolCalls = append(converted[i].ToolCalls, toolCall{
 				ID:       call.ID,
 				Type:     call.Type,
-				Function: toolFunction{Name: call.Name, Arguments: call.Arguments},
+				Function: toolFunction{Name: call.Name, Arguments: call.ReplayArguments()},
 			})
 		}
 	}
