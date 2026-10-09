@@ -32,12 +32,8 @@ type ToolCall struct {
 	Arguments string `json:"arguments"`
 }
 
-// ReplayArguments is the argument string to send when the call is replayed in
-// a later request. Arguments that are not valid JSON, for example after a
-// generation cut off inside the call, are replayed as an empty object: servers
-// that parse earlier calls with the chat template reject the whole request
-// otherwise. The call already got a "malformed arguments" result, and the
-// recorded call keeps its original arguments.
+// ReplayArguments is the argument string to send when the call is replayed:
+// invalid JSON, such as a call cut off mid-generation, becomes "{}" (D-043).
 func (c ToolCall) ReplayArguments() string {
 	if json.Valid([]byte(c.Arguments)) {
 		return c.Arguments

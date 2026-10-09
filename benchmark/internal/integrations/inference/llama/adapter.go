@@ -70,8 +70,6 @@ func toLlamaMessages(messages []inference.Message) []Message {
 	return converted
 }
 
-// toLlamaToolCalls replays earlier tool calls in the request; malformed
-// arguments are replayed as an empty object (see ToolCall.ReplayArguments).
 func toLlamaToolCalls(calls []inference.ToolCall) []ToolCall {
 	converted := make([]ToolCall, len(calls))
 	for index, call := range calls {
