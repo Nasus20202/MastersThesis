@@ -159,3 +159,35 @@ func TestAdapterPreservesMissingOptionalResponseFields(t *testing.T) {
 	assert.Nil(t, response.Usage)
 	assert.Nil(t, response.Timings)
 }
+
+func TestAdapterReplaysMalformedToolCallArgumentsAsEmptyObject(t *testing.T) {
+	var replayed []string
+	client, err := NewClient(Config{
+		BaseURL: "http://llama.test",
+		Model:   "gemma-test",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			var payload ChatRequest
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			for _, call := range payload.Messages[1].ToolCalls {
+				replayed = append(replayed, call.Function.Arguments)
+			}
+			return testResponse(http.StatusOK, `{"id":"chatcmpl-replay","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}`)
+		})},
+	})
+	require.NoError(t, err)
+	adapter, err := NewAdapter(client)
+	require.NoError(t, err)
+
+	history := []inference.Message{
+		{Role: "user", Content: "Inspect"},
+		{Role: "assistant", ToolCalls: []inference.ToolCall{
+			{ID: "valid", Type: "function", Name: "bash", Arguments: `{"command":"true"}`},
+			{ID: "cut-off", Type: "function", Name: "bash", Arguments: `{"command":"kubectl get`},
+			{ID: "empty", Type: "function", Name: "bash", Arguments: ""},
+		}},
+	}
+	_, err = adapter.Chat(context.Background(), history, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{`{"command":"true"}`, `{}`, `{}`}, replayed)
+	assert.Equal(t, `{"command":"kubectl get`, history[1].ToolCalls[1].Arguments, "the recorded call keeps its original arguments")
+}

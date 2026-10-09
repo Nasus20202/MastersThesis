@@ -2,6 +2,7 @@ package llama
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
@@ -70,13 +71,22 @@ func toLlamaMessages(messages []inference.Message) []Message {
 	return converted
 }
 
+// toLlamaToolCalls replays earlier tool calls in the request. The server
+// parses their arguments with the chat template and rejects the whole request
+// when they are not valid JSON, for example after a generation cut off inside
+// a tool call. Such calls already got a "malformed arguments" result, so they
+// are replayed with empty arguments; the recorded evidence keeps the original.
 func toLlamaToolCalls(calls []inference.ToolCall) []ToolCall {
 	converted := make([]ToolCall, len(calls))
 	for index, call := range calls {
+		arguments := call.Arguments
+		if !json.Valid([]byte(arguments)) {
+			arguments = "{}"
+		}
 		converted[index] = ToolCall{
 			ID:       call.ID,
 			Type:     call.Type,
-			Function: ToolCallFunction{Name: call.Name, Arguments: call.Arguments},
+			Function: ToolCallFunction{Name: call.Name, Arguments: arguments},
 		}
 	}
 	return converted
