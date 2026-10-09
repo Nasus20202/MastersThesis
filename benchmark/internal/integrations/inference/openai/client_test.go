@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/stretchr/testify/assert"
@@ -138,4 +139,74 @@ func TestChatMapsErrors(t *testing.T) {
 	assert.ErrorIs(t, err, inference.ErrContextOverflow)
 
 	assert.ErrorContains(t, chat(http.StatusOK, `{"choices":[]}`), "no choices")
+}
+
+func TestChatRetriesTransientErrors(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	client, err := NewClient(Config{
+		BaseURL:        "https://api.test/v1",
+		Model:          "gpt-test",
+		RetryBaseDelay: time.Nanosecond,
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			calls++
+			switch calls {
+			case 1:
+				return testResponse(http.StatusTooManyRequests, "slow down")
+			case 2:
+				return nil, errors.New("connection reset")
+			case 3:
+				return testResponse(http.StatusServiceUnavailable, "busy")
+			}
+			return testResponse(http.StatusOK, `{"id":"ok","choices":[{"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}`)
+		})},
+	})
+	require.NoError(t, err)
+
+	result, err := client.Chat(context.Background(), []inference.Message{{Role: "user", Content: "hi"}}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result.ID)
+	assert.Equal(t, 4, calls)
+}
+
+func TestChatDoesNotRetryClientErrorsAndGivesUp(t *testing.T) {
+	t.Parallel()
+
+	for name, test := range map[string]struct {
+		status int
+		calls  int
+	}{
+		"bad request":  {http.StatusBadRequest, 1},
+		"unauthorized": {http.StatusUnauthorized, 1},
+		"server error": {http.StatusInternalServerError, maxAttempts},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			client, err := NewClient(Config{
+				BaseURL:        "https://api.test/v1",
+				Model:          "gpt-test",
+				RetryBaseDelay: time.Nanosecond,
+				HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					calls++
+					return testResponse(test.status, "nope")
+				})},
+			})
+			require.NoError(t, err)
+			_, err = client.Chat(context.Background(), []inference.Message{{Role: "user", Content: "hi"}}, nil, inference.Options{})
+			var httpErr *HTTPError
+			require.ErrorAs(t, err, &httpErr)
+			assert.Equal(t, test.status, httpErr.StatusCode)
+			assert.Equal(t, test.calls, calls)
+		})
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 3*time.Second, parseRetryAfter("3"))
+	assert.Equal(t, maxRetryAfter, parseRetryAfter("86400"))
+	assert.Zero(t, parseRetryAfter(""))
+	assert.Zero(t, parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT"))
 }

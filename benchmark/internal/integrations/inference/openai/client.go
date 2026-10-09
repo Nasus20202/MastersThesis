@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 const (
 	chatCompletionsPath = "/chat/completions"
 	maxErrorBodyBytes   = 8 << 10
+	maxAttempts         = 5
+	maxRetryAfter       = time.Minute
 )
 
 type Config struct {
@@ -28,6 +31,9 @@ type Config struct {
 	Model      string
 	APIKey     string
 	HTTPClient *http.Client
+	// RetryBaseDelay is the first backoff between retries; it doubles on each
+	// retry. Zero means one second.
+	RetryBaseDelay time.Duration
 }
 
 // Client implements inference.Client and inference.MetadataProvider.
@@ -36,6 +42,7 @@ type Client struct {
 	model      string
 	apiKey     string
 	httpClient *http.Client
+	retryDelay time.Duration
 }
 
 // NewClient validates cfg and returns a client for the configured API.
@@ -63,7 +70,11 @@ func NewClient(cfg Config) (*Client, error) {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, httpClient: httpClient}, nil
+	retryDelay := cfg.RetryBaseDelay
+	if retryDelay <= 0 {
+		retryDelay = time.Second
+	}
+	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, httpClient: httpClient, retryDelay: retryDelay}, nil
 }
 
 func (c *Client) Metadata() inference.Metadata {
@@ -99,17 +110,42 @@ func (c *Client) Chat(ctx context.Context, messages []inference.Message, tools [
 	}, nil
 }
 
+// post retries rate limits, server errors and transport failures with an
+// exponential backoff, or the server's Retry-After, until maxAttempts.
 func (c *Client) post(ctx context.Context, path string, payload, result any) error {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode openai request: %w", err)
 	}
+	logger := slog.With("path", path)
+	delay := c.retryDelay
+	for attempt := 1; ; attempt++ {
+		retryAfter, retryable, err := c.postOnce(ctx, path, encoded, result)
+		if err == nil || !retryable || attempt == maxAttempts || ctx.Err() != nil {
+			return err
+		}
+		if retryAfter <= 0 {
+			retryAfter = delay
+		}
+		logger.WarnContext(ctx, "openai request will be retried", "attempt", attempt, "wait", retryAfter, "error", err)
+		select {
+		case <-time.After(retryAfter):
+		case <-ctx.Done():
+			return err
+		}
+		delay *= 2
+	}
+}
+
+// postOnce sends one request and reports whether a failure is worth retrying
+// and how long the server asked to wait.
+func (c *Client) postOnce(ctx context.Context, path string, encoded []byte, result any) (retryAfter time.Duration, retryable bool, err error) {
 	endpoint := *c.baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + path
 	endpoint.RawPath = ""
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(encoded))
 	if err != nil {
-		return fmt.Errorf("create openai request: %w", err)
+		return 0, false, fmt.Errorf("create openai request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
@@ -123,7 +159,7 @@ func (c *Client) post(ctx context.Context, path string, payload, result any) err
 	if err != nil {
 		requestErr := fmt.Errorf("call openai endpoint: %w", err)
 		logger.ErrorContext(ctx, "openai request failed", "duration", time.Since(started), "error", requestErr)
-		return requestErr
+		return 0, ctx.Err() == nil, requestErr
 	}
 	defer response.Body.Close()
 	logger.DebugContext(ctx, "openai response received", "status", response.StatusCode, "duration", time.Since(started))
@@ -131,12 +167,30 @@ func (c *Client) post(ctx context.Context, path string, payload, result any) err
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		httpErr := newHTTPError(response)
 		logger.ErrorContext(ctx, "openai request returned an error", "status", response.StatusCode, "error", httpErr)
-		return httpErr
+		return parseRetryAfter(response.Header.Get("Retry-After")), isRetryableStatus(response.StatusCode), httpErr
 	}
 	if err := json.NewDecoder(response.Body).Decode(result); err != nil {
-		return fmt.Errorf("decode openai response: %w", err)
+		return 0, false, fmt.Errorf("decode openai response: %w", err)
 	}
-	return nil
+	return 0, false, nil
+}
+
+func isRetryableStatus(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway,
+		http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+// parseRetryAfter reads the delay-seconds form of Retry-After, capped.
+func parseRetryAfter(value string) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || seconds <= 0 {
+		return 0
+	}
+	return min(time.Duration(seconds)*time.Second, maxRetryAfter)
 }
 
 type HTTPError struct {
