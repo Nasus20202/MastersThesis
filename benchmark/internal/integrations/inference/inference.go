@@ -15,6 +15,18 @@ type Client interface {
 	Chat(context.Context, []Message, []Tool, Options) (Result, error)
 }
 
+// ChatClient is a Client that also reports the metadata of its attempts.
+type ChatClient interface {
+	Client
+	MetadataProvider
+}
+
+// SamplingReader is implemented by clients whose server exposes its sampler
+// defaults (llama-server only).
+type SamplingReader interface {
+	Sampling(context.Context) (Sampling, error)
+}
+
 // MetadataProvider is implemented by clients that can report provider and
 // model metadata for the attempt record.
 type MetadataProvider interface {

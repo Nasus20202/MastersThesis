@@ -1,10 +1,8 @@
-// Package llamaenv creates inference clients from the LLAMA_* and EMBEDDING_*
-// environment set by the model profile and retrieval.env. Setting
-// INFERENCE_PROVIDER=openai switches chat to an OpenAI-compatible API.
+// Package llamaenv creates llama.cpp clients from the LLAMA_* and EMBEDDING_*
+// environment set by the model profile and retrieval.env.
 package llamaenv
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,12 +10,6 @@ import (
 
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/llama"
-	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference/openai"
-)
-
-const (
-	providerLlama  = "llama"
-	providerOpenAI = "openai"
 )
 
 // Parallelism is the inference server capacity; the compose default is 1.
@@ -33,30 +25,7 @@ func Parallelism() (int, error) {
 	return parallelism, nil
 }
 
-// ChatClient is a chat client that reports the metadata of its attempts.
-type ChatClient interface {
-	inference.Client
-	inference.MetadataProvider
-}
-
-// SamplingReader is implemented by chat clients whose server exposes its
-// sampler defaults (llama-server only).
-type SamplingReader interface {
-	Sampling(context.Context) (inference.Sampling, error)
-}
-
-func NewChatClient() (ChatClient, error) {
-	switch provider := env(envInferenceProvider); provider {
-	case "", providerLlama:
-		return newLlamaChatClient()
-	case providerOpenAI:
-		return newOpenAIChatClient()
-	default:
-		return nil, fmt.Errorf("%s must be %q or %q, got %q", envInferenceProvider, providerLlama, providerOpenAI, provider)
-	}
-}
-
-func newLlamaChatClient() (llama.Adapter, error) {
+func NewChatClient() (llama.Adapter, error) {
 	model := env(envLlamaModelName)
 	if model == "" {
 		return llama.Adapter{}, fmt.Errorf("%s is required", envLlamaModelName)
@@ -78,23 +47,6 @@ func newLlamaChatClient() (llama.Adapter, error) {
 	}
 	metadata.RuntimeSettings = runtimeSettings()
 	return newAdapter(localURL(port), metadata)
-}
-
-func newOpenAIChatClient() (ChatClient, error) {
-	baseURL, model := env(envOpenAIBaseURL), env(envOpenAIModel)
-	if baseURL == "" || model == "" {
-		return nil, fmt.Errorf("%s and %s are required when %s=%s", envOpenAIBaseURL, envOpenAIModel, envInferenceProvider, providerOpenAI)
-	}
-	client, err := openai.NewClient(openai.Config{
-		BaseURL:         baseURL,
-		Model:           model,
-		APIKey:          env(envOpenAIAPIKey),
-		ReasoningEffort: env(envOpenAIEffort),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create openai client for %s: %w", model, err)
-	}
-	return client, nil
 }
 
 func NewEmbeddingClient() (llama.Adapter, error) {
