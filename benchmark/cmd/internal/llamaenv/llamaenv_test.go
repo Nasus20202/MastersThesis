@@ -3,6 +3,7 @@ package llamaenv
 import (
 	"testing"
 
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,4 +94,40 @@ func TestNewChatClientRecordsRuntimeSettingsOnlyForLocalServer(t *testing.T) {
 	client, err = NewChatClient()
 	require.NoError(t, err)
 	assert.Nil(t, client.Metadata().RuntimeSettings)
+}
+
+func TestNewChatClientProvider(t *testing.T) {
+	t.Run("openai", func(t *testing.T) {
+		t.Setenv(envInferenceProvider, "openai")
+		t.Setenv(envOpenAIBaseURL, "https://api.example.test/v1/")
+		t.Setenv(envOpenAIModel, "gpt-test")
+		client, err := NewChatClient()
+		require.NoError(t, err)
+		assert.Equal(t, inference.Metadata{Provider: "openai", Model: "gpt-test"}, client.Metadata())
+		_, hasSampling := client.(SamplingReader)
+		assert.False(t, hasSampling)
+	})
+
+	t.Run("openai requires base URL and model", func(t *testing.T) {
+		t.Setenv(envInferenceProvider, "openai")
+		t.Setenv(envOpenAIBaseURL, "")
+		t.Setenv(envOpenAIModel, "")
+		_, err := NewChatClient()
+		assert.ErrorContains(t, err, envOpenAIBaseURL+" and "+envOpenAIModel+" are required")
+	})
+
+	t.Run("llama by default", func(t *testing.T) {
+		t.Setenv(envInferenceProvider, "")
+		t.Setenv(envLlamaModelName, "gemma")
+		client, err := NewChatClient()
+		require.NoError(t, err)
+		_, hasSampling := client.(SamplingReader)
+		assert.True(t, hasSampling)
+	})
+
+	t.Run("unknown provider", func(t *testing.T) {
+		t.Setenv(envInferenceProvider, "other")
+		_, err := NewChatClient()
+		assert.ErrorContains(t, err, envInferenceProvider+" must be")
+	})
 }

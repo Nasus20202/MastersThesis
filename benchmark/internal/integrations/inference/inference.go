@@ -10,7 +10,7 @@ import (
 // ErrContextOverflow reports a request that does not fit in the model context.
 var ErrContextOverflow = errors.New("request exceeds the model context")
 
-// Client sends chat-completion requests. llama.Adapter implements it.
+// Client sends chat-completion requests. llama.Adapter and openai.Client implement it.
 type Client interface {
 	Chat(context.Context, []Message, []Tool, Options) (Result, error)
 }

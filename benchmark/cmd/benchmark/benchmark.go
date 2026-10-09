@@ -180,12 +180,18 @@ func validateResumeMetadata(metadata results.RunMetadata, agents []commandagent.
 
 // readSampling records the sampler settings the inference server applies to
 // the profile's model. It also fails the run early when the server is down.
+// Providers that do not expose their sampler (OpenAI-compatible APIs) record
+// none.
 func readSampling(ctx context.Context) (*results.SamplingProvenance, error) {
 	client, err := llamaenv.NewChatClient()
 	if err != nil {
 		return nil, err
 	}
-	sampling, err := client.Sampling(ctx)
+	reader, ok := client.(llamaenv.SamplingReader)
+	if !ok {
+		return nil, nil
+	}
+	sampling, err := reader.Sampling(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read sampling settings: %w; start the server with make llama-start", err)
 	}
