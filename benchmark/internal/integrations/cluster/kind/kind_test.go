@@ -53,7 +53,7 @@ func TestClusterRunsCreateAndDelete(t *testing.T) {
 	assert.Equal(t, program, executor.specs[1].Program)
 	assert.Equal(t, []string{"get", "kubeconfig", "--name", "benchmark", "--internal"}, executor.specs[1].Args)
 	assert.Equal(t, program, executor.specs[2].Program)
-	assert.Equal(t, []string{"delete", "cluster", "--name", "benchmark"}, executor.specs[2].Args)
+	assert.Equal(t, []string{"delete", "cluster", "--name", "benchmark", "--kubeconfig", kubeconfigPath}, executor.specs[2].Args)
 	assert.NotEqual(t, kubeconfigPath, cluster.InternalKubeconfigPath())
 }
 
