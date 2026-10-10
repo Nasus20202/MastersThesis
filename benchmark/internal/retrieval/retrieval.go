@@ -27,8 +27,6 @@ const (
 
 var Chunkings = []Chunking{Sections, Windows}
 
-// ChunkParams are set in the retrieval configuration and recorded in the
-// index metadata.
 type ChunkParams struct {
 	MaxBytes      int
 	WindowOverlap int
