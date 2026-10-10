@@ -13,12 +13,6 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
-// Reciprocal rank fusion constant from Cormack et al. (2009).
-const (
-	hybridCandidates = 50
-	rrfK             = 60
-)
-
 // Hit.Score is negated BM25 for lexical, cosine similarity for semantic and
 // the fused RRF score for hybrid search.
 type Hit struct {
@@ -104,15 +98,18 @@ func (i *Index) semantic(ctx context.Context, embedder inference.Embedder, query
 }
 
 func (i *Index) hybrid(ctx context.Context, embedder inference.Embedder, query string, k int) ([]scored, error) {
-	lexical, err := i.lexical(ctx, query, hybridCandidates)
+	if i.Hybrid.Candidates < 1 || i.Hybrid.RRFK < 1 {
+		return nil, errors.New("hybrid search parameters are not set")
+	}
+	lexical, err := i.lexical(ctx, query, i.Hybrid.Candidates)
 	if err != nil {
 		return nil, err
 	}
-	semantic, err := i.semantic(ctx, embedder, query, hybridCandidates)
+	semantic, err := i.semantic(ctx, embedder, query, i.Hybrid.Candidates)
 	if err != nil {
 		return nil, err
 	}
-	return fuse(k, lexical, semantic), nil
+	return fuse(k, i.Hybrid.RRFK, lexical, semantic), nil
 }
 
 func (i *Index) rank(ctx context.Context, query string, match any, k int) ([]scored, error) {
@@ -132,7 +129,7 @@ func (i *Index) rank(ctx context.Context, query string, match any, k int) ([]sco
 	return ranked, rows.Err()
 }
 
-func fuse(k int, rankings ...[]scored) []scored {
+func fuse(k, rrfK int, rankings ...[]scored) []scored {
 	scores := make(map[int64]float64)
 	for _, ranking := range rankings {
 		for rank, hit := range ranking {

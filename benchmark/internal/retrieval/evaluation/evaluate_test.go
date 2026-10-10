@@ -38,11 +38,12 @@ func TestEvaluateScoresEveryConfiguration(t *testing.T) {
 		{Path: "docs/storage.md", Title: "Storage", Text: "A PersistentVolumeClaim binds a volume."},
 		{Path: "docs/network.md", Title: "Networking", Text: "NetworkPolicy isolates network traffic between Pods."},
 		{Path: "docs/scheduler.md", Title: "Scheduling", Text: "The scheduler avoids nodes with taints."},
-	}, retrieval.Sections, embedder, retrieval.IndexMetadata{})
+	}, retrieval.Sections, embedder, retrieval.IndexMetadata{MaxChunkBytes: 1536})
 	require.NoError(t, err)
 	index, err := retrieval.OpenIndex(context.Background(), path)
 	require.NoError(t, err)
 	defer index.Close()
+	index.Hybrid = retrieval.HybridParams{Candidates: 50, RRFK: 60}
 
 	probes := []ProbeQueries{{
 		Probe: Probe{ID: "K01", Prompt: "Pods avoid tainted nodes", Primary: []string{"docs/scheduler.md"}, Relevant: []string{"docs/scheduler.md", "docs/network.md"}},

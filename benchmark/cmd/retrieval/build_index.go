@@ -49,7 +49,7 @@ func buildIndexes(ctx context.Context, configPaths []string, chunkingValue strin
 		path := retrieval.IndexPath(config.IndexDir, chunking)
 		slog.InfoContext(ctx, "building index", "chunking", chunking, "documents", len(documents), "path", path)
 		metadata, err := retrieval.BuildIndex(ctx, path, documents, chunking, embedder,
-			retrieval.IndexMetadata{CorpusRevision: revision, Embedding: embedder.Metadata()})
+			retrieval.IndexMetadata{CorpusRevision: revision, Embedding: embedder.Metadata(), MaxChunkBytes: config.MaxChunkBytes, WindowOverlap: config.WindowOverlap})
 		if err != nil {
 			return fmt.Errorf("build %s index: %w", chunking, err)
 		}

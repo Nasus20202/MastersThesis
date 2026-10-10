@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	commandagent "github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/agent"
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
@@ -213,9 +214,17 @@ type runnerDeps struct {
 	setupImageBuilder   sandboxintegration.ImageBuilder
 	sandboxFactory      sandboxintegration.Factory
 	setupFactory        sandboxintegration.Factory
+	cleanupTimeout      time.Duration
 }
 
 func newRunnerDeps(containers benchmarkconfig.ContainersConfig) (runnerDeps, error) {
+	var cleanupTimeout time.Duration
+	if seconds := containers.CleanupTimeoutSeconds; seconds != nil {
+		if *seconds <= 0 {
+			return runnerDeps{}, errors.New("containers.cleanup_timeout_seconds must be greater than 0")
+		}
+		cleanupTimeout = time.Duration(*seconds * float64(time.Second))
+	}
 	executor := command.LocalExecutor{Environment: os.Environ()}
 	sandboxImageBuilder, err := docker.NewImageBuilder(executor, docker.ImageConfig{
 		Image:          containers.Sandbox.Image,
@@ -238,6 +247,7 @@ func newRunnerDeps(containers benchmarkconfig.ContainersConfig) (runnerDeps, err
 		return runnerDeps{}, fmt.Errorf("resolve repository root: %w", err)
 	}
 	return runnerDeps{
+		cleanupTimeout:      cleanupTimeout,
 		executor:            executor,
 		sandboxImageBuilder: sandboxImageBuilder,
 		setupImageBuilder:   setupImageBuilder,
@@ -283,6 +293,7 @@ func newOrchestrationRunner(deps runnerDeps, definition scenario.Definition, age
 		AgentFactory:        agentFactory,
 		AgentSlots:          agentSlots,
 		Condition:           string(agentName),
+		CleanupTimeout:      deps.cleanupTimeout,
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(deps.executor, kind.Config{
 				Name:       name,

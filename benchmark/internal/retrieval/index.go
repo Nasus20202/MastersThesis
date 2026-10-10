@@ -31,6 +31,8 @@ type IndexMetadata struct {
 }
 
 type Index struct {
+	// Hybrid must be set before a hybrid search.
+	Hybrid   HybridParams
 	db       *sql.DB
 	metadata IndexMetadata
 }
@@ -58,11 +60,16 @@ func openDB(ctx context.Context, dataSource string) (*sql.DB, error) {
 
 // BuildIndex writes the index to a temporary file and renames it to path only
 // when complete, so an interrupted build never leaves a usable partial index.
+// metadata.MaxChunkBytes and metadata.WindowOverlap set the chunking.
 func BuildIndex(ctx context.Context, path string, documents []Document, chunking Chunking, embedder inference.Embedder, metadata IndexMetadata) (IndexMetadata, error) {
+	if metadata.MaxChunkBytes < 1 || metadata.WindowOverlap < 0 || metadata.WindowOverlap >= metadata.MaxChunkBytes {
+		return IndexMetadata{}, errors.New("chunking needs a positive maximum chunk size above the window overlap")
+	}
+	params := ChunkParams{MaxBytes: metadata.MaxChunkBytes, WindowOverlap: metadata.WindowOverlap}
 	chunked := make([][]Chunk, len(documents))
 	var chunks []Chunk
 	for index, document := range documents {
-		chunked[index] = ChunkDocument(document, chunking)
+		chunked[index] = ChunkDocument(document, chunking, params)
 		chunks = append(chunks, chunked[index]...)
 	}
 	if len(chunks) == 0 {
@@ -73,8 +80,9 @@ func BuildIndex(ctx context.Context, path string, documents []Document, chunking
 		return IndexMetadata{}, err
 	}
 	metadata.Chunking = chunking
-	metadata.MaxChunkBytes = MaxChunkBytes
-	metadata.WindowOverlap = windowOverlap(chunking)
+	if chunking != Windows {
+		metadata.WindowOverlap = 0
+	}
 	metadata.Documents = len(documents)
 	metadata.Chunks = len(chunks)
 	metadata.Dimensions = len(embeddings[0])
@@ -170,19 +178,7 @@ func OpenIndex(ctx context.Context, path string) (*Index, error) {
 		db.Close()
 		return nil, fmt.Errorf("decode retrieval index metadata from %s: %w", path, err)
 	}
-	if metadata.MaxChunkBytes != MaxChunkBytes || metadata.WindowOverlap != windowOverlap(metadata.Chunking) {
-		db.Close()
-		return nil, fmt.Errorf("retrieval index %s was built with other chunking parameters; rebuild it", path)
-	}
 	return &Index{db: db, metadata: metadata}, nil
-}
-
-// windowOverlap is recorded only for window chunking.
-func windowOverlap(chunking Chunking) int {
-	if chunking == Windows {
-		return WindowOverlap
-	}
-	return 0
 }
 
 func (i *Index) Metadata() IndexMetadata {

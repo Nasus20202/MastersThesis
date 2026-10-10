@@ -20,15 +20,28 @@ type Settings struct {
 	TopK     int
 	MaxBytes int
 	IndexDir string
+
+	MaxChunkBytes    int
+	WindowOverlap    int
+	HybridCandidates int
+	RRFK             int
 }
 
 func Load(values benchmarkconfig.RetrievalConfig) (Settings, error) {
-	if values.TopK == nil || values.MaxBytes == nil || values.IndexDir == "" {
-		return Settings{}, errors.New("retrieval.top_k, retrieval.max_bytes and retrieval.index_dir are required")
+	if values.TopK == nil || values.MaxBytes == nil || values.IndexDir == "" ||
+		values.MaxChunkBytes == nil || values.WindowOverlap == nil || values.HybridCandidates == nil || values.RRFK == nil {
+		return Settings{}, errors.New("retrieval.top_k, max_bytes, index_dir, max_chunk_bytes, window_overlap, hybrid_candidates and rrf_k are required")
 	}
-	result := Settings{TopK: *values.TopK, MaxBytes: *values.MaxBytes, IndexDir: values.IndexDir}
-	if result.TopK < 1 || result.MaxBytes < 1 {
-		return Settings{}, errors.New("retrieval.top_k and retrieval.max_bytes must be positive")
+	result := Settings{
+		TopK: *values.TopK, MaxBytes: *values.MaxBytes, IndexDir: values.IndexDir,
+		MaxChunkBytes: *values.MaxChunkBytes, WindowOverlap: *values.WindowOverlap,
+		HybridCandidates: *values.HybridCandidates, RRFK: *values.RRFK,
+	}
+	if result.TopK < 1 || result.MaxBytes < 1 || result.MaxChunkBytes < 1 || result.HybridCandidates < 1 || result.RRFK < 1 {
+		return Settings{}, errors.New("retrieval.top_k, max_bytes, max_chunk_bytes, hybrid_candidates and rrf_k must be positive")
+	}
+	if result.WindowOverlap < 0 || result.WindowOverlap >= result.MaxChunkBytes {
+		return Settings{}, errors.New("retrieval.window_overlap must be at least 0 and below max_chunk_bytes")
 	}
 	var err error
 	if result.Mode, err = retrieval.ParseMode(values.Mode); err != nil {
@@ -40,15 +53,21 @@ func Load(values benchmarkconfig.RetrievalConfig) (Settings, error) {
 	return result, nil
 }
 
-// OpenIndex rejects an index built from another corpus revision or embedding
-// model than the current ones.
-func OpenIndex(ctx context.Context, path string, embedding inference.Metadata) (*retrieval.Index, error) {
+// OpenIndex rejects an index built from another corpus revision, embedding
+// model or chunking than the current ones.
+func OpenIndex(ctx context.Context, path string, embedding inference.Metadata, settings Settings) (*retrieval.Index, error) {
 	index, err := retrieval.OpenIndex(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	built := index.Metadata()
-	if pinned := os.Getenv("CORPUS_REVISION"); built.CorpusRevision != pinned {
+	wantOverlap := settings.WindowOverlap
+	if built.Chunking != retrieval.Windows {
+		wantOverlap = 0
+	}
+	if built.MaxChunkBytes != settings.MaxChunkBytes || built.WindowOverlap != wantOverlap {
+		err = fmt.Errorf("index %s was built with other chunking parameters", path)
+	} else if pinned := os.Getenv("CORPUS_REVISION"); built.CorpusRevision != pinned {
 		err = fmt.Errorf("index %s was built from corpus %s, want %s", path, built.CorpusRevision, pinned)
 	} else if built.Embedding.Artifact != embedding.Artifact || built.Embedding.SHA256 != embedding.SHA256 {
 		err = fmt.Errorf("index %s was embedded with %s, the embedding client uses %s", path, built.Embedding.Artifact, embedding.Artifact)
@@ -57,5 +76,6 @@ func OpenIndex(ctx context.Context, path string, embedding inference.Metadata) (
 		_ = index.Close()
 		return nil, fmt.Errorf("%w; rebuild it with make retrieval-index", err)
 	}
+	index.Hybrid = retrieval.HybridParams{Candidates: settings.HybridCandidates, RRFK: settings.RRFK}
 	return index, nil
 }

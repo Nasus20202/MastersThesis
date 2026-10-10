@@ -64,11 +64,12 @@ func testSearch(t *testing.T) *Search {
 		{Path: "docs/storage.md", BlobSHA: "a", Title: "Storage", Text: "A PersistentVolumeClaim binds a volume."},
 		{Path: "docs/network.md", BlobSHA: "b", Title: "Networking", Text: "NetworkPolicy isolates traffic between Pods."},
 	}
-	_, err := retrieval.BuildIndex(ctx, path, documents, retrieval.Windows, wordEmbedder{}, retrieval.IndexMetadata{CorpusRevision: "pinned"})
+	_, err := retrieval.BuildIndex(ctx, path, documents, retrieval.Windows, wordEmbedder{}, retrieval.IndexMetadata{CorpusRevision: "pinned", MaxChunkBytes: 1536, WindowOverlap: 256})
 	require.NoError(t, err)
 	index, err := retrieval.OpenIndex(ctx, path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = index.Close() })
+	index.Hybrid = retrieval.HybridParams{Candidates: 50, RRFK: 60}
 	return &Search{Index: index, Embedder: wordEmbedder{}, Mode: retrieval.Hybrid, TopK: 1, MaxBytes: 8192}
 }
 

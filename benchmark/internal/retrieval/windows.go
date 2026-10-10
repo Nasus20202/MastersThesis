@@ -2,13 +2,13 @@ package retrieval
 
 import "strings"
 
-func windowChunks(document Document, sections []section) []Chunk {
+func windowChunks(document Document, sections []section, params ChunkParams) []Chunk {
 	text := document.Text
 	var chunks []Chunk
 	start := skipSpace(text, 0)
 	for start < len(text) {
 		chunk := Chunk{Path: document.Path, Title: document.Title, Headings: headingsAt(sections, start)}
-		end := start + bodyBudget(chunk)
+		end := start + bodyBudget(chunk, params)
 		if end >= len(text) {
 			end = len(text)
 		} else {
@@ -21,7 +21,7 @@ func windowChunks(document Document, sections []section) []Chunk {
 		if end == len(text) {
 			break
 		}
-		next := end - WindowOverlap
+		next := end - params.WindowOverlap
 		if next <= start {
 			next = end
 		}

@@ -65,7 +65,7 @@ func evaluate(ctx context.Context, configPaths []string, queriesPath string, out
 	}()
 	for _, chunking := range retrieval.Chunkings {
 		path := retrieval.IndexPath(config.IndexDir, chunking)
-		index, err := retrievalenv.OpenIndex(ctx, path, embedder.Metadata())
+		index, err := retrievalenv.OpenIndex(ctx, path, embedder.Metadata(), config)
 		if err != nil {
 			return err
 		}
