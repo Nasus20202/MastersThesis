@@ -79,6 +79,8 @@ The final evaluation may extend the comparison beyond the adaptation conditions 
 
 The common model/tool loop uses per-attempt limits of 50 model turns, 100 tool calls, 60 seconds per tool call and 1800 seconds total agent runtime (D-039, provisional). The per-tool deadline and total deadline are independent: a timed-out tool call returns an error to the model so it may continue, while the 1800-second deadline stops the entire attempt.
 
+One response may generate at most 8192 tokens, reasoning included (`agents.loop.max_tokens`). A response that reaches the cap ends the attempt as `token_limit` and is not counted as running out of context. In the recorded evidence (about 64K responses) the largest normal response was 3,019 tokens; only a runaway generation exceeded it.
+
 Model-visible Bash output is capped at 8 KiB so a single command cannot fill the context; the complete output remains in raw evidence.
 
 The loop retains the model's reasoning content between tool calls and re-sends it with the next request, so the model keeps its reasoning context and the inference prompt cache can reuse the shared prefix. Reasoning is recorded in the raw attempt evidence.
