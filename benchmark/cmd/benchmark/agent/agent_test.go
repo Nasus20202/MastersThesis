@@ -128,12 +128,14 @@ func TestConfiguredLoopConfig(t *testing.T) {
 	maxToolCalls := 20
 	toolTimeout := 15.0
 	timeout := 90.0
+	maxTokens := 512
 	fileTools := false
 	got, err := configuredLoopConfig(benchmarkconfig.LoopConfig{
 		MaxTurns:           &maxTurns,
 		MaxToolCalls:       &maxToolCalls,
 		ToolTimeoutSeconds: &toolTimeout,
 		TimeoutSeconds:     &timeout,
+		MaxTokens:          &maxTokens,
 		FileTools:          &fileTools,
 	})
 	require.NoError(t, err)
@@ -141,6 +143,7 @@ func TestConfiguredLoopConfig(t *testing.T) {
 	assert.Equal(t, maxToolCalls, got.MaxToolCalls)
 	assert.Equal(t, toolTimeout, got.ToolTimeoutSeconds)
 	assert.Equal(t, timeout, got.TimeoutSeconds)
+	assert.Equal(t, &maxTokens, got.MaxTokens)
 	assert.False(t, got.FileTools)
 
 	defaultConfig, err := configuredLoopConfig(benchmarkconfig.LoopConfig{})
@@ -149,6 +152,7 @@ func TestConfiguredLoopConfig(t *testing.T) {
 	assert.Equal(t, 50, defaultConfig.MaxToolCalls)
 	assert.Equal(t, float64(60), defaultConfig.ToolTimeoutSeconds)
 	assert.Equal(t, float64(300), defaultConfig.TimeoutSeconds)
+	assert.Nil(t, defaultConfig.MaxTokens)
 	assert.True(t, defaultConfig.FileTools)
 }
 
@@ -163,6 +167,7 @@ func TestConfiguredLoopConfigRejectsNonpositiveValues(t *testing.T) {
 		{name: "max tool calls", config: benchmarkconfig.LoopConfig{MaxToolCalls: &zeroInt}},
 		{name: "tool timeout", config: benchmarkconfig.LoopConfig{ToolTimeoutSeconds: &zeroFloat}},
 		{name: "total timeout", config: benchmarkconfig.LoopConfig{TimeoutSeconds: &zeroFloat}},
+		{name: "max tokens", config: benchmarkconfig.LoopConfig{MaxTokens: &zeroInt}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

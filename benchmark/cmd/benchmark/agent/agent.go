@@ -144,6 +144,12 @@ func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, err
 		}
 		result.TimeoutSeconds = *values.TimeoutSeconds
 	}
+	if values.MaxTokens != nil {
+		if *values.MaxTokens < 1 {
+			return common.Config{}, errors.New("agents.loop.max_tokens must be at least 1")
+		}
+		result.MaxTokens = values.MaxTokens
+	}
 	if values.FileTools != nil {
 		result.FileTools = *values.FileTools
 	}
