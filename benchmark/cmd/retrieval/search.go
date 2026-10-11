@@ -59,7 +59,7 @@ func search(ctx context.Context, configPaths []string, overrides searchOverrides
 	if err != nil {
 		return err
 	}
-	index, err := retrievalenv.OpenIndex(ctx, retrieval.IndexPath(config.IndexDir, config.Chunking), embedder.Metadata())
+	index, err := retrievalenv.OpenIndex(ctx, retrieval.IndexPath(config.IndexDir, config.Chunking), embedder.Metadata(), config)
 	if err != nil {
 		return err
 	}

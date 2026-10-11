@@ -25,6 +25,7 @@ type Config struct {
 	TimeoutSeconds     float64  `json:"timeout_seconds"`
 	Temperature        *float64 `json:"temperature,omitempty"`
 	MaxTokens          *int     `json:"max_tokens,omitempty"`
+	MaxOutputBytes     int      `json:"max_output_bytes"`
 	FileTools          bool     `json:"file_tools,omitempty"`
 }
 
@@ -36,6 +37,7 @@ func DefaultConfig() Config {
 		MaxToolCalls:       50,
 		ToolTimeoutSeconds: 60,
 		TimeoutSeconds:     300,
+		MaxOutputBytes:     8192,
 		FileTools:          true,
 	}
 }
@@ -72,6 +74,9 @@ func NewLoop(client inference.Client, tools []Tool, config Config) (*Loop, error
 	}
 	if config.TimeoutSeconds < 0 {
 		return nil, errors.New("agent timeout must not be negative")
+	}
+	if config.MaxOutputBytes < 0 {
+		return nil, errors.New("agent maximum output bytes must not be negative")
 	}
 	if config.Temperature != nil && *config.Temperature < 0 {
 		return nil, errors.New("agent temperature must not be negative")

@@ -122,12 +122,12 @@ func TestFileToolsReportFailures(t *testing.T) {
 
 func TestReadFileLimitsModelVisibleContent(t *testing.T) {
 	dir := t.TempDir()
-	content := strings.Repeat("x", maxModelVisibleCommandOutputBytes) + "end"
+	content := strings.Repeat("x", testMaxOutputBytes) + "end"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "big.txt"), []byte(content), 0o600))
 
 	result := callFile(t, fileTool(t, dir, "read_file"), `{"path":"big.txt"}`)
 	require.NoError(t, result.Error)
-	assert.Len(t, result.Content, maxModelVisibleCommandOutputBytes)
+	assert.Len(t, result.Content, testMaxOutputBytes)
 	assert.Contains(t, result.Content, truncatedFileMarker)
 	assert.True(t, strings.HasSuffix(result.Content, "end"))
 	assert.Equal(t, len(content), result.Details.(FileEvidence).Bytes)

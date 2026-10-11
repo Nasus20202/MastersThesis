@@ -42,14 +42,15 @@ var testDocuments = []Document{
 func buildTestIndex(t *testing.T, embedder *topicEmbedder) *Index {
 	t.Helper()
 	path := IndexPath(t.TempDir(), Sections)
-	metadata, err := BuildIndex(context.Background(), path, testDocuments, Sections, embedder, IndexMetadata{CorpusRevision: "rev"})
+	metadata, err := BuildIndex(context.Background(), path, testDocuments, Sections, embedder, IndexMetadata{CorpusRevision: "rev", MaxChunkBytes: testChunkParams.MaxBytes})
 	require.NoError(t, err)
-	assert.Equal(t, IndexMetadata{CorpusRevision: "rev", Chunking: Sections, MaxChunkBytes: MaxChunkBytes, Documents: 3, Chunks: 3, Dimensions: 3}, metadata)
+	assert.Equal(t, IndexMetadata{CorpusRevision: "rev", Chunking: Sections, MaxChunkBytes: testChunkParams.MaxBytes, Documents: 3, Chunks: 3, Dimensions: 3}, metadata)
 	assert.NoFileExists(t, path+".partial")
 
 	index, err := OpenIndex(context.Background(), path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = index.Close() })
+	index.Hybrid = HybridParams{Candidates: 50, RRFK: 60}
 	assert.Equal(t, metadata, index.Metadata())
 	return index
 }
@@ -87,14 +88,14 @@ func TestLexicalQueryQuotesDistinctTerms(t *testing.T) {
 }
 
 func TestFuseSumsReciprocalRanks(t *testing.T) {
-	fused := fuse(3,
+	fused := fuse(3, 60,
 		[]scored{{id: 1}, {id: 2}, {id: 3}},
 		[]scored{{id: 3}, {id: 2}, {id: 4}},
 	)
 	assert.Equal(t, []int64{3, 2, 1}, []int64{fused[0].id, fused[1].id, fused[2].id})
 	assert.InDelta(t, 1.0/63+1.0/61, fused[0].score, 1e-12)
 
-	tied := fuse(2, []scored{{id: 7}, {id: 5}}, []scored{{id: 5}, {id: 7}})
+	tied := fuse(2, 60, []scored{{id: 7}, {id: 5}}, []scored{{id: 5}, {id: 7}})
 	assert.Equal(t, []int64{5, 7}, []int64{tied[0].id, tied[1].id})
 }
 
@@ -121,17 +122,8 @@ func TestOpenIndexRejectsMissingFile(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestOpenIndexRejectsOtherChunkingParameters(t *testing.T) {
-	ctx := context.Background()
-	path := IndexPath(t.TempDir(), Sections)
-	_, err := BuildIndex(ctx, path, testDocuments, Sections, &topicEmbedder{}, IndexMetadata{})
-	require.NoError(t, err)
-	db, err := openDB(ctx, path)
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `UPDATE metadata SET value = json_set(value, '$.max_chunk_bytes', 1)`)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	_, err = OpenIndex(ctx, path)
-	assert.ErrorContains(t, err, "other chunking parameters")
+func TestBuildIndexRejectsInvalidChunking(t *testing.T) {
+	_, err := BuildIndex(context.Background(), IndexPath(t.TempDir(), Windows), testDocuments, Windows, &topicEmbedder{},
+		IndexMetadata{MaxChunkBytes: 256, WindowOverlap: 256})
+	assert.ErrorContains(t, err, "chunking needs")
 }

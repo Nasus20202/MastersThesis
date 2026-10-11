@@ -87,7 +87,7 @@ func TestNewFactoryRAGRequiresSearch(t *testing.T) {
 	ctx := context.Background()
 	path := retrieval.IndexPath(t.TempDir(), retrieval.Windows)
 	_, err = retrieval.BuildIndex(ctx, path, []retrieval.Document{{Path: "docs/a.md", Title: "A", Text: "Body"}},
-		retrieval.Windows, unitEmbedder{}, retrieval.IndexMetadata{})
+		retrieval.Windows, unitEmbedder{}, retrieval.IndexMetadata{MaxChunkBytes: 1536, WindowOverlap: 256})
 	require.NoError(t, err)
 	index, err := retrieval.OpenIndex(ctx, path)
 	require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestNewFactoryRAGRequiresSearch(t *testing.T) {
 
 func TestOpenSearchValidatesSettings(t *testing.T) {
 	_, _, err := OpenSearch(context.Background(), benchmarkconfig.RetrievalConfig{})
-	assert.ErrorContains(t, err, "retrieval.top_k, retrieval.max_bytes and retrieval.index_dir are required")
+	assert.ErrorContains(t, err, "are required")
 }
 
 type unitEmbedder struct{}

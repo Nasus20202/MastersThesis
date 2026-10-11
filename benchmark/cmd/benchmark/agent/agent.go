@@ -150,6 +150,12 @@ func configuredLoopConfig(values benchmarkconfig.LoopConfig) (common.Config, err
 		}
 		result.MaxTokens = values.MaxTokens
 	}
+	if values.MaxOutputBytes != nil {
+		if *values.MaxOutputBytes < 1 {
+			return common.Config{}, errors.New("agents.loop.max_output_bytes must be at least 1")
+		}
+		result.MaxOutputBytes = *values.MaxOutputBytes
+	}
 	if values.FileTools != nil {
 		result.FileTools = *values.FileTools
 	}

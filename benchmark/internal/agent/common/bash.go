@@ -13,20 +13,24 @@ import (
 
 const bashToolName = "bash"
 
-// maxModelVisibleCommandOutputBytes bounds one shell result placed in the
-// model conversation. The complete stdout and stderr remain in
-// CommandEvidence for reproducibility and later inspection.
-const maxModelVisibleCommandOutputBytes = 8 * 1024
-
 const truncatedCommandOutputMarker = "\n[command output truncated; full stdout/stderr is preserved in evidence]\n"
 
-type bashTool struct{ shell Shell }
+// bashTool bounds one shell result placed in the model conversation to
+// maxOutputBytes. The complete stdout and stderr remain in CommandEvidence for
+// reproducibility and later inspection.
+type bashTool struct {
+	shell          Shell
+	maxOutputBytes int
+}
 
-func NewBashTool(shell Shell) (Tool, error) {
+func NewBashTool(shell Shell, maxOutputBytes int) (Tool, error) {
 	if shell == nil {
 		return nil, errors.New("bash shell is required")
 	}
-	return bashTool{shell: shell}, nil
+	if maxOutputBytes < 1 {
+		return nil, errors.New("bash maximum output bytes must be at least 1")
+	}
+	return bashTool{shell: shell, maxOutputBytes: maxOutputBytes}, nil
 }
 
 func BashTool() inference.Tool {
@@ -72,13 +76,13 @@ func (t bashTool) Execute(ctx context.Context, call inference.ToolCall) ToolResu
 		DurationSeconds: commandResult.Duration.Seconds(),
 	}
 	return ToolResult{
-		Content: formatCommandResult(commandResult, execErr),
+		Content: formatCommandResult(commandResult, execErr, t.maxOutputBytes),
 		Details: details,
 		Error:   execErr,
 	}
 }
 
-func formatCommandResult(result command.Result, execErr error) string {
+func formatCommandResult(result command.Result, execErr error, maxOutputBytes int) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "exit_code: %d\n", result.ExitCode)
 	builder.WriteString("stdout:\n")
@@ -96,16 +100,19 @@ func formatCommandResult(result command.Result, execErr error) string {
 	if execErr != nil && result.ExitCode <= 0 {
 		fmt.Fprintf(&builder, "error: %s\n", execErr)
 	}
-	return limitOutput(builder.String(), truncatedCommandOutputMarker)
+	return limitOutput(builder.String(), truncatedCommandOutputMarker, maxOutputBytes)
 }
 
-// limitOutput keeps the head and tail of content within
-// maxModelVisibleCommandOutputBytes, joined by marker.
-func limitOutput(content, marker string) string {
-	if len(content) <= maxModelVisibleCommandOutputBytes {
+// limitOutput keeps the head and tail of content within maxBytes, joined by
+// marker. A cap too small for the marker keeps only the head.
+func limitOutput(content, marker string, maxBytes int) string {
+	if len(content) <= maxBytes {
 		return content
 	}
-	available := maxModelVisibleCommandOutputBytes - len(marker)
+	if maxBytes <= len(marker) {
+		return content[:maxBytes]
+	}
+	available := maxBytes - len(marker)
 	head := available / 2
 	tail := available - head
 	return content[:head] + marker + content[len(content)-tail:]

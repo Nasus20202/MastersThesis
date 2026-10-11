@@ -32,13 +32,17 @@ const (
 // NewSandboxTools returns bash and, when config.FileTools is set, the file
 // tools.
 func NewSandboxTools(shell Shell, config Config) ([]Tool, error) {
-	bash, err := NewBashTool(shell)
+	maxOutputBytes := config.MaxOutputBytes
+	if maxOutputBytes == 0 {
+		maxOutputBytes = DefaultConfig().MaxOutputBytes
+	}
+	bash, err := NewBashTool(shell, maxOutputBytes)
 	if err != nil {
 		return nil, err
 	}
 	tools := []Tool{bash}
 	if config.FileTools {
-		files := fileTools{shell: shell}
+		files := fileTools{shell: shell, maxOutputBytes: maxOutputBytes}
 		tools = append(tools, readFileTool{files}, writeFileTool{files}, editFileTool{files})
 	}
 	return tools, nil
@@ -52,7 +56,10 @@ type FileEvidence struct {
 	Stderr   string `json:"stderr,omitempty"`
 }
 
-type fileTools struct{ shell Shell }
+type fileTools struct {
+	shell          Shell
+	maxOutputBytes int
+}
 
 func (f fileTools) read(ctx context.Context, path string) (string, FileEvidence, error) {
 	result, err := f.shell.Exec(ctx, command.Spec{Program: "cat", Args: []string{"--", path}})
@@ -122,7 +129,7 @@ func (t readFileTool) Execute(ctx context.Context, call inference.ToolCall) Tool
 	if content == "" {
 		content = "(empty file)"
 	}
-	return ToolResult{Content: limitOutput(content, truncatedFileMarker), Details: evidence}
+	return ToolResult{Content: limitOutput(content, truncatedFileMarker, t.maxOutputBytes), Details: evidence}
 }
 
 type writeFileTool struct{ fileTools }

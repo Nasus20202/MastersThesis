@@ -67,11 +67,11 @@ func joinHeadings(path []string, title string) string {
 }
 
 // sectionChunks splits oversized sections at paragraph boundaries.
-func sectionChunks(document Document, sections []section) []Chunk {
+func sectionChunks(document Document, sections []section, params ChunkParams) []Chunk {
 	var chunks []Chunk
 	for _, section := range sections {
 		chunk := Chunk{Path: document.Path, Title: document.Title, Headings: section.headings}
-		for _, body := range splitText(section.body, bodyBudget(chunk)) {
+		for _, body := range splitText(section.body, bodyBudget(chunk, params)) {
 			chunk.Body = body
 			chunks = append(chunks, chunk)
 		}

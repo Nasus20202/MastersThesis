@@ -21,24 +21,24 @@ func (c Chunk) Header() string {
 	return c.Path + "\n" + context
 }
 
-// Rendered is at most MaxChunkBytes long unless the header exceeds half of it.
+// Rendered is at most ChunkParams.MaxBytes long unless the header exceeds half
+// of it.
 func (c Chunk) Rendered() string {
 	return c.Header() + "\n" + c.Body
 }
 
-// minBodyBytes keeps a long header from shrinking the body budget to nothing.
-const minBodyBytes = MaxChunkBytes / 2
-
-func ChunkDocument(document Document, chunking Chunking) []Chunk {
+func ChunkDocument(document Document, chunking Chunking, params ChunkParams) []Chunk {
 	sections := parseSections(document)
 	if chunking == Windows {
-		return windowChunks(document, sections)
+		return windowChunks(document, sections, params)
 	}
-	return sectionChunks(document, sections)
+	return sectionChunks(document, sections, params)
 }
 
-func bodyBudget(chunk Chunk) int {
-	return max(MaxChunkBytes-len(chunk.Header())-1, minBodyBytes)
+// bodyBudget keeps a long header from shrinking the body to less than half of
+// the chunk.
+func bodyBudget(chunk Chunk, params ChunkParams) int {
+	return max(params.MaxBytes-len(chunk.Header())-1, params.MaxBytes/2)
 }
 
 var splitSeparators = []string{"\n\n", "\n", " "}

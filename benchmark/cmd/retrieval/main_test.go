@@ -25,13 +25,14 @@ func TestRunRejectsUnknownCommandsAndMissingArguments(t *testing.T) {
 func TestLoadSettingsValidatesRetrievalConfig(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: hybrid\n  chunking: windows\n  top_k: 5\n  max_bytes: 8192\n  index_dir: corpus\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: hybrid\n  chunking: windows\n  top_k: 5\n  max_bytes: 8192\n  index_dir: corpus\n  max_chunk_bytes: 1536\n  window_overlap: 256\n  hybrid_candidates: 50\n  rrf_k: 60\n"), 0o600))
 
 	config, err := loadSettings([]string{path})
 	require.NoError(t, err)
-	assert.Equal(t, retrievalenv.Settings{Mode: retrieval.Hybrid, Chunking: retrieval.Windows, TopK: 5, MaxBytes: 8192, IndexDir: filepath.Join(directory, "corpus")}, config)
+	assert.Equal(t, retrievalenv.Settings{Mode: retrieval.Hybrid, Chunking: retrieval.Windows, TopK: 5, MaxBytes: 8192, IndexDir: filepath.Join(directory, "corpus"),
+		MaxChunkBytes: 1536, WindowOverlap: 256, HybridCandidates: 50, RRFK: 60}, config)
 
-	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: dense\n  chunking: windows\n  top_k: 5\n  max_bytes: 8192\n  index_dir: corpus\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("retrieval:\n  mode: dense\n  chunking: windows\n  top_k: 5\n  max_bytes: 8192\n  index_dir: corpus\n  max_chunk_bytes: 1536\n  window_overlap: 256\n  hybrid_candidates: 50\n  rrf_k: 60\n"), 0o600))
 	_, err = loadSettings([]string{path})
 	assert.ErrorContains(t, err, `unsupported retrieval mode "dense"`)
 }

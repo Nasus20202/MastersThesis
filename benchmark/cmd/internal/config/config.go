@@ -26,9 +26,16 @@ type RetrievalConfig struct {
 	TopK     *int   `yaml:"top_k,omitempty"`
 	MaxBytes *int   `yaml:"max_bytes,omitempty"`
 	IndexDir string `yaml:"index_dir,omitempty"`
+
+	MaxChunkBytes    *int `yaml:"max_chunk_bytes,omitempty"`
+	WindowOverlap    *int `yaml:"window_overlap,omitempty"`
+	HybridCandidates *int `yaml:"hybrid_candidates,omitempty"`
+	RRFK             *int `yaml:"rrf_k,omitempty"`
 }
 
 type ContainersConfig struct {
+	CleanupTimeoutSeconds *float64 `yaml:"cleanup_timeout_seconds,omitempty"`
+
 	Sandbox ContainerConfig `yaml:"sandbox,omitempty"`
 	Setup   ContainerConfig `yaml:"setup,omitempty"`
 }
@@ -59,6 +66,7 @@ type LoopConfig struct {
 	ToolTimeoutSeconds *float64 `yaml:"tool_timeout_seconds,omitempty"`
 	TimeoutSeconds     *float64 `yaml:"timeout_seconds,omitempty"`
 	MaxTokens          *int     `yaml:"max_tokens,omitempty"`
+	MaxOutputBytes     *int     `yaml:"max_output_bytes,omitempty"`
 	FileTools          *bool    `yaml:"file_tools,omitempty"`
 }
 

@@ -27,11 +27,17 @@ const (
 
 var Chunkings = []Chunking{Sections, Windows}
 
-// Five chunks fit the 8 KiB model-visible cap.
-const (
-	MaxChunkBytes = 1536
-	WindowOverlap = 256
-)
+type ChunkParams struct {
+	MaxBytes      int
+	WindowOverlap int
+}
+
+// HybridParams are the candidates each ranking contributes to hybrid search and
+// the reciprocal rank fusion constant of Cormack et al. (2009).
+type HybridParams struct {
+	Candidates int
+	RRFK       int
+}
 
 func ParseMode(value string) (Mode, error) {
 	return parseOption(value, Modes, "retrieval mode")

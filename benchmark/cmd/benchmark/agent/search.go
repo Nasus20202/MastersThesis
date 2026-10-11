@@ -34,7 +34,7 @@ func OpenSearch(ctx context.Context, values benchmarkconfig.RetrievalConfig) (*r
 		return nil, results.RetrievalProvenance{}, fmt.Errorf("hash retrieval index: %w", err)
 	}
 	embedding := embedder.Metadata()
-	index, err := retrievalenv.OpenIndex(ctx, path, embedding)
+	index, err := retrievalenv.OpenIndex(ctx, path, embedding, settings)
 	if err != nil {
 		return nil, results.RetrievalProvenance{}, err
 	}
