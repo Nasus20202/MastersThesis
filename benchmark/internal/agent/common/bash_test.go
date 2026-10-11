@@ -143,3 +143,9 @@ func TestBashToolPreservesFullOutputInEvidence(t *testing.T) {
 	assert.Equal(t, stdout, details.Stdout)
 	assert.LessOrEqual(t, len(result.Content), testMaxOutputBytes)
 }
+
+func TestLimitOutputWithCapShorterThanMarker(t *testing.T) {
+	for _, maxBytes := range []int{1, len(truncatedCommandOutputMarker)} {
+		assert.Equal(t, strings.Repeat("x", maxBytes), limitOutput(strings.Repeat("x", 2*maxBytes), truncatedCommandOutputMarker, maxBytes))
+	}
+}

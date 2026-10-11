@@ -104,10 +104,13 @@ func formatCommandResult(result command.Result, execErr error, maxOutputBytes in
 }
 
 // limitOutput keeps the head and tail of content within maxBytes, joined by
-// marker.
+// marker. A cap too small for the marker keeps only the head.
 func limitOutput(content, marker string, maxBytes int) string {
 	if len(content) <= maxBytes {
 		return content
+	}
+	if maxBytes <= len(marker) {
+		return content[:maxBytes]
 	}
 	available := maxBytes - len(marker)
 	head := available / 2
