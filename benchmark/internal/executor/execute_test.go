@@ -90,7 +90,7 @@ func TestExecuteLimitsConcurrentTasks(t *testing.T) {
 	go func() {
 		for range outcomeChannel {
 		}
-		<-errorChannel
+		assert.NoError(t, <-errorChannel)
 		close(done)
 	}()
 
