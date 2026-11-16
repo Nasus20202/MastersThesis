@@ -2,11 +2,11 @@
 
 ## Documents
 
-- [Research design](research-design.md) — research goal, questions, scope and comparison principles.
-- [Benchmark](benchmark.md) — scenario structure, lifecycle, condition capabilities, visibility and verification.
+- [Research design](research-design.md) — research goal, questions, hypothesis, conditions, comparison principles and the development/final split.
+- [Benchmark](benchmark.md) — scenario contract and lifecycle, what each condition adds, execution limits, model visibility, scoring and repeated runs.
 - [Scenario catalogue](scenarios.md) — development scenarios with difficulty, setup, expected repair and grading (evaluator-only).
-- [Technology stack](tech-stack.md) — runner, model execution, Kubernetes environment and sandbox.
-- [Decision log](decision-log.md) — canonical record of approved, provisional, open and superseded decisions.
+- [Technology stack](tech-stack.md) — runner, model serving locally and on Kaggle, models and sampling, retrieval, `kind` clusters and sandbox.
+- [Decision log](decision-log.md) — every research and technical decision with date, status and rationale; the only place open decisions are listed.
 - [Sources](sources.md) — technical documentation, papers and related work.
 - [Glossary](glossary.md) — project terminology and links to further information.
 - [Benchmark module](../benchmark/README.md) — local runner commands, logging and scenario configuration.

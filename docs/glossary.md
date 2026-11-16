@@ -1,6 +1,10 @@
 # Glossary
 
+- **Ablation** — a run of a condition with part of it switched off, to see what that part contributes; here the Harness without its added mechanisms. See [research-design.md](research-design.md).
+
 - **Adaptation condition** — one controlled version of the benchmark that differs by the model knowledge, instructions, tools or weights provided to the model. See [research-design.md](research-design.md).
+
+- **Adapter (LoRA)** — a small set of trained weights applied on top of an unchanged base model; the form of fine-tuning used here (D-046). See [the LoRA paper](https://arxiv.org/abs/2106.09685).
 
 - **Baseline** — the reference condition using the model with minimal task capabilities and no additional adaptation method. See [benchmark.md](benchmark.md) and [Wikipedia: Scientific control](https://en.wikipedia.org/wiki/Scientific_control).
 
@@ -8,7 +12,11 @@
 
 - **Chunk** — one piece of a corpus document that the retrieval index stores and returns as a single result. See [the retrieval design study](research/retrieval-design/README.md).
 
+- **Bootstrap interval** — a confidence interval obtained by resampling the scenarios many times and recomputing the statistic; used for the paired difference between two conditions (D-051). See [research-design.md](research-design.md) and [Wikipedia: Bootstrapping (statistics)](https://en.wikipedia.org/wiki/Bootstrapping_%28statistics%29).
+
 - **Decoding throughput** — generated tokens per second, aggregated from the llama.cpp timings recorded per response. See [tech-stack.md](tech-stack.md).
+
+- **Development scenario** — one of the 46 scenarios used to build and tune the conditions and to train the adapters; its results are reported for comparison only (D-044). See [scenarios.md](scenarios.md).
 
 - **Draft acceptance rate** — the fraction of speculatively drafted tokens accepted by the target model, recorded per condition. See [tech-stack.md](tech-stack.md).
 
@@ -16,11 +24,15 @@
 
 - **Embedding** — a fixed-length vector representation of text whose similarity to other vectors is used for semantic retrieval. See [tech-stack.md](tech-stack.md) and [Wikipedia: Sentence embedding](https://en.wikipedia.org/wiki/Sentence_embedding).
 
+- **False completion** — an attempt the agent ended itself, reporting it was done, with less than a full score (D-054).
+
 - **Fault injection** — the controlled action that changes a known-good environment into a faulty state. See [Wikipedia: Fault injection](https://en.wikipedia.org/wiki/Fault_injection).
 
 - **Full task success** — the scenario's complete success criterion has been satisfied. See [benchmark.md](benchmark.md).
 
-- **Harness** — the operational layer that gives the model structured tools, controlled external context or additional interaction capabilities. See [tech-stack.md](tech-stack.md) and [Wikipedia: Test harness](https://en.wikipedia.org/wiki/Test_harness).
+- **Harness** — the code around the model that runs the tool loop and can add tools, checks and messages of its own. As a condition: skills and retrieval combined, plus checks and tools that answer measured failures (D-049). See [benchmark.md](benchmark.md).
+
+- **Held-out scenario** — a scenario of the final experiment whose fault does not occur in the development set; never run by an agent before the final experiment, and the basis of the official result (D-044). See [research-design.md](research-design.md).
 
 - **Hit@k** — whether any of the top k retrieval results comes from a relevant document. See [the retrieval design study](research/retrieval-design/README.md).
 
@@ -28,13 +40,17 @@
 
 - **kind** — Kubernetes in Docker, used to run local Kubernetes clusters for benchmark scenarios. See the [kind documentation](https://kind.sigs.k8s.io/docs/) and [Wikipedia: Kubernetes](https://en.wikipedia.org/wiki/Kubernetes).
 
+- **Macro score** — the mean over scenarios of each scenario's mean partial score, so every scenario counts equally whatever its number of attempts. See [benchmark.md](benchmark.md).
+
 - **Mean reciprocal rank (MRR)** — the average of 1/rank of the first relevant result, 0 when none is returned. See [Wikipedia: Mean reciprocal rank](https://en.wikipedia.org/wiki/Mean_reciprocal_rank).
 
-- **Model artifact** — the specific model files and revision used for inference or fine-tuning. See the [Gemma 4 E4B model card](https://huggingface.co/google/gemma-4-E4B-it).
+- **Model artifact** — the specific model files and revision used for inference or fine-tuning. See [tech-stack.md](tech-stack.md).
 
 - **Model profile** — a `benchmark/model-profiles/*.env` file selecting one pinned model artifact, revision, hash and router name. See [tech-stack.md](tech-stack.md).
 
 - **Multi-token prediction (MTP)** — a speculatively decoded mode in which a drafter proposes several tokens per step (`--spec-type draft-mtp`). See the [llama.cpp speculative decoding documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md) and [Wikipedia: Speculative decoding](https://en.wikipedia.org/wiki/Speculative_decoding).
+
+- **Paired difference** — the difference between two conditions computed per scenario on the same scenarios, then averaged; reported with a bootstrap interval (D-051).
 
 - **Partial score** — a deterministic score representing how many independently verifiable scenario criteria were restored. See [benchmark.md](benchmark.md).
 
@@ -58,12 +74,18 @@
 
 - **Scenario verifier** — deterministic logic that checks observable properties of the environment after the model's attempt. See [benchmark.md](benchmark.md) and [Wikipedia: Test oracle](https://en.wikipedia.org/wiki/Test_oracle).
 
-- **Skill** — reusable procedural knowledge prepared for the model, such as Kubernetes inspection or troubleshooting guidance. See [research-design.md](research-design.md) and [Wikipedia: Skill](https://en.wikipedia.org/wiki/Skill).
+- **Skill** — a prepared text with a troubleshooting procedure or reference for one subsystem, which the agent loads on demand through a tool. See [benchmark.md](benchmark.md) and [the skills optimization study](research/skills-optimization/README.md).
 
 - **Source corpus** — the approved collection of documents used for retrieval, scenario construction, validation or training-data creation. See [sources.md](sources.md) and [Wikipedia: Text corpus](https://en.wikipedia.org/wiki/Text_corpus).
 
+- **Teacher model** — the model whose successful attempts become training examples for a smaller model; here Qwen3.5 9B, with a hosted model filling gaps (D-047).
+
 - **Tool calling** — the model's structured request to invoke an external function or operational tool. See the [llama.cpp function-calling documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md).
 
+- **Trajectory** — the full record of one attempt: system prompt, task, reasoning, tool calls, tool results and final report. Successful trajectories are the fine-tuning examples (D-047).
+
 - **Training-data leakage** — inclusion of benchmark information in adaptation data in a way that can give the adapted model access to the evaluation task or answer. See [benchmark.md](benchmark.md) and [Wikipedia: Leakage (machine learning)](https://en.wikipedia.org/wiki/Leakage_%28machine_learning%29).
+
+- **Validation scenario (fine-tuning)** — a development scenario kept out of the training data and used to select the training configuration (D-048).
 
 - **Vulkan backend** — the graphics-compute backend used by llama.cpp for local model execution on compatible hardware. See the [Vulkan documentation](https://docs.vulkan.org/guide/latest/) and [Wikipedia: Vulkan](https://en.wikipedia.org/wiki/Vulkan).
