@@ -18,7 +18,9 @@ The model is served locally through `llama.cpp` in Docker.
 
 The Vulkan backend is the initial execution target. The current reproducible implementation uses `ghcr.io/ggml-org/llama.cpp:server-vulkan-b10964` at digest `sha256:43e0e25ca654d839ebda39fd6c2f200b36e9efb3e597ba90d0aaeff1be95ca53`.
 
-The current execution host has an AMD Ryzen 5 3600 CPU (6 cores, 12 threads), 32 GiB RAM and an AMD Radeon RX 5700 GPU with 8 GiB VRAM.
+The local execution host has an AMD Ryzen 5 3600 CPU (6 cores, 12 threads), 32 GiB RAM and an AMD Radeon RX 5700 GPU with 8 GiB VRAM.
+
+Large runs, including the final experiment (D-053), use Kaggle sessions with two T4 GPUs. Inference is served there by [KaggleInferenceServer](https://github.com/Nasus20202/KaggleInferenceServer), and the `benchmark-kaggle.yaml` workflow shards scenarios across GitHub runners that run the same benchmark runner and `kind` clusters. Scores do not depend on the hardware; times do, so times from the two hosts are never mixed.
 
 ## Speculative decoding
 
@@ -45,7 +47,7 @@ The research uses four models, each selected by a profile under `benchmark/model
 | `qwen35-4b`   | Qwen3.5 4B  | [unsloth Qwen3.5 4B MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF)      |
 | `qwen35-9b`   | Qwen3.5 9B  | [unsloth Qwen3.5 9B MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF)      |
 
-Not every run must use all four. Results are reported per model and never mixed silently across models. Exact repositories, revisions and file hashes are pinned in the profiles, and the shared runtime configuration is maintained in `benchmark/config.env`. The artifacts remain provisional for final evaluation and may be superseded through a recorded decision.
+Not every run must use all four. Results are reported per model and never mixed silently across models. Exact repositories, revisions and file hashes are pinned in the profiles, and the shared runtime configuration is maintained in `benchmark/config.env`. The artifacts remain provisional for final evaluation and may be superseded through a recorded decision. A fifth, larger model (Gemma 4 12B) was considered and not added (D-052).
 
 ## Sampling
 
@@ -60,7 +62,7 @@ Before the first attempt, a benchmark run reads the values llama-server applies 
 
 ## Kubernetes environment
 
-Kubernetes incidents run in local `kind` clusters.
+Each attempt runs in a fresh, disposable single-node `kind` cluster on Kubernetes 1.37; the node image is pinned by digest in the cluster profiles under `benchmark/kind/`. The profiles and per-scenario add-ons are listed in [scenarios.md](scenarios.md).
 
 ## Local image cache and registry
 
@@ -93,10 +95,10 @@ The adaptation methods may add the following components:
 - prompt condition: an approved system prompt,
 - skill condition: prepared procedural skill content,
 - RAG condition: an embedding and retrieval pipeline over the frozen common experiment corpus recorded in [sources.md](sources.md),
-- fine-tuning condition: a separately trained model adapter and its training tooling,
-- harness condition: predefined operational tools and controlled external context access.
+- fine-tuning condition: a LoRA adapter per adapted model, trained on Kaggle from code kept in this repository, and its training tooling (D-046, D-048); not implemented yet,
+- harness condition: the skill and retrieval components together, plus checks and tools implemented in the runner (D-049); no external knowledge access; not implemented yet.
 
-These components are benchmark conditions, not separate primary execution stacks. They should reuse the common runner, environment and result format wherever possible.
+These components are benchmark conditions, not separate execution stacks. They reuse the common runner, environment and result format.
 
 ## Version and provenance records
 
@@ -113,5 +115,5 @@ Before final evaluation, record:
 - drafter repository, revision and file hash,
 - quantization, decoding and runtime parameters,
 - retrieval and embedding artifacts,
-- fine-tuning adapter and training configuration,
-- harness tool versions and external-access configuration.
+- fine-tuning base checkpoints, dataset revision, training configuration and adapter hashes,
+- harness prompt, mechanism settings and tool definitions.

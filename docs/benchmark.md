@@ -6,11 +6,13 @@ This document defines how benchmark operational tasks are represented, executed 
 
 The research motivation and comparison rationale are described in [research-design.md](research-design.md). Technology choices are described in [tech-stack.md](tech-stack.md).
 
-## Initial benchmark scope
+## Benchmark scope
 
-The development benchmark uses reproducible Kubernetes operational tasks in local `kind` clusters. It may include both troubleshooting tasks and constructive implementation or configuration tasks. The execution environment does not determine the final knowledge domain or source corpus.
+The benchmark uses reproducible Kubernetes operational tasks in local `kind` clusters: troubleshooting tasks, where a fault must be found and repaired, and constructive tasks, where something must be built or configured.
 
-A benchmark scenario should require the model to inspect or modify an observable system state. Simple knowledge questions without an executable environment are outside the intended benchmark scope.
+A scenario requires the model to inspect or modify an observable system state. Knowledge questions without an executable environment are outside the scope.
+
+There are two scenario sets (D-044). The development set is used to build and tune the conditions and to train the fine-tuning adapters; it is catalogued in [scenarios.md](scenarios.md). The held-out set contains faults that do not occur in the development set, is never run by an agent before the final experiment, and gives the official result. The split is described in [research-design.md](research-design.md).
 
 Changes to the benchmark scope are recorded in the [decision log](decision-log.md).
 
@@ -18,7 +20,7 @@ Changes to the benchmark scope are recorded in the [decision log](decision-log.m
 
 The common experiment corpus is the official English Kubernetes 1.37 documentation at the immutable `kubernetes/website@ea639c1d22a60365d07b78692b1b1a2eb866bd15` revision recorded in [sources.md](sources.md) and [the knowledge check](research/kubernetes-knowledge-check/README.md).
 
-All experiment conditions that use the common corpus must use this exact revision. This requirement preserves version alignment and reproducibility without selecting the runtime Kubernetes cluster configuration in this document.
+Every condition that uses the corpus uses this exact revision, which matches the Kubernetes version of the benchmark clusters.
 
 ## Scenario definition
 
@@ -58,22 +60,22 @@ A scenario is suitable for evaluation only when its starting state, optional fau
 
 ## Condition capabilities
 
-The benchmark conditions initially have these operational differences:
+Every condition has bash and the file tools in the sandbox. The conditions differ as follows:
 
-| Condition   | Additional capability                                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Baseline    | Bash access and the command-line tools required to interact with the Kubernetes environment                                              |
-| Prompt      | Baseline capabilities plus an approved troubleshooting system prompt                                                                     |
-| Skill       | Baseline capabilities plus approved reusable troubleshooting skills                                                                      |
-| RAG         | Baseline capabilities plus a `search_docs` tool the agent calls on demand over the frozen Kubernetes documentation corpus (D-011, D-036) |
-| Fine-tuning | Baseline capabilities using a model adapted with separate technical troubleshooting examples                                             |
-| Harness     | Baseline capabilities plus approved structured operational tools and controlled external knowledge access                                |
+| Condition   | What it adds                                                                                                                                                                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Baseline    | Nothing: no system prompt; the task is followed by one fixed sentence on using the shell                                                                                                                                                                           |
+| Prompt      | A troubleshooting system prompt (D-023)                                                                                                                                                                                                                            |
+| Skill       | A system prompt of its own and a tool that loads troubleshooting skills on demand; the `troubleshooting` skill is loaded before the first command (D-026, D-032)                                                                                                   |
+| RAG         | The prompt condition's system prompt plus one search paragraph, and a `search_docs` tool the agent calls on demand over the frozen Kubernetes documentation corpus (D-011, D-036)                                                                                  |
+| Fine-tuning | The prompt condition on a model with a LoRA adapter trained on agent trajectories from the development scenarios; Gemma 4 E4B and Qwen3.5 4B only (D-046, D-047)                                                                                                   |
+| Harness     | The skills and `search_docs` together under one combined prompt, plus a check before finishing, a patch syntax check, a server-side dry-run before writes, a `rollout_wait` tool, a resource inspection tool and a loop notice. No live external knowledge (D-049) |
 
-The exact tools, prompts, skills, retrieved context, model artifacts and access limits must be recorded for each evaluated condition.
+The fine-tuning and Harness conditions are not implemented yet. Each run records the prompt, tools, skills, retrieval configuration and model artifact it used.
 
-## Extended comparisons
+## Runtime comparisons
 
-The final evaluation may extend the comparison beyond the adaptation conditions to model and runtime configuration, for example multi-token prediction enabled versus disabled or different quantization levels. Each compared configuration must be pinned and recorded like a condition; these are candidates and are not part of the initial comparison.
+Model and runtime configuration, for example multi-token prediction on or off or different quantization levels, is not a condition of the comparison. Multi-token prediction is measured separately in [the speculative-decoding study](research/speculative-decoding/README.md).
 
 ## Agent execution limits
 
@@ -121,6 +123,8 @@ After the model attempt, each grading criterion is evaluated independently as pa
 
 The score is therefore normalized to `[0, 1]`. Full task success is recorded separately as a boolean and is true only when every repair criterion passes, regardless of the weights. A scenario must have at least one repair criterion, and its total criterion weight must be positive.
 
+A condition's **macro score** is the mean partial score per scenario, then the unweighted mean across scenarios, so every scenario counts equally. Attempts that end in an error stay in the denominator with their recorded score.
+
 Primary scoring does not use an LLM judge. The verifier may use bounded polling for convergence, but it must use a fixed bound and deterministic pass/fail condition rather than an unbounded wait or subjective interpretation.
 
 Each run should preserve the outcome and raw evidence for every grading criterion, together with the aggregate partial score and full-success result. Verifier internals and hidden scenario metadata remain evaluator-side data and must not be included in the model-visible task, capabilities or execution transcript.
@@ -129,11 +133,9 @@ The current status of scoring decisions is recorded in the [decision log](decisi
 
 ## Repeated runs
 
-Each scenario and condition should be executed multiple times because model behaviour is stochastic.
+Each scenario and condition is executed several times because model behaviour is stochastic (D-010). The final experiment runs each held-out scenario five times and each development scenario once, for every condition and model (D-045).
 
-The current repetition decision is recorded in the [decision log](decision-log.md).
-
-Each run should preserve, where available:
+Each run preserves, where available:
 
 - scenario and condition identifiers,
 - model and runtime identifiers, including the applied sampling,

@@ -19,49 +19,53 @@ These questions describe the current research framing. They may be refined befor
 
 ## Hypothesis
 
-The expected order of the conditions is baseline < prompt < {skill, RAG} < harness. Skill and RAG are parallel knowledge methods built on the prompt condition, and no order between them is assumed. Fine-tuning is compared with the prompt condition without an assumed direction.
+The expected order of the conditions is baseline < prompt < {skill, RAG} < harness. Skill and RAG are parallel knowledge methods that add knowledge to an instructed agent, and no order between them is assumed. Fine-tuning is compared with the prompt condition without an assumed direction.
 
 This is a hypothesis, not a tuning target: an order that does not hold is reported as a result.
 
-## Initial research scope
+## Research scope
 
-The initial execution direction is troubleshooting technical incidents in reproducible local `kind` environments. The common experiment corpus is the official English Kubernetes 1.37 documentation at the immutable revision recorded in [sources.md](sources.md) and [the knowledge check](research/kubernetes-knowledge-check/README.md); the final benchmark protocol remains open.
+The work covers one domain: diagnosing and repairing Kubernetes incidents in reproducible local `kind` clusters. The common experiment corpus is the official English Kubernetes 1.37 documentation at the immutable revision recorded in [sources.md](sources.md) and [the knowledge check](research/kubernetes-knowledge-check/README.md).
 
-The scope is intentionally a starting point. Scope changes are recorded in the [decision log](decision-log.md).
+Scope changes are recorded in the [decision log](decision-log.md).
 
 ## Adaptation methods
 
-The comparison is intended to include the following conditions:
+The comparison includes six conditions (D-002):
 
-- **baseline** — model knowledge with the minimal execution capabilities needed to interact with the environment,
-- **prompt** — baseline with a carefully designed troubleshooting system prompt,
-- **skill** — baseline with reusable procedural troubleshooting knowledge,
-- **RAG** — baseline with retrieved information from the technical documentation corpus selected through source-corpus qualification,
+- **baseline** — the model with a shell and file tools in the sandbox and no system prompt,
+- **prompt** — baseline with a troubleshooting system prompt (D-023),
+- **skill** — baseline with a system prompt of its own and procedural troubleshooting skills the agent loads on demand (D-026, D-032),
+- **RAG** — the prompt condition with one added search paragraph and a `search_docs` tool over the frozen documentation corpus (D-036),
 - **fine-tuning** — the prompt condition on a model adapted with LoRA, trained on reviewed agent trajectories from the development scenarios (D-046, D-047),
 - **harness** — the skill and RAG conditions combined, with structured operational tools and harness checks (D-049).
 
-These names describe the research conditions at a high level. Their concrete capabilities and execution rules are defined in [benchmark.md](benchmark.md) and [tech-stack.md](tech-stack.md).
+The RAG prompt is the prompt condition's prompt plus one paragraph, so prompt → RAG differs only by retrieval. The skill condition's system prompt was written during skill development and is a separate text, so prompt → skill changes the instructions as well as adding skills.
+
+The capabilities and execution rules of each condition are defined in [benchmark.md](benchmark.md) and [tech-stack.md](tech-stack.md).
 
 ## Research outcomes
 
-The comparison should examine:
+The comparison examines:
 
 - how often incidents are repaired,
 - how completely and consistently they are repaired,
 - how much time and model/tool usage each condition requires,
-- what trade-offs are introduced by each adaptation method.
+- what trade-offs each adaptation method introduces.
 
-The benchmark defines the observable scoring and result format. Fine-tuning cost should be considered separately from inference-time cost.
+The benchmark defines the scoring and the result format. Fine-tuning cost is reported separately from inference-time cost (D-048).
 
 ## Comparison principles
 
-The conditions should use the same benchmark and evaluation process wherever possible. The intended experimental difference is the adaptation method, not an unrelated change in the task or scoring.
+All conditions use the same benchmark, limits, scoring and result format. The intended experimental difference is the adaptation method, not a change in the task or scoring.
 
 Conditions are developed and evaluated on four models, Gemma 4 E2B and E4B and Qwen3.5 4B and 9B (D-037), so that no condition is fitted to one model's weaknesses and condition differences can be checked across model families and sizes. Each model is reported separately; the models are listed in [tech-stack.md](tech-stack.md). Fine-tuning is evaluated on Gemma 4 E4B and Qwen3.5 4B only (D-046).
 
-Any necessary difference in model, runtime, tools or limits must be recorded and considered when interpreting the results.
+The conditions did not receive equal tuning effort during development (skill 11 candidates, RAG 6, prompt 3). After the shared settings were fixed, one targeted round on the prompt remained (D-050, D-054); the difference in effort is reported as a limitation.
 
-The study should preserve raw results, including negative and inconclusive outcomes. Conclusions should be based on repeated runs rather than on a single model execution.
+Any necessary difference in model, runtime, tools or limits is recorded and considered when interpreting the results.
+
+Raw results are preserved, including negative and inconclusive outcomes. Conclusions rest on repeated runs, not on a single model execution.
 
 ## Development and final evaluation
 
@@ -71,6 +75,8 @@ The final evaluation runs on held-out scenarios whose faults do not occur in the
 
 Condition differences are reported as paired differences per scenario with a 95% bootstrap interval (D-051).
 
-The final benchmark, conditions and evaluation protocol should be frozen before final evaluation. Final results must not be used to change the protocol retrospectively.
+The final evaluation runs on Kaggle (two T4 GPUs), so every model and condition is measured on one hardware type; attempts finished on the local GPU are marked and their times reported separately (D-053).
+
+The final benchmark, conditions and evaluation protocol are frozen before the final evaluation. Final results must not be used to change the protocol retrospectively.
 
 Research and technical decisions are recorded in the [decision log](decision-log.md), with supporting references collected in [sources.md](sources.md).

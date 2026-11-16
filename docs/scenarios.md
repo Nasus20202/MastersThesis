@@ -2,7 +2,8 @@
 
 Evaluator-only. This file records scenario states, expected repairs and grading.
 It must never be exposed to a model, used as retrieval context, or included in
-fine-tuning data. The runner exposes only the `task` field from each
+fine-tuning data. It covers the 46 development scenarios; the held-out scenarios
+of the final experiment (D-044) are not written yet. The runner exposes only the `task` field from each
 `benchmark/scenarios/<id>/scenario.yaml`.
 
 The contract, lifecycle, visibility rules and scoring are in
@@ -42,7 +43,7 @@ Scenarios run in fresh disposable single-node `kind` clusters. Each declares one
 
 Every profile also includes:
 
-- shared **pull-through registry caches** (`registry:3.1.1`) on the kind network, mirrored for `docker.io` and `quay.io` in `containerdConfigPatches`, so pinned images are pulled once and reused across clusters;
+- shared **pull-through registry caches** on the kind network, mirrored for `docker.io`, `quay.io` and `ghcr.io` in `containerdConfigPatches`, so pinned images are pulled once and reused across clusters (see [tech-stack.md](tech-stack.md));
 - kind's built-in default StorageClass `standard` (`rancher.io/local-path`), no add-on; its `WaitForFirstConsumer` binding means a PVC binds only after a consumer Pod is scheduled.
 
 Per-scenario add-ons, installed evaluator-side in `prepare`, never part of the task:
