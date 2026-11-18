@@ -280,15 +280,10 @@ Four of them scored 0.
   JSON, `results.json` and `run.json`) and the session stats each shard
   recorded at start (`server-*.json`). `raw/sweep/` holds the two sweep runs,
   with session stats at start and end.
-- [analysis/attempts.csv](analysis/attempts.csv) and
-  [sweep-attempts.csv](analysis/sweep-attempts.csv): one row per attempt with
-  the timing split, produced by [extract.py](analysis/extract.py) and
-  summarized by [summarize.py](analysis/summarize.py). Draft acceptance and
-  the prompt-cache hit rate come from [spec.py](analysis/spec.py).
 - `analysis/*-vs-prompt/` and the matching `.txt` files: `analyze --by-model`
   output for each comparison.
 - [raw/repeats/](raw/repeats/): the Gemma 4 E4B run with three repeats, and
   the merged Qwen3.5 9B run of its three runs, with each run's session stats.
   [analysis/repeats/](analysis/repeats/) holds their `analyze --by-model`
-  output, `attempts.csv`, and the per-repeat and per-scenario agreement from
-  [agree.py](analysis/repeats/agree.py).
+  output and the per-repeat and per-scenario agreement
+  ([agreement.txt](analysis/repeats/agreement.txt)).
