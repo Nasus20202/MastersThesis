@@ -69,3 +69,4 @@ Keep detail in its owning document and link instead of copying it. Update the ow
 - Document only what helps the research, reproducibility or thesis writing. Do not restate code, repository structure or ticket history.
 - Avoid boilerplate, filler, repeated explanations and generic "best practices" text.
 - When finished, briefly report what changed, what was verified and anything unresolved.
+- Always tell the researcher explicitly about pending decisions or approvals, in the final report and in the pull request description (a "Needs the researcher" section). Say what is waiting, what it affects and what you propose; never leave it implicit.
