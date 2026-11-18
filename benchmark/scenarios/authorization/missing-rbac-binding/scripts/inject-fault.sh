@@ -2,5 +2,5 @@
 set -eu
 
 kubectl patch rolebinding app-config-reader --type=json \
-    -p='[{"op":"replace","path":"/subjects/0/name","value":"wrong-reader"}]'
+    -p='[{"op":"replace","path":"/subjects/0/name","value":"app-reader"}]'
 kubectl rollout restart deployment/app

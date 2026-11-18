@@ -148,6 +148,11 @@ Counts by the scenario's top-level category, which is also the validation shard.
 
 ## Scenario detail
 
+Injected values that the agent can see do not name the fault. They are
+plausible typos, stale names or unrelated values (for example `ngnix:1.31.5`
+rather than `nginx:does-not-exist`), so that the cause has to be diagnosed
+rather than read off (D-053).
+
 ### Workload controllers
 
 - **`rollback-bad-release`** — **Fault:** rev1 healthy, rev2 bad, available<3. **Fix:** restore rev1 via `rollout undo` or re-apply the good image. **Grade:** available [2]; running image == last good [1]; history preserved [1]. **Note:** requires rollout-history reasoning, not Pod deletion.
