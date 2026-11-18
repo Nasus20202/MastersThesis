@@ -4,7 +4,9 @@ set -eu
 probe=route-probe
 
 cleanup() {
-    kubectl delete pod "$probe" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+    # Remove the probe and its events so the agent never sees a grader Pod.
+    kubectl delete pod "$probe" --ignore-not-found --now --timeout=60s >/dev/null 2>&1 || true
+    kubectl delete events --field-selector "involvedObject.kind=Pod,involvedObject.name=$probe" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
