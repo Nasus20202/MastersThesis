@@ -22,9 +22,14 @@ type ModelMean struct {
 }
 
 // ByModel splits attempts by the model that ran them, in model order.
+// Attempts whose agent never ran (scenario setup failed) record no model and
+// are left out; NotRun counts them.
 func ByModel(attempts []RunAttempt) ([]string, map[string][]RunAttempt) {
 	groups := map[string][]RunAttempt{}
 	for _, attempt := range attempts {
+		if notRun(attempt) {
+			continue
+		}
 		groups[attempt.Model] = append(groups[attempt.Model], attempt)
 	}
 	models := make([]string, 0, len(groups))
@@ -33,6 +38,21 @@ func ByModel(attempts []RunAttempt) ([]string, map[string][]RunAttempt) {
 	}
 	slices.Sort(models)
 	return models, groups
+}
+
+// NotRun counts the attempts ByModel leaves out.
+func NotRun(attempts []RunAttempt) int {
+	count := 0
+	for _, attempt := range attempts {
+		if notRun(attempt) {
+			count++
+		}
+	}
+	return count
+}
+
+func notRun(attempt RunAttempt) bool {
+	return !attempt.AgentRan && attempt.Model == ""
 }
 
 // MeanOverModels averages the condition's per-model macro scores and, when

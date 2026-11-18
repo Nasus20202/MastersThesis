@@ -47,7 +47,8 @@ type Difference struct {
 // Usage is the mean model cost of an attempt and how the agent changed and
 // checked the cluster, over attempts where the agent ran. Unconfirmed counts
 // attempts the agent completed without full success: it reported a repair the
-// grader did not confirm. PeakContext and MaxPeakContext are the mean and
+// grader did not confirm; TurnLimits counts attempts ended by the turn limit.
+// PeakContext and MaxPeakContext are the mean and
 // largest per-attempt peak context; Overflows counts attempts that ran out of
 // context.
 type Usage struct {
@@ -63,6 +64,7 @@ type Usage struct {
 	Edits          int     `json:"edits"`
 	RolloutStatus  int     `json:"rollout_status_attempts"`
 	Unconfirmed    int     `json:"unconfirmed_attempts"`
+	TurnLimits     int     `json:"turn_limit_attempts"`
 }
 
 // CriterionRate is the pass rate of one scenario criterion. Criterion IDs are
@@ -257,6 +259,9 @@ func usage(attempts []RunAttempt) Usage {
 		}
 		if attempt.Termination == "completed" && !attempt.FullSuccess {
 			result.Unconfirmed++
+		}
+		if attempt.Termination == "turn_limit" {
+			result.TurnLimits++
 		}
 	}
 	if result.Attempts > 0 {

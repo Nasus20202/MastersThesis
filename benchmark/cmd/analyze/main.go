@@ -19,7 +19,8 @@ const usage = `Usage:
 
 With --by-model, all --condition runs are pooled and split by the model that
 ran them, each model is compared with the reference attempts of the same
-model, and the mean over models is reported.`
+model, and the mean over models is reported. Attempts whose agent never ran
+have no model and are left out of the split.`
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil && !errors.Is(err, flag.ErrHelp) {
@@ -125,6 +126,9 @@ func run(args []string, output, logOutput io.Writer) error {
 		for _, model := range models {
 			summaries = append(summaries, analysis.Summarize(modelLabel(model), groups[model], referenceGroups[model]))
 		}
+		if count := analysis.NotRun(analyzed) + analysis.NotRun(referenceAttempts); count > 0 {
+			fmt.Fprintf(output, "%d attempts without an agent run (setup failed) are left out of the per-model split\n\n", count)
+		}
 		value := analysis.MeanOverModels(analyzed, referenceAttempts)
 		mean = &value
 	}
@@ -222,7 +226,7 @@ func printUsage(output io.Writer, summary analysis.RunSummary) {
 	mean := func(label string, usage analysis.Usage) {
 		fmt.Fprintf(output, "%s: %d agent attempts, mean %.1f turns, %.0f prompt tokens, %.0f completion tokens\n", label, usage.Attempts, usage.Turns, usage.Prompt, usage.Completion)
 		fmt.Fprintf(output, "  peak context: mean %.0f, max %d tokens; %d attempts ran out of context\n", usage.PeakContext, usage.MaxPeakContext, usage.Overflows)
-		fmt.Fprintf(output, "  %d kubectl changes, %d failed, %d kubectl edit; rollout status in %d attempts; %d completed without full success\n", usage.Changes, usage.FailedChanges, usage.Edits, usage.RolloutStatus, usage.Unconfirmed)
+		fmt.Fprintf(output, "  %d kubectl changes, %d failed, %d kubectl edit; rollout status in %d attempts; %d completed without full success; %d ended at the turn limit\n", usage.Changes, usage.FailedChanges, usage.Edits, usage.RolloutStatus, usage.Unconfirmed, usage.TurnLimits)
 	}
 	mean("usage", summary.Usage)
 	if summary.ReferenceUsage != nil {
