@@ -129,8 +129,9 @@ func TestNewRunAttemptCountsChangesAndChecks(t *testing.T) {
 	assert.Equal(t, 31000, attempt.PeakContext)
 	assert.True(t, attempt.Overflow)
 
-	usage := Summarize("prompt", []RunAttempt{attempt}, nil).Usage
-	assert.Equal(t, Usage{Attempts: 1, PeakContext: 31000, MaxPeakContext: 31000, Overflows: 1, Changes: 3, FailedChanges: 2, Edits: 1, RolloutStatus: 1, Unconfirmed: 1}, usage)
+	limited := RunAttempt{Scenario: "app", Termination: "turn_limit", AgentRan: true}
+	usage := Summarize("prompt", []RunAttempt{attempt, limited}, nil).Usage
+	assert.Equal(t, Usage{Attempts: 2, PeakContext: 15500, MaxPeakContext: 31000, Overflows: 1, Changes: 3, FailedChanges: 2, Edits: 1, RolloutStatus: 1, Unconfirmed: 1, TurnLimits: 1}, usage)
 }
 
 func TestSummarizeGroupsAttemptsAndMatchesReferenceScenarios(t *testing.T) {

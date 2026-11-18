@@ -47,3 +47,16 @@ func TestMeanOverModelsWithoutReference(t *testing.T) {
 	assert.Nil(t, mean.ReferenceMacro)
 	assert.Nil(t, mean.Difference)
 }
+
+func TestByModelLeavesOutAttemptsWithoutAnAgentRun(t *testing.T) {
+	attempts := []RunAttempt{
+		{Model: "m", AgentRan: true, Scenario: "a", Score: 1},
+		{Scenario: "b"},
+	}
+
+	models, groups := ByModel(attempts)
+	assert.Equal(t, []string{"m"}, models)
+	assert.Len(t, groups["m"], 1)
+	assert.Equal(t, 1, NotRun(attempts))
+	assert.InDelta(t, 1, MeanOverModels(attempts, nil).Macro, 1e-9)
+}
