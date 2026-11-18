@@ -160,6 +160,223 @@ difference fell to −0.125 [−0.292, +0.000]. At 6 agents no attempt timed out
 the table uses that run. Skill and RAG runs of Qwen3.5 9B are only comparable
 at the same number of agents.
 
+## Why the failures persist
+
+A post-hoc reading of the same 648 attempts, with no new runs.
+
+### Qwen: repaired, but no passing check
+
+All 27 Qwen3.5 4B turn-limit endings with full success were read by hand. Two
+turns were recorded for each:
+
+- the last change the final state depends on;
+- the first turn the agent's own output showed the outcome.
+
+The repair lands a median of 16 turns before the limit (range 0–39), and the
+agent first sees the outcome a median of 11 turns before it.
+
+| After the repair, the agent…                                           | ref |  P5 |  P6 | All |
+| ---------------------------------------------------------------------- | --: | --: | --: | --: |
+| tries and fails to build a request through the Service or Gateway      |   4 |   2 |   5 |  11 |
+| fixed only in the last 7 turns (a late repair, not a stopping failure) |   5 |   2 |   1 |   8 |
+| re-reads objects that already show the outcome                         |   1 |   3 |   1 |   5 |
+| waits for a slow controller (ReplicaSet or init-container backoff)     |   3 |   0 |   0 |   3 |
+
+Most of the time after the outcome is visible goes into the request check:
+232 of 357 tool calls, 24% of which fail. The failing requests have these causes:
+
+- `kubectl run` with wrong flags;
+- curl images given wget arguments;
+- images without curl or wget;
+- requests to Traefik without the `Host` header;
+- `app.example.com` resolved from the sandbox.
+
+The prompt asks for exactly this check ("for a Service, confirm a request
+through it succeeds") and to keep diagnosing while any check fails. The agent
+never sees a passing check, so P5's "finish when a fresh observation shows the
+outcome" never applies.
+
+On `gateway-route-misconfig`:
+
+| Model       | Attempts at the turn limit | Of which repaired |
+| ----------- | -------------------------: | ----------------: |
+| Qwen3.5 4B  |                     7 of 9 |                 6 |
+| Qwen3.5 9B  |                     7 of 9 |                 7 |
+| Gemma 4 E4B |                     0 of 9 |                 — |
+
+Gemma 4 E4B ends all 9 attempts with full success and never sends a request.
+
+Qwen3.5 9B sometimes does get a correct answer through the Gateway, but doubts
+it ("That might be default") and keeps testing other hosts and paths.
+
+The 47 Qwen3.5 4B turn-limit endings without full success are still repairing:
+30 changed the cluster in their last 10 turns.
+
+### Gemma: change not applied, failure misread, or wrong check
+
+The 189 Gemma false completions were classified by a heuristic on the agent's
+own trace and final report. Agreement with a manual reading:
+
+| Sample                                            | Categories | Reports |
+| ------------------------------------------------- | ---------: | ------: |
+| 40 attempts used to tune the heuristic            |      36/40 |   38/40 |
+| 20 further attempts, before the last tuning round |      15/20 |   20/20 |
+| 20 further attempts, after the last tuning round  |      18/20 |   20/20 |
+
+| After the last accepted change  | Claims success | "Should" work | Admits failure | Total |
+| ------------------------------- | -------------: | ------------: | -------------: | ----: |
+| No change reached the cluster   |             21 |             7 |             11 |    39 |
+| No observation after the change |              7 |             1 |              5 |    13 |
+| An observation showed failure   |             35 |             4 |             42 |    81 |
+| Rollout still in progress       |              2 |             0 |              1 |     3 |
+| Observations looked healthy     |             46 |             1 |              6 |    53 |
+| **Total**                       |        **111** |        **13** |         **65** |   189 |
+
+- **Unverified reports are rare.** Only 13 attempts made a change and never
+  looked again.
+- **Changes that never reached the cluster are common.** In 39 attempts no
+  change reached the cluster, for one or both of two reasons:
+  - a local manifest was edited and never applied;
+  - the API server rejected the change (a `Conflict` from a stale
+    `resourceVersion`, an invalid patch, or `kubectl edit` without an editor).
+
+  21 of the 39 still report the change as made, some with invented output.
+
+- **The largest group misreads a failing observation.** Examples:
+  - READY `3/3` from the old ReplicaSet while one replica is updated;
+  - an `nslookup` that times out, followed by "DNS restored".
+- **The second group checks a proxy or makes a different repair:**
+  - compares the image tag instead of the pulled build;
+  - checks that a Pod is Running instead of sending a DNS or dependency request;
+  - patches the failing command instead of rolling back;
+  - removes the read-only root filesystem.
+- **Transient and destructive changes.** 40 attempts made only transient
+  changes (Pod deletes, `rollout restart`); 13 deleted the Deployment or
+  StatefulSet that owns the fault.
+- **A third are honest give-ups.** 65 admit that the outcome was not reached.
+  30 of these name a limitation that does not exist, such as "without permission
+  to modify the deployment".
+
+In 181 of the 189 at least one outcome criterion fails; the most frequent are:
+
+| Criterion          | Failures |
+| ------------------ | -------: |
+| `deployment-ready` |       63 |
+| `replica-capacity` |       37 |
+| `service-response` |       21 |
+
+Most early stops are scenarios Gemma does not repair; it stops anyway.
+
+Reports by condition, over both Gemma models:
+
+| Condition | Claim success | Admit failure |
+| --------- | ------------: | ------------: |
+| ref       |            42 |            20 |
+| P5        |            36 |            18 |
+| P6        |            33 |            27 |
+
+The number of early stops does not change across conditions. P6 may turn some
+success claims into admissions; this is a post-hoc reading of small counts.
+
+### What this suggests
+
+A further stopping paragraph addresses neither failure:
+
+- **Qwen** lacks the passing observation that a stopping rule waits for.
+- **Gemma** mostly believes a change or check that its own output contradicts.
+
+Both point to the Harness mechanisms (#35), which can work from the agent's own
+trace without grader information:
+
+- **Loop notice:** fires after N turns without a cluster change, or K failed
+  commands in a row.
+- **Check before finishing:** shows which changes the API server accepted,
+  which local files were never applied, and the latest state of the changed
+  objects.
+
+The request-check sentence of the prompt is a separate candidate, tested in the
+[request-check fallback pilot](#request-check-fallback-pilot) below. It did not
+help.
+
+## Request-check fallback pilot
+
+Exploratory and post-hoc, run after the decision above. No prompt was changed
+and no decision is recorded.
+
+### Question
+
+Qwen3.5 4B often reaches the turn limit after repairing a Service or Gateway
+because it cannot build the request the prompt asks for ("confirm a request
+through it succeeds"). Does allowing a fallback to resource status, after two
+failed request attempts, make it stop on these scenarios without lowering the
+score?
+
+### Method
+
+**Candidate.** [P7](candidates/p7.md) is the prompt agent's system prompt with
+one clause extended. The new text is in bold:
+
+> for a Service, confirm a request through it succeeds, **and if two attempts
+> to send such a request fail because of the request command itself rather than
+> the Service, use instead the strongest status the resources report (ready
+> endpoints, accepted routes) and state which check you could not make**;
+
+**Runs.** Qwen3.5 4B, prompt agent, on the three development scenarios whose
+check is a request: `gateway-route-misconfig`, `service-targetport-mismatch` and
+`readiness-probe-breaks-endpoints`. Both arms ran locally, one after the other,
+on one host (AMD RX 5700, Vulkan; llama.cpp on port 8090; 2 agents in flight),
+at revision `e6c88f6b` with the shared settings (D-038 to D-041) and P7 through
+[a config overlay](candidates/p7.yaml). Two batches per arm, 3 then 2 attempts
+per scenario: 15 attempts per arm, P7 first within each batch. The raw runs are
+in [raw/](raw/), and `make analyze-runs` compares P7 with the same-host reference
+([report](analysis/p7-vs-reference.txt)). The Kaggle attempts above on the same
+three scenarios are context only, because host and concurrency differ.
+
+### Results
+
+**The fallback did not help.** P7 ended more attempts at the turn limit than the
+same-host reference, and the agent never used the fallback.
+
+| Arm (15 attempts each) | Turn limit | Full success | Macro | Mean turns | Fallback stated in report |
+| ---------------------- | ---------: | -----------: | ----: | ---------: | ------------------------: |
+| P7, local              |          7 |           14 | 0.967 |       41.4 |                         0 |
+| Reference, local       |          3 |           15 | 1.000 |       41.6 |                         — |
+| Kaggle reference (9)   |          5 |            8 | 0.889 |       46.0 |                         — |
+| Kaggle P5 and P6 (18)  |          6 |           17 | 0.963 |       43.8 |                         — |
+
+Turn-limit endings per scenario, out of 5 attempts: `gateway-route-misconfig` 4
+for P7 against 3 for the reference, `service-targetport-mismatch` 2 against 0,
+`readiness-probe-breaks-endpoints` 1 against 0.
+
+- **Turn-limit endings: 7 against 3.** Within chance (Fisher's exact test,
+  two-sided p = 0.25), but a large reduction would have shown, and none did.
+- **Score.** The macro difference is −0.033 [95% CI −0.100, +0.000]. The one
+  lost criterion is `target-port-correct` in one `service-targetport-mismatch`
+  attempt, which ended at the limit with the port still wrong.
+- **The fallback was never used.** No P7 report states which check could not be
+  made. In the Gateway attempts at the limit the agent stops trying requests
+  after a few attempts but does not finish: it keeps looking for objects that do
+  not exist (`xdsroute`, `lrroute`, "gatewayroutes") and re-reads a route status
+  it has already seen as Accepted. Its reasoning still asks to "verify that
+  traffic actually flows through".
+- **Same-host reference.** It ended at the limit less often than the Kaggle
+  reference on these scenarios (3 of 15 against 5 of 9), so the stopping failure
+  partly depends on the run.
+
+**Reading.** Permission to fall back is not enough for Qwen3.5 4B to stop: once
+the request has failed, it does not judge that the request command was at fault
+and keeps exploring. This supports leaving the stopping failure to the Harness
+(#35), for example a loop notice after turns without a change, rather than
+further prompt text.
+
+### Pilot limitations
+
+- Three scenarios and few attempts per arm detect only a large change in
+  turn-limit endings, and say nothing about other scenarios or models.
+- The fallback sentence relaxes a verification rule. On Gemma it could raise
+  false completions; this was not tested.
+- Local and Kaggle runs differ in host and concurrency.
+
 ## Limitations
 
 - Three attempts on 18 scenarios detect only a clear effect: single runs of
@@ -176,3 +393,7 @@ at the same number of agents.
   false completions and Qwen3.5 4B the turn-limit endings.
 - The prompt, skill and RAG conditions received unequal tuning effort before
   this round.
+- The failure diagnosis in [Why the failures persist](#why-the-failures-persist)
+  was made after the decision, by one coder who knew the conditions. The Gemma
+  categories come from a heuristic whose agreement with a manual reading is
+  given above; treat its counts as ±10%.
