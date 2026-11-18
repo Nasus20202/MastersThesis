@@ -12,7 +12,7 @@
 
 - **Chunk** — one piece of a corpus document that the retrieval index stores and returns as a single result. See [the retrieval design study](research/retrieval-design/README.md).
 
-- **Bootstrap interval** — a confidence interval obtained by resampling the scenarios many times and recomputing the statistic; used for the paired difference between two conditions (D-051). See [research-design.md](research-design.md) and [Wikipedia: Bootstrapping (statistics)](https://en.wikipedia.org/wiki/Bootstrapping_%28statistics%29).
+- **Bootstrap interval** — a confidence interval obtained by resampling the scenarios many times and recomputing the statistic; used for the paired difference between two conditions (D-050). See [research-design.md](research-design.md) and [Wikipedia: Bootstrapping (statistics)](https://en.wikipedia.org/wiki/Bootstrapping_%28statistics%29).
 
 - **Decoding throughput** — generated tokens per second, aggregated from the llama.cpp timings recorded per response. See [tech-stack.md](tech-stack.md).
 
@@ -24,7 +24,7 @@
 
 - **Embedding** — a fixed-length vector representation of text whose similarity to other vectors is used for semantic retrieval. See [tech-stack.md](tech-stack.md) and [Wikipedia: Sentence embedding](https://en.wikipedia.org/wiki/Sentence_embedding).
 
-- **False completion** — an attempt the agent ended itself, reporting it was done, with less than a full score (D-054).
+- **False completion** — an attempt the agent ended itself, reporting it was done, with less than a full score. See the [stopping-rule study](research/stopping-rule/README.md).
 
 - **Fault injection** — the controlled action that changes a known-good environment into a faulty state. See [Wikipedia: Fault injection](https://en.wikipedia.org/wiki/Fault_injection).
 
@@ -50,7 +50,7 @@
 
 - **Multi-token prediction (MTP)** — a speculatively decoded mode in which a drafter proposes several tokens per step (`--spec-type draft-mtp`). See the [llama.cpp speculative decoding documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md) and [Wikipedia: Speculative decoding](https://en.wikipedia.org/wiki/Speculative_decoding).
 
-- **Paired difference** — the difference between two conditions computed per scenario on the same scenarios, then averaged; reported with a bootstrap interval (D-051).
+- **Paired difference** — the difference between two conditions computed per scenario on the same scenarios, then averaged; reported with a bootstrap interval (D-050).
 
 - **Partial score** — a deterministic score representing how many independently verifiable scenario criteria were restored. See [benchmark.md](benchmark.md).
 
