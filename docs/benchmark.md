@@ -109,6 +109,8 @@ The model must not see:
 - verifier implementation details,
 - hidden ground-truth data, including scenario source references.
 
+The cluster must not leak the problem either (D-053): injected values do not name the fault, and grader objects such as probe Pods and their events are removed before the agent starts.
+
 Scenario source references are evaluator and analysis metadata. They must never be supplied as a hint or used to guide retrieval. RAG or Harness may independently retrieve the same source through an approved mechanism using only model-visible information, but the stored scenario reference itself must not be provided as a query, context or other external-knowledge input.
 
 ## Verification and scoring
