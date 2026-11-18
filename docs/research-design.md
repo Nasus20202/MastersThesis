@@ -61,7 +61,7 @@ All conditions use the same benchmark, limits, scoring and result format. The in
 
 Conditions are developed and evaluated on four models, Gemma 4 E2B and E4B and Qwen3.5 4B and 9B (D-037), so that no condition is fitted to one model's weaknesses and condition differences can be checked across model families and sizes. Each model is reported separately; the models are listed in [tech-stack.md](tech-stack.md). Fine-tuning is evaluated on Gemma 4 E4B and Qwen3.5 4B only (D-046).
 
-The conditions did not receive equal tuning effort during development (skill 11 candidates, RAG 6, prompt 3). After the shared settings were fixed, one targeted round on the prompt remained (D-050, D-054); the difference in effort is reported as a limitation.
+The conditions did not receive equal tuning effort during development (skill 11 candidates, RAG 6, prompt 3). After the shared settings were fixed, one targeted round on the prompt found no effect and left the prompts unchanged ([stopping-rule study](research/stopping-rule/README.md)); the difference in effort is reported as a limitation.
 
 Any necessary difference in model, runtime, tools or limits is recorded and considered when interpreting the results.
 
@@ -73,9 +73,9 @@ Development scenarios may be used to improve prompts, skills, retrieval, trainin
 
 The final evaluation runs on held-out scenarios whose faults do not occur in the development scenarios (D-044). They are not used for tuning, training or model selection, and no agent runs on them before the final evaluation. Their results are the official result of the comparison. The development scenarios are run again in the final evaluation for comparison only: the conditions were tuned on them, and the fine-tuning adapters are trained on them. Each held-out scenario runs five times and each development scenario once (D-045).
 
-Condition differences are reported as paired differences per scenario with a 95% bootstrap interval (D-051).
+Condition differences are reported as paired differences per scenario with a 95% bootstrap interval (D-050).
 
-The final evaluation runs on Kaggle (two T4 GPUs), so every model and condition is measured on one hardware type; attempts finished on the local GPU are marked and their times reported separately (D-053).
+The final evaluation runs on Kaggle (two T4 GPUs), so every model and condition is measured on one hardware type; attempts finished on the local GPU are marked and their times reported separately (D-052).
 
 The final benchmark, conditions and evaluation protocol are frozen before the final evaluation. Final results must not be used to change the protocol retrospectively.
 
