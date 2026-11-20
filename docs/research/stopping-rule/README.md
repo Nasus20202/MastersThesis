@@ -52,7 +52,7 @@ Each candidate and the unchanged prompt (_reference_) ran the 18-scenario
 [subset](../skills-optimization/subset.txt) three times on Gemma 4 E2B, Gemma 4
 E4B, Qwen3.5 4B and Qwen3.5 9B: 648 attempts on Kaggle under the shared
 settings (D-038 to D-041). Scores are macro scores with paired differences and
-95% bootstrap intervals over scenarios (D-050). A _false completion_ is an
+95% bootstrap intervals over scenarios (D-049). A _false completion_ is an
 attempt the agent ended itself without full success.
 
 Fixed before any result was read:

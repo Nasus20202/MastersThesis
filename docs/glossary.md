@@ -4,7 +4,7 @@
 
 - **Adaptation condition** — one controlled version of the benchmark that differs by the model knowledge, instructions, tools or weights provided to the model. See [research-design.md](research-design.md).
 
-- **Adapter (LoRA)** — a small set of trained weights applied on top of an unchanged base model; the form of fine-tuning used here (D-046). See [the LoRA paper](https://arxiv.org/abs/2106.09685).
+- **Adapter (LoRA)** — a small set of trained weights applied on top of an unchanged base model; the form of fine-tuning used here (D-053). See [the LoRA paper](https://arxiv.org/abs/2106.09685).
 
 - **Baseline** — the reference condition using the model with minimal task capabilities and no additional adaptation method. See [benchmark.md](benchmark.md) and [Wikipedia: Scientific control](https://en.wikipedia.org/wiki/Scientific_control).
 
@@ -12,7 +12,7 @@
 
 - **Chunk** — one piece of a corpus document that the retrieval index stores and returns as a single result. See [the retrieval design study](research/retrieval-design/README.md).
 
-- **Bootstrap interval** — a confidence interval obtained by resampling the scenarios many times and recomputing the statistic; used for the paired difference between two conditions (D-050). See [research-design.md](research-design.md) and [Wikipedia: Bootstrapping (statistics)](https://en.wikipedia.org/wiki/Bootstrapping_%28statistics%29).
+- **Bootstrap interval** — a confidence interval obtained by resampling the scenarios many times and recomputing the statistic; used for the paired difference between two conditions (D-049). See [research-design.md](research-design.md) and [Wikipedia: Bootstrapping (statistics)](https://en.wikipedia.org/wiki/Bootstrapping_%28statistics%29).
 
 - **Decoding throughput** — generated tokens per second, aggregated from the llama.cpp timings recorded per response. See [tech-stack.md](tech-stack.md).
 
@@ -30,7 +30,7 @@
 
 - **Full task success** — the scenario's complete success criterion has been satisfied. See [benchmark.md](benchmark.md).
 
-- **Harness** — the code around the model that runs the tool loop and can add tools, checks and messages of its own. As a condition: skills and retrieval combined, plus checks and tools that answer measured failures (D-049). See [benchmark.md](benchmark.md).
+- **Harness** — the code around the model that runs the tool loop and can add tools, checks and messages of its own. As a condition: skills and retrieval combined, plus checks and tools that answer measured failures (D-048). See [benchmark.md](benchmark.md).
 
 - **Held-out scenario** — a scenario of the final experiment whose fault does not occur in the development set; never run by an agent before the final experiment, and the basis of the official result (D-044). See [research-design.md](research-design.md).
 
@@ -50,7 +50,7 @@
 
 - **Multi-token prediction (MTP)** — a speculatively decoded mode in which a drafter proposes several tokens per step (`--spec-type draft-mtp`). See the [llama.cpp speculative decoding documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md) and [Wikipedia: Speculative decoding](https://en.wikipedia.org/wiki/Speculative_decoding).
 
-- **Paired difference** — the difference between two conditions computed per scenario on the same scenarios, then averaged; reported with a bootstrap interval (D-050).
+- **Paired difference** — the difference between two conditions computed per scenario on the same scenarios, then averaged; reported with a bootstrap interval (D-049).
 
 - **Partial score** — a deterministic score representing how many independently verifiable scenario criteria were restored. See [benchmark.md](benchmark.md).
 
@@ -78,14 +78,14 @@
 
 - **Source corpus** — the approved collection of documents used for retrieval, scenario construction, validation or training-data creation. See [sources.md](sources.md) and [Wikipedia: Text corpus](https://en.wikipedia.org/wiki/Text_corpus).
 
-- **Teacher model** — the model whose successful attempts become training examples for a smaller model; here Qwen3.5 9B, with a hosted model filling gaps (D-047).
+- **Teacher model** — the model whose successful attempts become training examples for a smaller model; here Qwen3.5 9B and DeepSeek V4.1 Flash (D-054).
 
 - **Tool calling** — the model's structured request to invoke an external function or operational tool. See the [llama.cpp function-calling documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/function-calling.md).
 
-- **Trajectory** — the full record of one attempt: system prompt, task, reasoning, tool calls, tool results and final report. Successful trajectories are the fine-tuning examples (D-047).
+- **Trajectory** — the full record of one attempt: system prompt, task, reasoning, tool calls, tool results and final report. Successful trajectories are the fine-tuning examples (D-054).
 
 - **Training-data leakage** — inclusion of benchmark information in adaptation data in a way that can give the adapted model access to the evaluation task or answer. See [benchmark.md](benchmark.md) and [Wikipedia: Leakage (machine learning)](https://en.wikipedia.org/wiki/Leakage_%28machine_learning%29).
 
-- **Validation scenario (fine-tuning)** — a development scenario kept out of the training data and used to select the training configuration (D-048).
+- **Validation scenario (fine-tuning)** — a development scenario kept out of the training data and used to select the training configuration (D-055).
 
 - **Vulkan backend** — the graphics-compute backend used by llama.cpp for local model execution on compatible hardware. See the [Vulkan documentation](https://docs.vulkan.org/guide/latest/) and [Wikipedia: Vulkan](https://en.wikipedia.org/wiki/Vulkan).

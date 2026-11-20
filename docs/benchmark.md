@@ -68,8 +68,8 @@ Every condition has bash and the file tools in the sandbox. The conditions diffe
 | Prompt      | A troubleshooting system prompt (D-023)                                                                                                                                                                                                                            |
 | Skill       | A system prompt of its own and a tool that loads troubleshooting skills on demand; the `troubleshooting` skill is loaded before the first command (D-026, D-032)                                                                                                   |
 | RAG         | The prompt condition's system prompt plus one search paragraph, and a `search_docs` tool the agent calls on demand over the frozen Kubernetes documentation corpus (D-011, D-036)                                                                                  |
-| Fine-tuning | The prompt condition on a model with a LoRA adapter trained on agent trajectories from the development scenarios; Gemma 4 E4B and Qwen3.5 4B only (D-046, D-047)                                                                                                   |
-| Harness     | The skills and `search_docs` together under one combined prompt, plus a check before finishing, a patch syntax check, a server-side dry-run before writes, a `rollout_wait` tool, a resource inspection tool and a loop notice. No live external knowledge (D-049) |
+| Fine-tuning | The prompt condition on a model with a LoRA adapter trained on agent trajectories from the development scenarios; all four models (D-053, D-054)                                                                                                                   |
+| Harness     | The skills and `search_docs` together under one combined prompt, plus a check before finishing, a patch syntax check, a server-side dry-run before writes, a `rollout_wait` tool, a resource inspection tool and a loop notice. No live external knowledge (D-048) |
 
 The fine-tuning and Harness conditions are not implemented yet. Each run records the prompt, tools, skills, retrieval configuration and model artifact it used.
 
@@ -109,7 +109,7 @@ The model must not see:
 - verifier implementation details,
 - hidden ground-truth data, including scenario source references.
 
-The cluster must not leak the problem either (D-053): injected values do not name the fault, and grader objects such as probe Pods and their events are removed before the agent starts.
+The cluster must not leak the problem either (D-051): injected values do not name the fault, and grader objects such as probe Pods and their events are removed before the agent starts.
 
 Scenario source references are evaluator and analysis metadata. They must never be supplied as a hint or used to guide retrieval. RAG or Harness may independently retrieve the same source through an approved mechanism using only model-visible information, but the stored scenario reference itself must not be provided as a query, context or other external-knowledge input.
 
