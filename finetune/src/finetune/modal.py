@@ -23,7 +23,7 @@ from pathlib import Path
 
 import modal
 
-from finetune import config, kernel, logs
+from finetune import config, logs
 from finetune.data import manifest as manifests
 from finetune.runs import prepare
 from finetune.runs.models import VARIANTS, Variant
@@ -34,21 +34,13 @@ REMOTE_CONFIG = "/root/config.yaml"
 RESULTS = Path("/results")
 
 image = (
-    # NVIDIA's CUDA development image, whose toolkit compiles causal-conv1d
-    # (the `cuda` extra), with the local interpreter's Python version.
-    modal.Image.from_registry(
-        SETTINGS.cuda_image, add_python=f"{sys.version_info.major}.{sys.version_info.minor}"
+    # The local interpreter's version, which uv takes from .python-version.
+    modal.Image.debian_slim(
+        python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     )
     # Triton (flash-linear-attention) compiles its launchers with gcc.
     .apt_install("build-essential")
-    .uv_sync(str(config.PATH.parent), extras=["peft"], uv_version=SETTINGS.uv)
-    .run_function(
-        kernel.build,
-        cpu=SETTINGS.kernel_cpu,
-        memory=SETTINGS.kernel_memory_mib,
-        env={"MAX_JOBS": str(SETTINGS.kernel_jobs)},
-        timeout=60 * 60,
-    )
+    .uv_sync(str(config.PATH.parent), extras=["peft", "cuda"], uv_version=SETTINGS.uv)
     # Model weights and compiled Triton kernels persist on the cache volume,
     # so only the first run downloads and compiles them.
     .env({"HF_HOME": "/hf", "TRITON_CACHE_DIR": "/hf/triton", "FINETUNE_CONFIG": REMOTE_CONFIG})

@@ -23,10 +23,6 @@ class Modal:
     memory_mib: int
     timeout_minutes: int
     uv: str
-    cuda_image: str
-    kernel_cpu: float
-    kernel_memory_mib: int
-    kernel_jobs: int
     results_volume: str
     cache_volume: str
 
