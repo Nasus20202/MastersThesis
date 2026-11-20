@@ -1,32 +1,33 @@
 # finetune
 
-LoRA and QLoRA fine-tuning of the local models on benchmark agent trajectories
-with Hugging Face transformers + PEFT (D-054). Results and the reasoning behind
-the settings are in the
-[technical check](../docs/research/finetune-technical-check/README.md).
+LoRA and QLoRA fine-tuning of the benchmark's local models on agent
+trajectories, with Hugging Face transformers + PEFT (D-052), trained on Modal
+(D-055). Settings are in [config.yaml](config.yaml); rules for changing the
+module are in [AGENTS.md](AGENTS.md). The current study is the
+[GPU POC](../docs/research/finetune-technical-check/README.md).
 
 ## Flow
 
-1. **Trajectories** ([`trajectories.py`](src/finetune/trajectories.py)): a
-   benchmark attempt becomes a chat conversation; only clean attempts (full
-   score, ended by the agent) are used, never the validation scenarios.
-2. **Rendering** ([`render.py`](src/finetune/render.py),
-   [`dataset.py`](src/finetune/dataset.py)): the whole conversation is rendered
-   once with the checkpoint's chat template, and the text the model generates
-   when serving is marked as the loss target. `render.compare` checks the
-   render against the prompt llama.cpp builds when serving.
-3. **Training** ([`train.py`](src/finetune/train.py),
-   [`placement.py`](src/finetune/placement.py)): one model, one precision; the
-   model is split over all GPUs; a memory sweep picks the longest sequence
-   that fits; evaluation loss before and after; the adapter is saved.
-4. **Served model** ([`llama.py`](src/finetune/llama.py),
-   [`serving.py`](src/finetune/serving.py)): the adapter is converted to GGUF
-   and applied to the served 4-bit file with llama.cpp (perplexity, router,
-   multi-token-prediction drafter).
+The package has one subpackage per stage; each keeps its dataclasses in
+`models.py` and its logic in the other modules.
 
-[`check.py`](src/finetune/check.py) runs steps 1 to 3 for every model and
-precision on Kaggle's 2x T4; [`kaggle/check/kernel.py`](kaggle/check/kernel.py)
-starts it from a clone of the repository.
+1. **Data** ([`data/`](src/finetune/data/)): a benchmark attempt becomes a
+   chat conversation (`trajectories`), rendered once with the checkpoint's
+   chat template (`render`), with the text the model generates when serving
+   marked as the loss target (`rows`). A manifest lists the attempts to train
+   and evaluate on (`manifest`); training on validation scenarios is refused.
+2. **Run inputs** ([`runs/prepare.py`](src/finetune/runs/prepare.py)): the
+   manifest rendered for each model, with the commit and data hashes.
+3. **Training** ([`training/`](src/finetune/training/)): one model, one
+   precision (`run`): the checkpoint with a LoRA adapter on one GPU
+   (`lora`), a memory and speed sweep (`sweep`), evaluation loss before and
+   after (`evaluate`), training steps (`trainer`) with a chunked loss
+   (`loss`), all in bfloat16 (`gpu`).
+4. **Modal** ([`modal.py`](src/finetune/modal.py)): steps 2 and 3, one
+   container and GPU per variant, results in a Modal volume.
+5. **Serving** ([`serving/`](src/finetune/serving/)): the training render
+   equals the served prompt (`templates`); the adapter is converted to GGUF
+   and applied to the served 4-bit file (`llama`).
 
 ## Commands
 
@@ -34,13 +35,15 @@ starts it from a clone of the repository.
 make finetune-test        # CPU tests with tiny random models
 make finetune-lint
 
-# Kaggle (GPU T4 x2): push the starter, then download its output
-kaggle kernels push -p finetune/kaggle/check
-kaggle kernels output krzysztofnasuta/finetune-check -p <dir>
+# Modal, from finetune/ (once: `uv run modal setup`). Costs money: only with
+# the researcher's approval.
+uv run modal run -m finetune.modal --manifest ../docs/research/finetune-technical-check/manifest.yaml \
+  --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu H100
+uv run modal volume get finetune-results <run> <dir>
 
-# Served perplexity of one adapter (pinned llama.cpp image, local Vulkan GPU;
-# needs the served GGUF in benchmark/models)
-cd finetune && uv run --locked python -m finetune.llama \
+# Served perplexity of one adapter (local Vulkan GPU; needs the served GGUF
+# in benchmark/models)
+cd finetune && uv run --locked python -m finetune.serving.llama \
   --student gemma-4-e4b --adapter <run>/gemma-4-e4b-lora/adapter \
   --eval <run>/data/gemma-4-e4b/eval.jsonl --out <dir>
 ```
