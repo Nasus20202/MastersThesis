@@ -14,7 +14,7 @@ definitions, the task and tool results are context only.
 Gemma's serving prompt closes the previous model turn when the assistant wrote
 text next to a tool call, which a single render does not; the technical check
 showed that training on full renders still transfers to the served model
-(docs/research/finetune-technical-check).
+(#24).
 """
 
 from __future__ import annotations

@@ -3,8 +3,8 @@
 LoRA and QLoRA fine-tuning of the benchmark's local models on agent
 trajectories, with Hugging Face transformers + PEFT (D-052), trained on Modal
 (D-055). Settings are in [config.yaml](config.yaml); rules for changing the
-module are in [AGENTS.md](AGENTS.md). The current study is the
-[GPU POC](../docs/research/finetune-technical-check/README.md).
+module are in [AGENTS.md](AGENTS.md). The GPU POC is planned in #24;
+its attempts are listed in [manifests/poc.yaml](manifests/poc.yaml).
 
 ## Flow
 
@@ -37,7 +37,7 @@ make finetune-lint
 
 # Modal, from finetune/ (once: `uv run modal setup`). Costs money: only with
 # the researcher's approval.
-uv run modal run -m finetune.modal --manifest ../docs/research/finetune-technical-check/manifest.yaml \
+uv run modal run -m finetune.modal --manifest manifests/poc.yaml \
   --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu H100
 uv run modal volume get finetune-results <run> <dir>
 

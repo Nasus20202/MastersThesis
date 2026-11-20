@@ -12,7 +12,7 @@ from finetune.runs.models import Variant
 from finetune.training.models import Precision
 from tests.conftest import ATTEMPT, TemplateTokenizer
 
-POC_MANIFEST = ROOT / "docs/research/finetune-technical-check/manifest.yaml"
+POC_MANIFEST = ROOT / "finetune/manifests/poc.yaml"
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def test_prepare_renders_only_the_needed_models_and_records_provenance(
     saved = json.loads((tmp_path / "session.json").read_text())
     assert (saved["steps"], saved["gpu"]) == (2, "H100")
     assert saved["variants"] == ["qwen35-4b-lora", "gemma-4-e4b-qlora"]
-    assert saved["manifest"] == "docs/research/finetune-technical-check/manifest.yaml"
+    assert saved["manifest"] == "finetune/manifests/poc.yaml"
     assert len(session.provenance.commit) == 40
     for name, digest in session.data.items():
         assert hashlib.sha256((tmp_path / "data" / name).read_bytes()).hexdigest() == digest
