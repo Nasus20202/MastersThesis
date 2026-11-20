@@ -23,6 +23,7 @@ class Modal:
     memory_mib: int
     timeout_minutes: int
     uv: str
+    cuda_image: str
     results_volume: str
     cache_volume: str
 
