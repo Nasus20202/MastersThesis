@@ -1,6 +1,8 @@
 GO ?= go
 NPM ?= npm
+UV ?= uv
 BENCHMARK_DIR := benchmark
+FINETUNE_DIR := finetune
 LLAMA_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
 SCENARIO ?= scenarios/
@@ -76,14 +78,14 @@ BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),$(EMB
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search analyze-runs benchmark-list benchmark-merge
+.PHONY: help test format format-check lint check download-models llama-start llama-stop llama-logs registry-start registry-stop kind-network docker-cleanup build browser benchmark benchmark-validate check-corpus benchmark-go-lint finetune-test finetune-lint finetune-format finetune-format-check corpus-download embedding-start embedding-stop retrieval-index retrieval-queries retrieval-evaluate retrieval-search analyze-runs benchmark-list benchmark-merge
 
 help:
 	@printf '%s\n' 'Available commands:'
 	@printf '  %-28s %s\n' \
-		'make test' 'Run the benchmark Go tests.' \
-		'make format' 'Format Go, Markdown, YAML, JSON, and other supported files.' \
-		'make lint' 'Run Go vet, golangci-lint, and Renovate validation.' \
+		'make test' 'Run the benchmark Go tests and the finetune Python tests.' \
+		'make format' 'Format Go, Python, Markdown, YAML, JSON, and other supported files.' \
+		'make lint' 'Run Go vet, golangci-lint, ruff and Renovate validation.' \
 		'make check' 'Run test, lint, format and corpus checks.' \
 		'make download-models' 'Download the configured model, drafter and embedding GGUF from Hugging Face.' \
 		'make corpus-download' 'Fetch the frozen Kubernetes documentation corpus.' \
@@ -133,18 +135,22 @@ help:
 
 test:
 	$(MAKE) benchmark-go-test
+	$(MAKE) finetune-test
 
 format:
 	$(MAKE) benchmark-go-format
+	$(MAKE) finetune-format
 	$(MAKE) prettier
 
 format-check:
 	$(MAKE) benchmark-go-format-check
+	$(MAKE) finetune-format-check
 	$(MAKE) prettier-check
 
 lint:
 	$(MAKE) benchmark-go-vet
 	$(MAKE) benchmark-go-lint
+	$(MAKE) finetune-lint
 	$(MAKE) renovate-check
 
 check: test lint format-check check-corpus
@@ -235,6 +241,18 @@ benchmark-go-format:
 
 benchmark-go-format-check:
 	@test -z "$$(find $(BENCHMARK_DIR) -type f -name '*.go' -print0 | xargs -0 gofmt -l)"
+
+finetune-test:
+	cd $(FINETUNE_DIR) && $(UV) run --locked --extra peft pytest -q
+
+finetune-lint:
+	cd $(FINETUNE_DIR) && $(UV) run --locked ruff check .
+
+finetune-format:
+	cd $(FINETUNE_DIR) && $(UV) run --locked ruff format . && $(UV) run --locked ruff check --fix .
+
+finetune-format-check:
+	cd $(FINETUNE_DIR) && $(UV) run --locked ruff format --check .
 
 prettier:
 	$(NPM) exec --no -- prettier . --write --ignore-unknown

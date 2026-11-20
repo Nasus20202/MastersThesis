@@ -27,5 +27,6 @@ make check             # tests, lint, formatting and corpus validation
 
 - [`benchmark/`](benchmark/README.md): Go runner and terminal results browser.
 - [`benchmark/scenarios/`](benchmark/scenarios): incident definitions, faults, expected repairs and grading.
+- [`finetune/`](finetune/README.md): LoRA fine-tuning of the local models on agent trajectories, and the check that an adapter works on the served model.
 - [`docs/`](docs/README.md): research design, benchmark contract, technology stack and decision log.
 - [`docs/research/`](docs/research/): one study per topic, preserving its raw evidence.
