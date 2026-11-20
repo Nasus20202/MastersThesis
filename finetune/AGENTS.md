@@ -42,7 +42,8 @@ documentation policy, which also apply here.
   Ship code to containers from the checkout (`add_local_python_source`), not
   by cloning or shelling out.
 - Prefer library calls to subprocesses. The only remaining ones are `git`
-  for provenance and `docker` for the pinned llama.cpp image.
+  for provenance, `docker` for the pinned llama.cpp image and `uv` in the
+  Modal image's kernel build step (`finetune.kernel`).
 
 ## Code style
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import modal
 
-from finetune import config, logs
+from finetune import config, kernel, logs
 from finetune.data import manifest as manifests
 from finetune.runs import prepare
 from finetune.runs.models import VARIANTS, Variant
@@ -41,10 +41,14 @@ image = (
     )
     # Triton (flash-linear-attention) compiles its launchers with gcc.
     .apt_install("build-essential")
-    # Parallel nvcc jobs for causal-conv1d, each compiling 9 GPU architectures.
-    # The default (one per CPU) failed in Modal's image builder; two build.
-    .env({"MAX_JOBS": "2"})
-    .uv_sync(str(config.PATH.parent), extras=["peft", "cuda"], uv_version=SETTINGS.uv)
+    .uv_sync(str(config.PATH.parent), extras=["peft"], uv_version=SETTINGS.uv)
+    .run_function(
+        kernel.build,
+        cpu=SETTINGS.kernel_cpu,
+        memory=SETTINGS.kernel_memory_mib,
+        env={"MAX_JOBS": str(SETTINGS.kernel_jobs)},
+        timeout=60 * 60,
+    )
     # Model weights and compiled Triton kernels persist on the cache volume,
     # so only the first run downloads and compiles them.
     .env({"HF_HOME": "/hf", "TRITON_CACHE_DIR": "/hf/triton", "FINETUNE_CONFIG": REMOTE_CONFIG})
