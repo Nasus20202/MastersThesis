@@ -11,7 +11,7 @@ Every run costs money: start one only with the researcher's approval
 (AGENTS.md). From ``finetune/``:
 
     uv run modal run -m finetune.modal --manifest <manifest.yaml> \
-        --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu H100
+        --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu L40S
     uv run modal volume get finetune-results <run> <dir>
 """
 
@@ -41,7 +41,9 @@ image = (
     # Triton (flash-linear-attention) compiles its launchers with gcc.
     .apt_install("build-essential")
     .uv_sync(str(config.PATH.parent), extras=["peft"], uv_version=SETTINGS.uv)
-    .env({"HF_HOME": "/hf", "FINETUNE_CONFIG": REMOTE_CONFIG})
+    # Model weights and compiled Triton kernels persist on the cache volume,
+    # so only the first run downloads and compiles them.
+    .env({"HF_HOME": "/hf", "TRITON_CACHE_DIR": "/hf/triton", "FINETUNE_CONFIG": REMOTE_CONFIG})
     .add_local_file(config.PATH, REMOTE_CONFIG)
     .add_local_python_source("finetune")
 )
