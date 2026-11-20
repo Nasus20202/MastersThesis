@@ -9,33 +9,9 @@ object, so both are converted here. Reasoning stays in ``reasoning_content``.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
-# Validation scenarios of D-048 (#24): never used for training.
-VALIDATION_SCENARIOS = frozenset(
-    {
-        "configmap-missing-key",
-        "unschedulable-cpu-request",
-        "dns-name-resolution",
-        "stale-image-ifnotpresent",
-        "antiaffinity-unschedulable",
-        "hostpath-fsgroup",
-        "missing-rbac-binding",
-        "container-crash-loop",
-    }
-)
-
-
-@dataclass(frozen=True)
-class Trajectory:
-    source: str
-    scenario_id: str
-    condition: str
-    model: str
-    peak_context_tokens: int
-    tools: list[dict]
-    messages: list[dict]
+from finetune.data.models import Trajectory
 
 
 def _tool_call(call: dict) -> dict:
@@ -75,7 +51,7 @@ def load(path: Path) -> Trajectory:
 
 
 def is_clean(path: Path) -> bool:
-    """Full score and ended by the agent itself (D-047)."""
+    """Full score and ended by the agent itself (D-054)."""
     data = json.loads(path.read_text())
     agent = data.get("agent") or {}
     return agent.get("termination") == "completed" and bool(data["grading"]["full_success"])

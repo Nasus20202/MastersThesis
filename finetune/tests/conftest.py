@@ -21,15 +21,15 @@ except ImportError:
     pass
 from transformers.utils.chat_template_utils import render_jinja_template
 
-from finetune import trajectories
-from finetune.students import STUDENTS
+from finetune.config import STUDENTS
+from finetune.data import trajectories
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ATTEMPT = FIXTURES / "attempt-basic-deploy-service.json"
 
 
 class TemplateTokenizer:
-    """The part of a tokenizer that ``finetune.render`` uses: the chat template."""
+    """The part of a tokenizer that ``finetune.data.render`` uses: the chat template."""
 
     def __init__(self, family: str):
         self.template = (FIXTURES / f"{family}.jinja").read_text()
@@ -53,7 +53,7 @@ class TemplateTokenizer:
 
 @pytest.fixture(params=["gemma-4-e4b", "qwen35-4b"])
 def student_name(request):
-    """The two students of the study; the other models share their templates."""
+    """One model per family; the other models share their templates."""
     return request.param
 
 

@@ -20,17 +20,23 @@ showed that training on full renders still transfers to the served model
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
-from finetune import render, trajectories
-from finetune.students import Student
+from finetune.config import Family, Student
+from finetune.data import render
+from finetune.data.models import Row, Trajectory
 
 QWEN_TURN = re.compile(r"<\|im_start\|>assistant\n(?:<think>\n)?(.*?<\|im_end\|>)", re.DOTALL)
+
+
 GEMMA_TURN = re.compile(r"<\|turn>model\n(.*?(?:<turn\|>|$))", re.DOTALL)
+
+
 GEMMA_TOOL_RESULT = re.compile(r"<\|tool_response>(.*?<tool_response\|>)", re.DOTALL)
 
 
-def target_spans(family: str, text: str) -> list[tuple[int, int]]:
-    if family == "qwen":
+def target_spans(family: Family, text: str) -> list[tuple[int, int]]:
+    if family == Family.QWEN:
         return [m.span(1) for m in QWEN_TURN.finditer(text)]
     spans = []
     for turn in GEMMA_TURN.finditer(text):
@@ -42,12 +48,10 @@ def target_spans(family: str, text: str) -> list[tuple[int, int]]:
     return [(a, b) for a, b in spans if b > a]
 
 
-def example(tok, student: Student, traj: trajectories.Trajectory) -> dict:
-    """One training row: the rendered conversation and its target spans."""
+def read_rows(path: Path) -> list[Row]:
+    return [Row.from_json(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def example(tok, student: Student, traj: Trajectory) -> Row:
     text = render.render(tok, traj)
-    return {
-        "source": traj.source,
-        "scenario_id": traj.scenario_id,
-        "text": text,
-        "targets": target_spans(student.family, text),
-    }
+    return Row(traj.source, traj.scenario_id, text, target_spans(student.family, text))

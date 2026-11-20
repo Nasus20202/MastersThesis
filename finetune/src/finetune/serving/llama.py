@@ -1,7 +1,8 @@
 """The adapter on the served model: GGUF conversion and served perplexity.
 
-Both run in the pinned llama.cpp image (the release of the benchmark's server,
-``b10964``), so the converter and the runtime are the ones the benchmark uses:
+Both run in the llama.cpp image pinned in ``config.yaml`` (the release of the
+benchmark's server), so the converter and the runtime are the ones the
+benchmark uses:
 
 - ``convert``: PEFT adapter -> GGUF LoRA with ``convert_lora_to_gguf.py``,
   using only the pinned checkpoint's config (no weights);
@@ -16,25 +17,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
-from finetune import render
-from finetune.students import STUDENTS, Student
+from finetune import logs
+from finetune.config import CONFIG, ROOT, STUDENTS, Student
+from finetune.data import render
+from finetune.data.rows import read_rows
+from finetune.serving.models import Conversion, Perplexity, Served
 
-IMAGE = (
-    "ghcr.io/ggml-org/llama.cpp:full-b10964"
-    "@sha256:c983c142e666c6d69797b789998790b26305c8b52305dcafa78ffcfb9e06a0ea"
-)
-IMAGE_VULKAN = (
-    "ghcr.io/ggml-org/llama.cpp:full-vulkan-b10964"
-    "@sha256:f4ab9e13181311d341b05d52dd4c324b66c592a7d4b90b7681c105febdc84e83"
-)
-REPO = Path(__file__).resolve().parents[3]
-MODELS = REPO / "benchmark" / "models"
+MODELS = ROOT / "benchmark" / "models"
+
+
 PPL = re.compile(r"Final estimate: PPL = ([0-9.]+) \+/- ([0-9.]+)")
+log = logging.getLogger(__name__)
 
 
 def snapshot(student: Student) -> Path:
@@ -64,7 +64,8 @@ def docker(
     return subprocess.run(cmd + [image, *args], capture_output=True, text=True)
 
 
-def convert(student: Student, adapter: Path, out: Path) -> dict:
+def convert(student: Student, adapter: Path, out: Path) -> Conversion:
+    log.info("converting %s to %s", adapter, out)
     out.parent.mkdir(parents=True, exist_ok=True)
     # The HF cache snapshot holds relative symlinks into its blob store; copy
     # the resolved config files so the mounted directory is self-contained.
@@ -74,7 +75,7 @@ def convert(student: Student, adapter: Path, out: Path) -> dict:
         if file.suffix in (".json", ".jinja"):
             shutil.copyfile(file, base / file.name)
     result = docker(
-        IMAGE,
+        CONFIG.llama_cpp.ref(gpu=False),
         [
             "/app/convert_lora_to_gguf.py",
             "--outtype",
@@ -92,16 +93,17 @@ def convert(student: Student, adapter: Path, out: Path) -> dict:
         ],
         entrypoint="python3",
     )
-    return {
-        "ok": result.returncode == 0 and out.exists(),
-        "returncode": result.returncode,
-        "log_tail": (result.stdout + result.stderr)[-4000:],
-    }
+    return Conversion(
+        ok=result.returncode == 0 and out.exists(),
+        returncode=result.returncode,
+        log_tail=(result.stdout + result.stderr)[-4000:],
+    )
 
 
 def perplexity(
     student: Student, text: Path, lora: Path | None, ctx: int = 8192, gpu: bool = True
-) -> dict:
+) -> Perplexity:
+    log.info("perplexity of %s on %s, adapter %s", student.served_model, text.name, lora)
     mounts = [(MODELS.resolve(), "/models:ro"), (text.parent.resolve(), "/data:ro")]
     args = [
         "-m",
@@ -118,25 +120,24 @@ def perplexity(
     if lora:
         mounts.append((lora.parent.resolve(), "/lora:ro"))
         args += ["--lora", f"/lora/{lora.name}"]
-    image = IMAGE_VULKAN if gpu else IMAGE
-    result = docker(image, args, mounts, gpu=gpu, entrypoint="/app/llama-perplexity")
-    log = result.stdout + result.stderr
-    match = PPL.search(log)
-    return {
-        "ok": bool(match),
-        "ppl": float(match.group(1)) if match else None,
-        "ppl_error": float(match.group(2)) if match else None,
-        # llama.cpp's own lines about loading the adapter (empty without one).
-        "lora_log": [line for line in log.splitlines() if "lora" in line.lower()][:20],
-        "log_tail": log[-3000:],
-    }
+    result = docker(
+        CONFIG.llama_cpp.ref(gpu), args, mounts, gpu=gpu, entrypoint="/app/llama-perplexity"
+    )
+    output = result.stdout + result.stderr
+    match = PPL.search(output)
+    return Perplexity(
+        ok=bool(match),
+        ppl=float(match.group(1)) if match else None,
+        ppl_error=float(match.group(2)) if match else None,
+        lora_log=[line for line in output.splitlines() if "lora" in line.lower()][:20],
+        log_tail=output[-3000:],
+    )
 
 
 def eval_text(rows: Path, out: Path, bos: str) -> Path:
     """Held-out rendered trajectories as one text file, BOS text removed
     (llama.cpp adds BOS as a token)."""
-    texts = [json.loads(line)["text"] for line in rows.read_text().splitlines() if line]
-    out.write_text("\n".join(t.removeprefix(bos) for t in texts))
+    out.write_text("\n".join(row.text.removeprefix(bos) for row in read_rows(rows)))
     return out
 
 
@@ -150,21 +151,27 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cpu", action="store_true", help="llama.cpp on CPU instead of Vulkan")
     args = parser.parse_args()
+    logs.setup()
     student = STUDENTS[args.student]
     args.out.mkdir(parents=True, exist_ok=True)
     gguf = args.out / "adapter-f16.gguf"
-    result = {"convert": convert(student, args.adapter, gguf)}
-    if result["convert"]["ok"]:
+    served = Served(convert(student, args.adapter, gguf))
+    if served.convert.ok:
         text = eval_text(args.eval, args.out / "eval.txt", render.bos_text(student))
-        result["without_adapter"] = perplexity(student, text, None, gpu=not args.cpu)
-        result["with_adapter"] = perplexity(student, text, gguf, gpu=not args.cpu)
-    (args.out / "served.json").write_text(json.dumps(result, indent=2))
-    print(
-        json.dumps(
-            {k: {kk: vv for kk, vv in v.items() if kk != "log_tail"} for k, v in result.items()},
-            indent=2,
+        served = Served(
+            served.convert,
+            without_adapter=perplexity(student, text, None, gpu=not args.cpu),
+            with_adapter=perplexity(student, text, gguf, gpu=not args.cpu),
         )
-    )
+    (args.out / "served.json").write_text(json.dumps(asdict(served), indent=2))
+    if not served.convert.ok:
+        log.error("conversion failed:\n%s", served.convert.log_tail)
+    for name, result in (
+        ("without adapter", served.without_adapter),
+        ("with adapter", served.with_adapter),
+    ):
+        if result:
+            log.info("served perplexity %s: %s +/- %s", name, result.ppl, result.ppl_error)
 
 
 if __name__ == "__main__":

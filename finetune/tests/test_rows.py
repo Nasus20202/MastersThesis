@@ -1,14 +1,14 @@
 """Target spans on real renders of a real attempt, for both students."""
 
-from finetune import dataset, render
+from finetune.data import render, rows
 
 
 def build(student, template_tokenizer, attempt):
-    return dataset.example(template_tokenizer, student, attempt)
+    return rows.example(template_tokenizer, student, attempt)
 
 
 def targets_text(row):
-    return [row["text"][a:b] for a, b in row["targets"]]
+    return [row.text[a:b] for a, b in row.targets]
 
 
 def test_every_assistant_output_is_a_target(student, template_tokenizer, attempt):
@@ -41,7 +41,7 @@ def test_context_is_never_a_target(student, template_tokenizer, attempt):
 
 def test_spans_are_ordered_and_disjoint(student, template_tokenizer, attempt):
     row = build(student, template_tokenizer, attempt)
-    spans = row["targets"]
+    spans = row.targets
     assert spans
     assert all(a < b for a, b in spans)
     assert all(prev[1] <= cur[0] for prev, cur in zip(spans, spans[1:], strict=False))
@@ -63,7 +63,7 @@ def test_turn_ends_are_targets_so_the_model_learns_to_stop(student, template_tok
 def test_generation_prompt_is_not_a_target(student, template_tokenizer, attempt):
     """Every served prompt ends right where a target starts (Qwen exactly)."""
     row = build(student, template_tokenizer, attempt)
-    starts = {a for a, _ in row["targets"]}
+    starts = {a for a, _ in row.targets}
     first_turn = next(i for i, m in enumerate(attempt.messages) if m["role"] == "assistant")
     prompt = render.render(template_tokenizer, attempt, upto=first_turn)
     if student.family == "qwen":

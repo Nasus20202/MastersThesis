@@ -1,6 +1,6 @@
 import json
 
-from finetune import trajectories
+from finetune.data import trajectories
 
 
 def attempt(termination="completed", full_success=True):
@@ -62,7 +62,3 @@ def test_is_clean_requires_full_score_and_own_ending(tmp_path):
     assert trajectories.is_clean(write(tmp_path, attempt()))
     assert not trajectories.is_clean(write(tmp_path, attempt(termination="turn_limit")))
     assert not trajectories.is_clean(write(tmp_path, attempt(full_success=False)))
-
-
-def test_validation_scenarios_match_d048():
-    assert len(trajectories.VALIDATION_SCENARIOS) == 8

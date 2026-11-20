@@ -1,8 +1,9 @@
-from finetune import render
-from finetune.students import Student
-from finetune.trajectories import Trajectory
+from finetune.config import Student
+from finetune.data import render
+from finetune.data.models import Trajectory
+from finetune.serving import templates
 
-STUDENT = Student("gemma", "x", "rev", "served", in_study=True)
+STUDENT = Student("gemma", "x", "rev", "served")
 
 TRAJ = Trajectory(
     source="a",
@@ -31,9 +32,9 @@ class FakeTokenizer:
 def test_compare_ignores_bos_and_flags_non_prefix_prompts(monkeypatch):
     monkeypatch.setattr(render, "tokenizer", lambda student: FakeTokenizer())
     served = {1: "[u]<gen>", 3: "[u][a1][t]<gen>"}
-    monkeypatch.setattr(render, "served_prompt", lambda url, model, traj, upto: served[upto])
+    monkeypatch.setattr(templates, "served_prompt", lambda url, model, traj, upto: served[upto])
 
-    checks = render.compare("http://x", STUDENT, TRAJ)
+    checks = templates.compare("http://x", STUDENT, TRAJ)
 
     assert [c.turn for c in checks] == [1, 3]
     assert all(c.served_equals_hf_prompt for c in checks)
@@ -44,12 +45,12 @@ def test_compare_ignores_bos_and_flags_non_prefix_prompts(monkeypatch):
 
 def test_compare_reports_first_difference(monkeypatch):
     monkeypatch.setattr(render, "tokenizer", lambda student: FakeTokenizer())
-    monkeypatch.setattr(render, "served_prompt", lambda url, model, traj, upto: "[u]<other>")
+    monkeypatch.setattr(templates, "served_prompt", lambda url, model, traj, upto: "[u]<other>")
 
-    checks = render.compare("http://x", STUDENT, TRAJ)
+    checks = templates.compare("http://x", STUDENT, TRAJ)
 
     assert not checks[0].served_equals_hf_prompt
-    assert '"at": 4' in checks[0].first_difference
+    assert checks[0].first_difference.at == 4
 
 
 def test_template_render_equals_llama_cpp_served_prompt(
