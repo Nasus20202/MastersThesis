@@ -41,6 +41,9 @@ image = (
     )
     # Triton (flash-linear-attention) compiles its launchers with gcc.
     .apt_install("build-essential")
+    # Parallel nvcc jobs for causal-conv1d, each compiling 9 GPU architectures.
+    # The default (one per CPU) failed in Modal's image builder; two build.
+    .env({"MAX_JOBS": "2"})
     .uv_sync(str(config.PATH.parent), extras=["peft", "cuda"], uv_version=SETTINGS.uv)
     # Model weights and compiled Triton kernels persist on the cache volume,
     # so only the first run downloads and compiles them.
