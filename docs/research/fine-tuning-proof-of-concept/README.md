@@ -234,6 +234,34 @@ changes in the checkpoint therefore reaches the 4-bit model. The values are
 not comparable between the families: the tokenizers and chat templates
 differ, and the windows include tool results.
 
+### Adapter on Qwen3.5's linear-attention layers
+
+The POC adapters were trained on the seven projection names of attention
+and the MLP. In Qwen3.5 those names exist only in the 8 full-attention
+layers and the MLPs, so the mixing step of the 24 Gated DeltaNet layers had
+no adapter (see [concepts](concepts.md#projections-by-name)). Before adding
+those projections, a local check tested whether the served model applies a
+LoRA on them: a random adapter (rank 16, B non-zero so it changes the
+output) on `in_proj_qkv`, `in_proj_z` and `out_proj` of all 24 layers,
+converted with the pinned llama.cpp and compared with transformers.
+
+| Check                                                               | Result                                                                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Conversion with `out_proj`                                          | fails (`NotImplementedError`): llama.cpp reorders the value heads of `out_proj` along its input, which its LoRA converter cannot do |
+| Conversion of `in_proj_qkv` and `in_proj_z`                         | succeeds, 96 tensors for 24 layers                                                                                                  |
+| Served perplexity, evaluation trajectories (8,192-token windows)    | 8.908 ± 0.217 without, 7.895 ± 0.186 with the adapter                                                                               |
+| Same 8,192 tokens, 2,048-token windows: llama.cpp (4-bit, Vulkan)   | 9.765 → 7.872, ratio 0.806                                                                                                          |
+| Same 8,192 tokens, 2,048-token windows: transformers (float32, CPU) | 79.30 → 64.46, ratio 0.813                                                                                                          |
+
+The served model applies the adapter on `in_proj_qkv` and `in_proj_z`, and
+changes the output by the same factor as transformers, so the conversion
+keeps the heads in the right order. The absolute values differ between the
+two programs (different tokenization of the same text, 4-bit against
+float32 weights); the check compares the ratios. The adapter is random, so
+that it lowers perplexity says nothing about training. Both projections are
+added to the target modules for #26; `out_proj` stays without an adapter
+until llama.cpp can convert it.
+
 ## Conclusions
 
 - The training code is ready for #26 on Modal: both families, whole
@@ -267,13 +295,14 @@ differ, and the windows include tool results.
 
 ## Evidence
 
-| Run                   | Model              | GPU       | Commit     | Raw                                                  |
-| --------------------- | ------------------ | --------- | ---------- | ---------------------------------------------------- |
-| `run-20261120-184233` | Qwen3.5 4B         | A100      | `23781a2a` | [raw/run-20261120-184233/](raw/run-20261120-184233/) |
-| `run-20261120-190435` | Gemma 4 E4B        | A100      | `23781a2a` | [raw/run-20261120-190435/](raw/run-20261120-190435/) |
-| `run-20261120-191247` | both               | L40S      | `0745571c` | [raw/run-20261120-191247/](raw/run-20261120-191247/) |
-| `run-20261120-222907` | Qwen3.5 4B, kernel | A100      | `7bd7e559` | [raw/run-20261120-222907/](raw/run-20261120-222907/) |
-| served perplexity     | both               | local CPU | —          | [raw/served/](raw/served/)                           |
+| Run                      | Model              | GPU       | Commit     | Raw                                                            |
+| ------------------------ | ------------------ | --------- | ---------- | -------------------------------------------------------------- |
+| `run-20261120-184233`    | Qwen3.5 4B         | A100      | `23781a2a` | [raw/run-20261120-184233/](raw/run-20261120-184233/)           |
+| `run-20261120-190435`    | Gemma 4 E4B        | A100      | `23781a2a` | [raw/run-20261120-190435/](raw/run-20261120-190435/)           |
+| `run-20261120-191247`    | both               | L40S      | `0745571c` | [raw/run-20261120-191247/](raw/run-20261120-191247/)           |
+| `run-20261120-222907`    | Qwen3.5 4B, kernel | A100      | `7bd7e559` | [raw/run-20261120-222907/](raw/run-20261120-222907/)           |
+| served perplexity        | both               | local CPU | —          | [raw/served/](raw/served/)                                     |
+| linear-attention adapter | Qwen3.5 4B         | local     | —          | [raw/linear-attention-adapter/](raw/linear-attention-adapter/) |
 
 Each run's commit is tagged `finetune-poc/<run>`. Each run directory holds
 `session.json` (commit, manifest, data hashes) and
