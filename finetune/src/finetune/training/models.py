@@ -26,6 +26,7 @@ class Settings:
     alpha: int = TRAINING.alpha
     learning_rate: float = TRAINING.learning_rate
     warmup_steps: int = TRAINING.warmup_steps
+    lr_schedule: str = TRAINING.lr_schedule
     seed: int = TRAINING.seed
 
 

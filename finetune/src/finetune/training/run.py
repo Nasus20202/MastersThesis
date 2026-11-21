@@ -147,7 +147,7 @@ def _run(job: Job, metrics: Metrics) -> None:
         metrics.save()
 
     # 5. Train.
-    trainer = Trainer(model, cfg)
+    trainer = Trainer(model, cfg, job.steps)
 
     def on_step(entry: Step) -> None:
         metrics.train_log.append(entry)

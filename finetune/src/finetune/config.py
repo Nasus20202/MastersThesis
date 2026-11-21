@@ -44,6 +44,7 @@ class Training:
     alpha: int
     learning_rate: float
     warmup_steps: int
+    lr_schedule: str
     seed: int
     max_len: int
     sweep: list[int]
