@@ -19,6 +19,7 @@ showed that training on full renders still transfers to the served model
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from pathlib import Path
 
@@ -55,3 +56,8 @@ def read_rows(path: Path) -> list[Row]:
 def example(tok, student: Student, traj: Trajectory) -> Row:
     text = render.render(tok, traj)
     return Row(traj.source, traj.scenario_id, text, target_spans(student.family, text))
+
+
+def replace_source(row: Row, source: str) -> Row:
+    """The row with its source set to the raw record's path in the repository."""
+    return dataclasses.replace(row, source=source)

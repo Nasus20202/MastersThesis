@@ -19,6 +19,32 @@ class Trajectory:
 
 
 @dataclass(frozen=True)
+class Candidate:
+    """A clean attempt that may enter a training dataset."""
+
+    path: Path
+    run: str
+    scenario_id: str
+    attempt: int
+    teacher: str  # model id the attempt ran on
+    tokens: int  # peak context of the attempt
+    writes: tuple[str, ...]  # normalised write commands, in order
+
+
+@dataclass(frozen=True)
+class Entry:
+    """One kept attempt in a dataset manifest, with its provenance."""
+
+    scenario: str
+    teacher: str
+    run: str
+    attempt: int
+    tokens: int
+    review: str  # pending | accepted | rejected, from the review sheet
+    path: str  # raw attempt record, relative to the repository
+
+
+@dataclass(frozen=True)
 class Row:
     """One training example: the rendered conversation and its target spans."""
 

@@ -234,3 +234,30 @@ func TestReasoningEffortIsSentAndRecorded(t *testing.T) {
 	assert.Equal(t, "low", effort)
 	assert.Equal(t, map[string]string{"reasoning_effort": "low"}, client.Metadata().RuntimeSettings)
 }
+
+func TestReplayReasoningSendsAssistantReasoningAndIsRecorded(t *testing.T) {
+	t.Parallel()
+
+	var assistant map[string]any
+	client, err := NewClient(Config{
+		BaseURL:         "https://api.test/v1",
+		Model:           "deepseek-test",
+		ReplayReasoning: true,
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+			messages := payload["messages"].([]any)
+			assert.NotContains(t, messages[0], "reasoning_content")
+			assistant = messages[1].(map[string]any)
+			return testResponse(http.StatusOK, `{"id":"ok","choices":[{"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}`)
+		})},
+	})
+	require.NoError(t, err)
+	_, err = client.Chat(context.Background(), []inference.Message{
+		{Role: "user", Content: "hi", ReasoningContent: "ignored"},
+		{Role: "assistant", Content: "", ReasoningContent: "plan"},
+	}, nil, inference.Options{})
+	require.NoError(t, err)
+	assert.Equal(t, "plan", assistant["reasoning_content"])
+	assert.Equal(t, map[string]string{"replay_reasoning": "true"}, client.Metadata().RuntimeSettings)
+}

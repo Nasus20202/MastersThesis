@@ -51,6 +51,11 @@ class Training:
     lora_modules: list[str]
 
 
+@dataclass(frozen=True)
+class Dataset:
+    max_per_scenario: int
+
+
 class Family(StrEnum):
     """Model family; chat template and target spans depend only on it."""
 
@@ -75,6 +80,7 @@ class Config:
     modal: Modal
     llama_cpp: LlamaCpp
     training: Training
+    dataset: Dataset
     validation_scenarios: frozenset[str]  # never trained on (D-055)
     students: dict[str, Student]
 
@@ -85,6 +91,7 @@ def load(path: Path = PATH) -> Config:
         modal=Modal(**raw["modal"]),
         llama_cpp=LlamaCpp(**raw["llama_cpp"]),
         training=Training(**raw["training"]),
+        dataset=Dataset(**raw["dataset"]),
         validation_scenarios=frozenset(raw["validation_scenarios"]),
         students={
             name: Student(**{**s, "family": Family(s["family"])})
