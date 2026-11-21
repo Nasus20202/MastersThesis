@@ -149,7 +149,9 @@ def test_lora_targets_skip_vision_and_audio_towers():
     assert not pattern.match("model.vision_tower.encoder.layers.0.self_attn.q_proj")
     assert not pattern.match("model.audio_tower.layers.0.mlp.up_proj")
     assert not pattern.match("model.visual.blocks.0.attn.qkv")
-    assert not pattern.match("model.layers.0.linear_attn.in_proj_qkvz")
+    assert pattern.match("model.layers.0.linear_attn.in_proj_qkv")
+    assert pattern.match("model.layers.0.linear_attn.in_proj_z")
+    assert not pattern.match("model.layers.0.linear_attn.out_proj")
 
 
 def test_adapters_are_attached_to_language_projections(checkpoint):
