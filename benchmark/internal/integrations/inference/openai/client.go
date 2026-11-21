@@ -33,6 +33,9 @@ type Config struct {
 	// ReasoningEffort is sent as reasoning_effort when set (low, medium, high);
 	// empty leaves the provider default.
 	ReasoningEffort string
+	// ReplayReasoning sends each assistant turn's reasoning_content back with
+	// the history, as DeepSeek's thinking mode requires on tool-calling requests.
+	ReplayReasoning bool
 	HTTPClient      *http.Client
 	// RetryBaseDelay is the first backoff between retries; it doubles on each
 	// retry. Zero means one second.
@@ -45,6 +48,7 @@ type Client struct {
 	model      string
 	apiKey     string
 	effort     string
+	replay     bool
 	httpClient *http.Client
 	retryDelay time.Duration
 }
@@ -78,13 +82,19 @@ func NewClient(cfg Config) (*Client, error) {
 	if retryDelay <= 0 {
 		retryDelay = time.Second
 	}
-	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, effort: cfg.ReasoningEffort, httpClient: httpClient, retryDelay: retryDelay}, nil
+	return &Client{baseURL: baseURL, model: cfg.Model, apiKey: cfg.APIKey, effort: cfg.ReasoningEffort, replay: cfg.ReplayReasoning, httpClient: httpClient, retryDelay: retryDelay}, nil
 }
 
 func (c *Client) Metadata() inference.Metadata {
 	metadata := inference.Metadata{Provider: "openai", Model: c.model}
 	if c.effort != "" {
 		metadata.RuntimeSettings = map[string]string{"reasoning_effort": c.effort}
+	}
+	if c.replay {
+		if metadata.RuntimeSettings == nil {
+			metadata.RuntimeSettings = map[string]string{}
+		}
+		metadata.RuntimeSettings["replay_reasoning"] = "true"
 	}
 	return metadata
 }
@@ -97,7 +107,7 @@ func (c *Client) Chat(ctx context.Context, messages []inference.Message, tools [
 	var response chatResponse
 	err := c.post(ctx, chatCompletionsPath, chatRequest{
 		Model:               c.model,
-		Messages:            toMessages(messages),
+		Messages:            toMessages(messages, c.replay),
 		Tools:               toTools(tools),
 		Temperature:         options.Temperature,
 		MaxCompletionTokens: options.MaxTokens,

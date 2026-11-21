@@ -6,19 +6,20 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/inference"
 )
 
-// message is sent without reasoning_content, which strict APIs reject; it is
-// only read from responses.
+// message is sent without reasoning_content unless the client replays it:
+// strict APIs reject it, while DeepSeek's thinking mode requires it on
+// tool-calling requests.
 type message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	Name       string     `json:"name,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
+	Role             string     `json:"role"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	Name             string     `json:"name,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	ToolCalls        []toolCall `json:"tool_calls,omitempty"`
 }
 
 type responseMessage struct {
 	message
-	ReasoningContent string `json:"reasoning_content,omitempty"`
 }
 
 type toolCall struct {
@@ -71,10 +72,13 @@ type usage struct {
 	} `json:"prompt_tokens_details"`
 }
 
-func toMessages(messages []inference.Message) []message {
+func toMessages(messages []inference.Message, replayReasoning bool) []message {
 	converted := make([]message, len(messages))
 	for i, m := range messages {
 		converted[i] = message{Role: m.Role, Content: m.Content, Name: m.Name, ToolCallID: m.ToolCallID}
+		if replayReasoning && m.Role == "assistant" {
+			converted[i].ReasoningContent = m.ReasoningContent
+		}
 		for _, call := range m.ToolCalls {
 			converted[i].ToolCalls = append(converted[i].ToolCalls, toolCall{
 				ID:       call.ID,

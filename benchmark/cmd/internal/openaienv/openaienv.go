@@ -15,6 +15,7 @@ const (
 	envAPIKey  = "OPENAI_API_KEY" //nolint:gosec // variable name, not a credential
 	envModel   = "OPENAI_MODEL"
 	envEffort  = "OPENAI_REASONING_EFFORT"
+	envReplay  = "OPENAI_REPLAY_REASONING"
 )
 
 func NewChatClient() (*openai.Client, error) {
@@ -27,6 +28,7 @@ func NewChatClient() (*openai.Client, error) {
 		Model:           model,
 		APIKey:          env(envAPIKey),
 		ReasoningEffort: env(envEffort),
+		ReplayReasoning: env(envReplay) == "true",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create openai client for %s: %w", model, err)
