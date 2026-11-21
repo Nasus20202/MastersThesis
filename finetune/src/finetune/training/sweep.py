@@ -29,7 +29,7 @@ def sweep(
             results.append(SweepPoint(length, SweepStatus.NOT_ENOUGH_TOKENS))
             continue
         log.info("sweep: %d tokens", length)
-        trainer = Trainer(model, cfg, learning_rate=0.0)
+        trainer = Trainer(model, cfg, repeats, learning_rate=0.0)
         reset_peak()
         try:
             logs = [trainer.step(tokens.window(length)) for _ in range(repeats)]

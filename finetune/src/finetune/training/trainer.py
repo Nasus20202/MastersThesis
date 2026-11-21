@@ -1,7 +1,8 @@
-"""Training steps: AdamW with warm-up, one example per step."""
+"""Training steps: AdamW with warm-up and the configured decay, one example per step."""
 
 from __future__ import annotations
 
+import math
 import random
 import time
 from collections.abc import Callable
@@ -15,12 +16,27 @@ from finetune.training.loss import loss_and_count
 from finetune.training.models import Settings, Step, Tokens
 
 
-class Trainer:
-    """AdamW with linear warm-up; one example per step."""
+def lr_scale(step: int, warmup_steps: int, total_steps: int, schedule: str) -> float:
+    """Factor on the learning rate at 0-based ``step``: linear warm-up, then
+    ``constant`` or ``cosine`` decay to 0 at the last of ``total_steps``."""
+    warmup = max(warmup_steps, 1)
+    if step < warmup:
+        return (step + 1) / warmup
+    if schedule == "constant":
+        return 1.0
+    if schedule != "cosine":
+        raise ValueError(f"unknown lr_schedule {schedule!r}")
+    progress = (step - warmup + 1) / max(total_steps - warmup, 1)
+    return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
 
-    def __init__(self, model, cfg: Settings, learning_rate: float | None = None):
+
+class Trainer:
+    """AdamW with the learning-rate schedule of ``cfg``; one example per step."""
+
+    def __init__(self, model, cfg: Settings, total_steps: int, learning_rate: float | None = None):
         self.model = model
         self.cfg = cfg
+        self.total_steps = total_steps
         self.device = input_device(model)
         params = [p for p in model.parameters() if p.requires_grad]
         self.base_lr = cfg.learning_rate if learning_rate is None else learning_rate
@@ -29,9 +45,9 @@ class Trainer:
 
     def step(self, example: Tokens) -> Step:
         self.model.train()
-        warm = min(1.0, (self.steps + 1) / max(self.cfg.warmup_steps, 1))
+        scale = lr_scale(self.steps, self.cfg.warmup_steps, self.total_steps, self.cfg.lr_schedule)
         for group in self.optimizer.param_groups:
-            group["lr"] = self.base_lr * warm
+            group["lr"] = self.base_lr * scale
         ids_t = torch.tensor(example.ids, device=self.device)
         labels_t = torch.tensor(example.labels, device=self.device)
         sync()
