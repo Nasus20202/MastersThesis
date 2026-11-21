@@ -5,7 +5,7 @@ training code in [`finetune/`](../../../finetune/) works on Modal for both
 model families, measures what one GPU type costs per training token, and
 checks that a trained adapter carries over to the served 4-bit model (#24).
 It tests the GPU choice of D-055 (one A100 40 GB per run). Raw evidence is in
-[raw/](raw/).
+[raw/](raw/); the terms are explained in [concepts.md](concepts.md).
 
 ## Summary
 
