@@ -1,5 +1,5 @@
 """Review sheets: one markdown file per trajectory the researcher reviews, with
-the scenario, its write commands and the final report (#25).
+the scenario, its write commands and the final report.
 
 The researcher sets ``verdict`` (accepted | rejected) and ``reason`` in the
 front matter. A rejected attempt is dropped when the dataset is built again and
@@ -70,16 +70,16 @@ def verdicts(directory: Path) -> dict[str, Verdict]:
     return {v.attempt: v for v in map(read, sorted(directory.glob("*.md")))}
 
 
-def write_missing(directory: Path, entries: list[Entry]) -> None:
+def write_missing(directory: Path, entries: list[Entry], sheet=render) -> None:
     """A sheet for every entry that needs review and has none yet; a pending
     sheet of an attempt that is no longer kept is removed."""
     directory.mkdir(parents=True, exist_ok=True)
     kept = {e.path for e in entries}
-    for sheet in directory.glob("*.md"):
-        found = read(sheet)
+    for path in directory.glob("*.md"):
+        found = read(path)
         if found.verdict == PENDING and found.attempt not in kept:
-            sheet.unlink()
+            path.unlink()
     for entry in entries:
-        sheet = directory / sheet_name(entry)
-        if entry.review == PENDING and not sheet.exists():
-            sheet.write_text(render(entry))
+        path = directory / sheet_name(entry)
+        if entry.review == PENDING and not path.exists():
+            path.write_text(sheet(entry))

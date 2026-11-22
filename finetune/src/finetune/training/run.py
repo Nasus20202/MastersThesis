@@ -122,7 +122,7 @@ def _run(job: Job, metrics: Metrics) -> None:
     joined = Tokens([t for e in train for t in e.ids], [t for e in train for t in e.labels])
     metrics.sweep = sweep(model, cfg, joined, sorted(job.sweep))
 
-    # 3. Cap: longer trajectories are dropped, never cut (#24).
+    # 3. Cap: longer trajectories are dropped, never cut (rows.example).
     metrics.max_len = training_cap(metrics.sweep, job.max_len)
     kept = [e for e in train if len(e.ids) <= metrics.max_len]
     kept_evals = [e for e in evals if len(e.ids) <= metrics.max_len]

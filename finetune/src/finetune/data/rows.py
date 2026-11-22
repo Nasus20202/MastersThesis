@@ -14,7 +14,7 @@ definitions, the task and tool results are context only.
 Gemma's serving prompt closes the previous model turn when the assistant wrote
 text next to a tool call, which a single render does not; the technical check
 showed that training on full renders still transfers to the served model
-(#24).
+.
 """
 
 from __future__ import annotations
@@ -47,6 +47,28 @@ def target_spans(family: Family, text: str) -> list[tuple[int, int]]:
             start = result.end(1)
         spans.append((start, end))
     return [(a, b) for a, b in spans if b > a]
+
+
+# A template closes the model turn that ends a prefix render where the full
+# render continues it: Gemma ends the context with ``<turn|>`` and the full
+# conversation with ``<|channel>thought``. The two agree up to that terminator.
+TURN_TAIL = 16
+
+
+def mask_context(text: str, context: str, spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """The spans after ``context``, for a conversation whose first messages the
+    loss must not see (the prefix of a continuation).
+
+    The boundary is where the full render leaves the prefix render, not the
+    latter's length: the template's turn terminator sits on the context side.
+    """
+    boundary = next(
+        (i for i, (a, b) in enumerate(zip(text, context, strict=False)) if a != b),
+        min(len(text), len(context)),
+    )
+    if boundary == 0 or len(context) - boundary > TURN_TAIL:
+        raise ValueError("the context is not a prefix of the rendered conversation")
+    return [(a, b) for a, b in spans if a >= boundary]
 
 
 def read_rows(path: Path) -> list[Row]:

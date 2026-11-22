@@ -1,5 +1,5 @@
 """Freezes a reviewed dataset: renders it for each student, counts it and
-hashes it (#25).
+hashes it.
 
     uv run python -m finetune.data.freeze --name deepseek-flash
 
