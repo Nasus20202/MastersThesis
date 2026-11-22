@@ -88,6 +88,17 @@ tokenizer). Evaluation: the 6 clean attempts on validation scenarios, 10.1K
 to 15.3K tokens, never trained on. Each model trains on the same rendered
 data on both GPUs; the hashes are in `session.json`.
 
+**Frozen variant rows.** A run can take its training rows from a frozen
+dataset instead (`--rows finetune/datasets/<variant>/<teacher>/rendered`): the
+rows are copied as they were reviewed and the run checks that they match the
+dataset's recorded revision, while the manifest supplies only the evaluation
+split. This is what keeps a truncation cut or a masked continuation prefix from
+being silently re-rendered away. #26 compares four training-data configurations
+on that shared evaluation split: whole trajectories, the frozen truncation rows,
+the frozen continuation rows, and whole trajectories plus the variant of the
+model's own family (truncation for the Qwen students, continuation for the
+Gemma ones).
+
 **Measures** (`metrics.json` of each run):
 
 - _Sweep_: peak GPU memory and tokens per second of a training step at
