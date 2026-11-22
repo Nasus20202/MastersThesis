@@ -6,13 +6,38 @@ import json
 import pytest
 
 from finetune.config import CONFIG, ROOT
-from finetune.data import manifest, render, trajectories
+from finetune.data import frozen, manifest, render, trajectories
+from finetune.data.models import Manifest, Row
 from finetune.runs import prepare
 from finetune.runs.models import Variant
 from finetune.training.models import Precision
 from tests.conftest import ATTEMPT, TemplateTokenizer
 
 POC_MANIFEST = ROOT / "finetune/manifests/poc.yaml"
+
+
+def frozen_dataset(tmp_path, monkeypatch, examples):
+    """A frozen dataset the run can train from, under a temporary repository root."""
+    root = tmp_path / "datasets" / "gemma"
+    folder = root / "rendered"
+    folder.mkdir(parents=True)
+    for student, rows in examples.items():
+        (folder / f"{student}.jsonl").write_text("".join(r.to_json() + "\n" for r in rows))
+    manifest_path = root / "manifest.yaml"
+    manifest_path.write_text("teacher: gemma\n")
+    files = [manifest_path, *sorted(folder.glob("*.jsonl"))]
+    (root / "freeze.json").write_text(
+        json.dumps(
+            {
+                "teacher": "gemma",
+                "attempts": 1,
+                "revision": frozen.digest(files),
+                "files": [str(p.relative_to(tmp_path)) for p in files],
+            }
+        )
+    )
+    monkeypatch.setattr(frozen, "ROOT", tmp_path)
+    return root
 
 
 @pytest.fixture
@@ -80,3 +105,35 @@ def test_prepare_renders_only_the_needed_models_and_records_provenance(
     rows = (tmp_path / "data" / "gemma-4-e4b" / "train.jsonl").read_text().splitlines()
     assert len(rows) == 10 and all(json.loads(r)["targets"] for r in rows)
     assert sorted(p.name for p in (tmp_path / "data").iterdir()) == ["gemma-4-e4b", "qwen35-4b"]
+
+
+def test_prepare_trains_on_the_frozen_rows_and_records_their_revision(
+    tmp_path, monkeypatch, template_tokenizers
+):
+    poc = manifest.read(POC_MANIFEST)
+    inputs = Manifest(POC_MANIFEST, [], poc.eval[:1])
+    frozen_rows = [Row("frozen.json", "scenario", "frozen text", [(0, 4)])]
+    directory = frozen_dataset(tmp_path, monkeypatch, {"gemma-4-e4b": frozen_rows})
+    variants = [Variant("gemma-4-e4b", Precision.LORA)]
+
+    session = prepare.prepare(tmp_path / "out", inputs, variants, 1, rows=directory)
+
+    train = (tmp_path / "out" / "data" / "gemma-4-e4b" / "train.jsonl").read_text()
+    assert train == frozen_rows[0].to_json() + "\n"
+    saved = json.loads((tmp_path / "out" / "session.json").read_text())
+    assert saved["data_source"] == str(directory)
+    assert saved["data_revision"] == session.data_revision
+    assert (tmp_path / "out" / "data" / "gemma-4-e4b" / "eval.jsonl").read_text().strip()
+
+
+def test_prepare_refuses_frozen_rows_without_the_needed_student(
+    tmp_path, monkeypatch, template_tokenizers
+):
+    poc = manifest.read(POC_MANIFEST)
+    inputs = Manifest(POC_MANIFEST, [], poc.eval[:1])
+    directory = frozen_dataset(tmp_path, monkeypatch, {"gemma-4-e4b": []})
+
+    with pytest.raises(ValueError, match="no qwen35-4b rows"):
+        prepare.prepare(
+            tmp_path / "out", inputs, [Variant("qwen35-4b", Precision.LORA)], 1, rows=directory
+        )

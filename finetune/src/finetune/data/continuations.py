@@ -157,6 +157,7 @@ class Freeze:
     teacher: str
     attempts: int
     revision: str  # sha256 of the manifest, the candidates and the rendered files
+    files: list[str]  # what the revision covers, relative to the repository
     rendered: list[Rendered]
 
 
@@ -216,7 +217,13 @@ def freeze(teacher: str, tokenizers: dict | None = None) -> Freeze:
         )
         rendered.append(Rendered(name, kept, over))
     files = [out / "manifest.yaml", OUT, *sorted(folder.glob("*.jsonl"))]
-    result = Freeze(teacher, len(manifest["train"]), digest(files), rendered)
+    result = Freeze(
+        teacher,
+        len(manifest["train"]),
+        digest(files),
+        [str(p.relative_to(ROOT)) for p in files],
+        rendered,
+    )
     (out / "freeze.json").write_text(json.dumps(asdict(result), indent=2) + "\n")
     log.info("%s continuation frozen: revision %s", teacher, result.revision)
     return result

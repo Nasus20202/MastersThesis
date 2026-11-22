@@ -42,6 +42,8 @@ class Session:
 
     provenance: Provenance
     manifest: str  # relative to the repository
+    data_source: str | None  # frozen dataset rows, relative to the repository
+    data_revision: str | None  # the revision that covers those rows
     variants: list[str]
     gpu: str | None
     steps: int

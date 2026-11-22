@@ -115,6 +115,7 @@ class Truncation:
     attempts: int  # kept attempts in the manifest
     with_cut: int  # attempts that have a verified cut
     revision: str  # sha256 of the cuts and the rendered files
+    files: list[str]  # what the revision covers, relative to the repository
     rendered: list[Rendered]
 
 
@@ -152,9 +153,15 @@ def render_examples(directory: Path, source: Path, paths: list[str]) -> Truncati
     digest = hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest()
     source_revision = json.loads((source / "freeze.json").read_text())["revision"]
     result = Truncation(
-        directory.name, source_revision, len(paths), len(with_cut), digest, rendered
+        directory.name,
+        source_revision,
+        len(paths),
+        len(with_cut),
+        digest,
+        [str(p.relative_to(ROOT)) for p in files],
+        rendered,
     )
-    (directory / "truncation.json").write_text(json.dumps(asdict(result), indent=2) + "\n")
+    (directory / "freeze.json").write_text(json.dumps(asdict(result), indent=2) + "\n")
     return result
 
 

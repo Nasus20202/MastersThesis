@@ -22,11 +22,11 @@ Both variants are derived from the teacher datasets: the truncation cuts each te
 
 ## Layout of the truncation directory
 
-| Path                       | Content                                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------------------- |
-| `cuts.yaml`                | the cut point of every attempt that has a verified cut                                       |
-| `truncation.json`          | the teacher dataset it was built from and its revision, the counts and a hash of the renders |
-| `rendered/<student>.jsonl` | the cut conversations rendered for each student; the bytes the variant freezes               |
+| Path                       | Content                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `cuts.yaml`                | the cut point of every attempt that has a verified cut                                          |
+| `freeze.json`              | the teacher dataset it was built from and its revision, the counts and what the revision covers |
+| `rendered/<student>.jsonl` | the cut conversations rendered for each student; the bytes the variant freezes                  |
 
 ## Layout of the continuation directory
 

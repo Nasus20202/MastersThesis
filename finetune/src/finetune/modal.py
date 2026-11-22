@@ -11,7 +11,8 @@ Every run costs money: start one only with the researcher's approval
 (AGENTS.md). From ``finetune/``:
 
     uv run modal run -m finetune.modal --manifest <manifest.yaml> \
-        --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu L40S
+        --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu L40S \
+        [--rows finetune/datasets/continuation/<teacher>/rendered]
     uv run modal volume get finetune-results <run> <dir>
 """
 
@@ -76,6 +77,7 @@ def main(
     variants: str = ",".join(v.name for v in VARIANTS),
     gpu: str = SETTINGS.gpu,
     steps: int = config.CONFIG.training.steps,
+    rows: str = "",
 ) -> None:
     names = variants.split(",")
     parsed = [Variant.parse(name) for name in names]
@@ -84,7 +86,14 @@ def main(
     run_id = datetime.datetime.now(datetime.UTC).strftime("run-%Y%m%d-%H%M%S")
     logs.setup()
     with tempfile.TemporaryDirectory() as tmp:
-        session = prepare.prepare(Path(tmp), manifests.read(Path(manifest)), parsed, steps, gpu)
+        session = prepare.prepare(
+            Path(tmp),
+            manifests.read(Path(manifest)),
+            parsed,
+            steps,
+            gpu,
+            Path(rows) if rows else None,
+        )
         with results.batch_upload() as batch:
             batch.put_directory(tmp, f"/{run_id}")
     log.info(
