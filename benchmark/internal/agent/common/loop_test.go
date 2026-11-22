@@ -626,3 +626,32 @@ func TestLoopRecordsPeakContextAndOverflow(t *testing.T) {
 		})
 	}
 }
+
+func TestContinueReplaysRecordedToolCallsAndContinuesFromTheRecordedMessages(t *testing.T) {
+	client := &loopClient{results: []inference.Result{{
+		Message:      inference.Message{Role: "assistant", Content: "verified"},
+		FinishReason: "stop",
+	}}}
+	tool := &loopTool{definition: inference.Tool{Name: "bash"}, result: ToolResult{Content: "replayed output"}}
+	loop, err := NewLoop(client, []Tool{tool}, Config{MaxTurns: 3, MaxToolCalls: 3})
+	require.NoError(t, err)
+	call := inference.ToolCall{ID: "call-1", Type: "function", Name: "bash", Arguments: `{"command":"kubectl apply -f x"}`}
+	prefix := Prefix{Source: "attempt.json", Messages: []inference.Message{
+		{Role: "system", Content: "prompt"},
+		{Role: "user", Content: "task"},
+		{Role: "assistant", ToolCalls: []inference.ToolCall{call}},
+		{Role: "tool", ToolCallID: "call-1", Content: "recorded output"},
+	}}
+
+	result, err := loop.Continue(context.Background(), "task", prefix)
+
+	require.NoError(t, err)
+	assert.Equal(t, []inference.ToolCall{call}, tool.calls, "the recorded call ran again in this sandbox")
+	require.Len(t, client.requests, 1)
+	assert.Equal(t, prefix.Messages, client.requests[0].messages, "the model sees the recording, not the replay's output")
+	assert.Equal(t, "attempt.json", result.ContinuedFrom)
+	assert.Equal(t, 4, result.PrefixMessages)
+	assert.Equal(t, 1, result.Turns, "limits count from the continuation")
+	assert.Equal(t, 0, result.ToolCallCount)
+	assert.Equal(t, TerminationCompleted, result.Termination)
+}

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/validation"
 	"github.com/stretchr/testify/assert"
@@ -239,4 +240,46 @@ func TestRunListPrintsScenariosMatchingTags(t *testing.T) {
 
 	err = run(context.Background(), []string{"--scenario", "../../scenarios", "--tag", "difficulty=none", "--list"}, &output, &logs)
 	assert.ErrorContains(t, err, "no scenarios match")
+}
+
+func TestSplitListExpandsCommaSeparatedValues(t *testing.T) {
+	assert.Equal(t, stringList{"a", "b", "c"}, splitList(stringList{"a, b", "c"}))
+	assert.Empty(t, splitList(stringList{" ", ","}))
+}
+
+func TestRunListAcceptsCommaSeparatedScenarioPaths(t *testing.T) {
+	var output, logs bytes.Buffer
+	err := run(context.Background(), []string{"--scenario", "../../scenarios/storage,../../scenarios/pods", "--list"}, &output, &logs)
+	require.NoError(t, err)
+
+	all, err := scenario.LoadInputs([]string{"../../scenarios/storage", "../../scenarios/pods"})
+	require.NoError(t, err)
+	assert.Len(t, strings.Fields(output.String()), len(all))
+}
+
+func TestRunListTakesTheScenarioFromTheRecord(t *testing.T) {
+	record := writePrefix(t, "001.json", "pvc-pending")
+	var output, logs bytes.Buffer
+	err := run(context.Background(), []string{"--continue-from", record, "--list"}, &output, &logs)
+	require.NoError(t, err)
+
+	assert.Contains(t, output.String(), "pvc-pending")
+}
+
+func TestScenarioPathsForKeepsTheRecordedScenarios(t *testing.T) {
+	paths, err := scenarioPathsFor("../../scenarios", map[string]*common.Prefix{
+		"pvc-pending":      nil,
+		"oom-memory-limit": nil,
+	})
+	require.NoError(t, err)
+	require.Len(t, paths, 2)
+	for _, path := range paths {
+		assert.Contains(t, path, "scenario.yaml")
+	}
+}
+
+func TestScenarioPathsForRejectsAScenarioTheCorpusLacks(t *testing.T) {
+	_, err := scenarioPathsFor("../../scenarios", map[string]*common.Prefix{"no-such-scenario": nil})
+
+	assert.ErrorContains(t, err, `no scenario "no-such-scenario"`)
 }

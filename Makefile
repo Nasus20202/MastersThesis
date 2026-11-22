@@ -5,7 +5,16 @@ BENCHMARK_DIR := benchmark
 FINETUNE_DIR := finetune
 LLAMA_CONFIG := $(BENCHMARK_DIR)/config.env
 MODEL_PROFILE ?= $(BENCHMARK_DIR)/model-profiles/gemma-4-e4b.env
-SCENARIO ?= scenarios/
+CONTINUE_FROM ?=
+comma := ,
+# A continuation names its scenarios in the records; otherwise run the corpus.
+ifeq ($(strip $(SCENARIO)),)
+ifneq ($(strip $(CONTINUE_FROM)),)
+override SCENARIO :=
+else
+override SCENARIO := scenarios/
+endif
+endif
 VALIDATION ?= $(SCENARIO)
 CORPUS ?= scenarios/
 AGENT ?= all
@@ -66,6 +75,8 @@ BENCHMARK_RESUME_ARGS :=
 ifneq ($(strip $(RESUME)),)
 BENCHMARK_RESUME_ARGS += --resume $(RESUME)
 endif
+BENCHMARK_CONTINUE_PATHS := $(subst $(comma), ,$(CONTINUE_FROM))
+BENCHMARK_RESUME_ARGS += $(foreach path,$(BENCHMARK_CONTINUE_PATHS),--continue-from $(abspath $(path)))
 BENCHMARK_SCENARIO_ARGS := $(foreach path,$(SCENARIO),--scenario $(path))
 BENCHMARK_VALIDATION_ARGS := $(foreach path,$(VALIDATION),--validate $(path))
 BENCHMARK_TAG_ARGS := $(foreach tag,$(TAG),--tag $(tag))
@@ -76,7 +87,6 @@ BENCHMARK_LLAMA := $(if $(or $(LLAMA_BASE_URL),$(filter openai,$(INFERENCE_PROVI
 EMBEDDING_START := $(if $(EMBEDDING_BASE_URL),,embedding-start)
 # The RAG agent embeds its search queries, so start the embedding service only
 # when it is selected.
-comma := ,
 BENCHMARK_EMBEDDING := $(if $(filter all rag,$(subst $(comma), ,$(AGENT))),$(EMBEDDING_START))
 
 .DEFAULT_GOAL := help
@@ -126,6 +136,7 @@ help:
 		'REPEAT=N' 'Repeat each scenario or validation case (default: 1).' \
 		'RUNS=RUN_ID...' 'Runs merged by benchmark-merge; space-separated.' \
 		'RESUME=RUN_ID' 'Resume an incomplete benchmark run by ID.' \
+		'CONTINUE_FROM=PATH...' 'Recorded attempts to continue in a fresh cluster, one per scenario (space- or comma-separated, needs AGENT=prompt).' \
 		'BENCHMARK_PARALLEL=N' 'Set agentic benchmark parallelism (default: 4).' \
 		'VALIDATION_PARALLEL=N' 'Set validation parallelism (default: 4).' \
 		'BROWSER_RESULTS=PATH' 'Results directory for the browser (default: results).' \
@@ -219,7 +230,7 @@ benchmark: registry-start $(BENCHMARK_LLAMA) $(BENCHMARK_EMBEDDING)
 	cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --agent $(AGENT) --parallel $(BENCHMARK_PARALLEL) --repeat $(REPEAT) $(BENCHMARK_RESUME_ARGS)
 
 benchmark-list:
-	@cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) --list
+	@cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(BENCHMARK_CONFIG_ARGS) $(BENCHMARK_SCENARIO_ARGS) $(BENCHMARK_TAG_ARGS) $(BENCHMARK_RESUME_ARGS) --list
 
 benchmark-merge:
 	@cd $(BENCHMARK_DIR) && $(GO) run ./cmd/benchmark $(foreach run,$(RUNS),--merge $(run))
