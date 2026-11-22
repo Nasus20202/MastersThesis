@@ -4,6 +4,11 @@ A manifest (YAML) lists benchmark attempt files to train on (``train``) and
 to evaluate on (``eval``), as paths relative to the repository. Training
 attempts on validation scenarios are refused (D-055).
 
+With ``rows`` the training split is a frozen dataset instead (truncation or
+continuation): its rows are copied as they were reviewed, and the manifest
+supplies only the evaluation split, so every variant is compared on the same
+validation attempts.
+
 ``prepare`` writes to ``out``:
 
 - ``data/<student>/{train,eval}.jsonl``: the rendered rows;
@@ -21,32 +26,53 @@ import hashlib
 import json
 import logging
 import subprocess
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, replace
 from pathlib import Path
 
 from finetune import logs
-from finetune.config import CONFIG, ROOT, STUDENTS
+from finetune.config import CONFIG, ROOT, STUDENTS, Student
+from finetune.data import frozen, render, rows, trajectories
 from finetune.data import manifest as manifests
-from finetune.data import render, rows, trajectories
-from finetune.data.models import Manifest
+from finetune.data.models import Manifest, Row
 from finetune.runs.models import VARIANTS, Provenance, Session, Variant
 from finetune.training.models import Job, Settings
 
 log = logging.getLogger(__name__)
 
 
-def render_data(out: Path, students: list[str], manifest: Manifest) -> None:
+def _write(path: Path, examples: Iterable[Row]) -> None:
+    with path.open("w") as f:
+        for row in examples:
+            f.write(row.to_json() + "\n")
+
+
+def rendered(tok, student: Student, paths: list[Path]) -> Iterator[Row]:
+    for path in paths:
+        row = rows.example(tok, student, trajectories.load(path))
+        yield replace(row, source=str(path.relative_to(ROOT)))
+
+
+def render_data(
+    out: Path, students: list[str], manifest: Manifest, dataset: frozen.Dataset | None = None
+) -> None:
+    """The training and evaluation rows of each student.
+
+    Without ``dataset`` the training split is rendered from the manifest; with
+    it, the frozen rows are written unchanged and the mask or cut stays.
+    """
     for name in students:
         student = STUDENTS[name]
         tok = render.tokenizer(student)
         folder = out / name
         folder.mkdir(parents=True, exist_ok=True)
-        for split, paths in (("train", manifest.train), ("eval", manifest.eval)):
-            with (folder / f"{split}.jsonl").open("w") as f:
-                for path in paths:
-                    row = rows.example(tok, student, trajectories.load(path))
-                    row = replace(row, source=str(path.relative_to(ROOT)))
-                    f.write(row.to_json() + "\n")
+        if dataset is None:
+            _write(folder / "train.jsonl", rendered(tok, student, manifest.train))
+        else:
+            if name not in dataset.rows:
+                raise ValueError(f"no {name} rows in {dataset.directory}")
+            _write(folder / "train.jsonl", dataset.rows[name])
+        _write(folder / "eval.jsonl", rendered(tok, student, manifest.eval))
 
 
 def job(variant: Variant, data: Path, out: Path, steps: int) -> Job:
@@ -77,17 +103,35 @@ def sha256(path: Path) -> str:
 
 
 def prepare(
-    out: Path, manifest: Manifest, variants: list[Variant], steps: int, gpu: str | None = None
+    out: Path,
+    manifest: Manifest,
+    variants: list[Variant],
+    steps: int,
+    gpu: str | None = None,
+    rows: Path | None = None,
 ) -> Session:
-    """Renders the manifest for ``variants`` and writes ``session.json``."""
+    """The rows of ``variants`` and ``session.json``; ``rows`` is a frozen dataset."""
     data = out / "data"
-    log.info(
-        "rendering %d training and %d evaluation attempts", len(manifest.train), len(manifest.eval)
-    )
-    render_data(data, sorted({v.student for v in variants}), manifest)
+    dataset = frozen.read(rows) if rows is not None else None
+    if dataset is None:
+        log.info(
+            "rendering %d training and %d evaluation attempts",
+            len(manifest.train),
+            len(manifest.eval),
+        )
+    else:
+        log.info(
+            "training rows from %s (revision %s), %d evaluation attempts",
+            dataset.directory,
+            dataset.revision[:12],
+            len(manifest.eval),
+        )
+    render_data(data, sorted({v.student for v in variants}), manifest, dataset)
     session = Session(
         provenance=provenance(),
         manifest=str(manifest.path.relative_to(ROOT)),
+        data_source=str(rows) if rows is not None else None,
+        data_revision=dataset.revision if dataset else None,
         variants=[v.name for v in variants],
         gpu=gpu,
         steps=steps,
@@ -111,11 +155,12 @@ def main(argv: list[str] | None = None) -> None:
         default=[v.name for v in VARIANTS],
         help="default: all",
     )
+    parser.add_argument("--rows", type=Path, help="train from this frozen dataset instead")
     parser.add_argument("--steps", type=int, default=CONFIG.training.steps)
     args = parser.parse_args(argv)
     logs.setup()
     variants = [Variant.parse(v) for v in args.variants]
-    prepare(args.out, manifests.read(args.manifest), variants, args.steps)
+    prepare(args.out, manifests.read(args.manifest), variants, args.steps, rows=args.rows)
 
 
 if __name__ == "__main__":
