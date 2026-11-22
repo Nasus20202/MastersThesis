@@ -1,5 +1,5 @@
 """One teacher's training dataset: every attempt of its runs, and a manifest
-that lists the kept ones with provenance (#25).
+that lists the kept ones with provenance.
 
     uv run python -m finetune.data.dataset --name deepseek-flash \\
         --runs <run dir>...
@@ -44,17 +44,23 @@ def raw_target(c: Candidate, out: Path) -> Path:
     return out / "runs" / c.run / c.scenario_id / "prompt" / c.path.name
 
 
+def _copy(source: Path, target: Path) -> None:
+    """Copy unless the run is already the dataset's own, so a build can be redone
+    from the records it keeps."""
+    if source.resolve() == target.resolve():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+
+
 def copy_runs(run_dirs: list[Path], allowed: set[str], out: Path) -> None:
     """Every attempt record of the training scenarios, and each run's metadata."""
     for run in run_dirs:
         for name in ("run.json", "results.json"):
-            (out / "runs" / run.name).mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(run / name, out / "runs" / run.name / name)
+            _copy(run / name, out / "runs" / run.name / name)
         for path in select.attempt_files([run]):
             if path.parts[-3] in allowed:
-                target = out / "runs" / run.name / path.parts[-3] / "prompt" / path.name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(path, target)
+                _copy(path, out / "runs" / run.name / path.parts[-3] / "prompt" / path.name)
 
 
 def entries(kept: list[Candidate], out: Path) -> list[Entry]:

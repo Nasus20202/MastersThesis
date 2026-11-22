@@ -37,3 +37,17 @@ def test_committed_datasets_hold_only_training_scenarios_with_raw_records():
         assert scenarios <= dataset.training_scenarios(), path
         assert not scenarios & set(raw["scenarios_without_examples"]), path
         manifest.read(path)  # every record exists, is clean and not a validation scenario
+
+
+def test_build_can_be_redone_from_the_dataset_itself(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset, "DATASETS", tmp_path / "datasets")
+    monkeypatch.setattr(select, "ROOT", tmp_path)
+    monkeypatch.setattr(review, "ROOT", tmp_path)
+    training = sorted(dataset.training_scenarios())[0]
+    runs = tmp_path / "results"
+    write(runs, "001", attempt(scenario=training))
+    out = dataset.build("teacher", [runs / "run-1"])
+
+    again = dataset.build("teacher", [out / "runs" / "run-1"])
+
+    assert again == out

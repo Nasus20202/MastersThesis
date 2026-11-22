@@ -73,3 +73,34 @@ def test_generation_prompt_is_not_a_target(student, template_tokenizer, attempt)
         # thought channel the model writes next is a target.
         assert prompt.endswith("<|turn>model\n")
         assert len(prompt) in starts
+
+
+def test_mask_context_drops_the_spans_inside_the_context():
+    text = "promptturnmodel answer"
+
+    assert rows.mask_context(text, "prompt", [(0, 6), (6, len(text))]) == [(6, len(text))]
+
+
+def test_mask_context_needs_the_context_at_the_start():
+    try:
+        rows.mask_context("abc", "bc", [(0, 1)])
+    except ValueError as error:
+        assert "not a prefix" in str(error)
+    else:
+        raise AssertionError("a context that does not start the text was accepted")
+
+
+def test_mask_context_tolerates_only_the_turn_terminator_of_the_prefix():
+    # A template closes the turn that ends the context where the full render continues it.
+    text = "task<turn|>model<|channel>thought\nfix it"
+    context = "task<turn|>model<turn|>"
+
+    assert rows.mask_context(text, context, [(0, 4), (11, 16)]) == []
+    assert rows.mask_context(text, context, [(17, len(text))]) == [(17, len(text))]
+
+    try:
+        rows.mask_context("task" + "x" * 40 + "rest", "task" + "y" * 40 + "rest", [(0, 1)])
+    except ValueError as error:
+        assert "not a prefix" in str(error)
+    else:
+        raise AssertionError("a context that differs well before its end was accepted")

@@ -1,4 +1,4 @@
-"""Selection of training attempts for one teacher (D-054, #25).
+"""Selection of training attempts for one teacher (D-054).
 
 An attempt is kept when it has a full score, ended by the agent itself, did not
 overflow the context and made no malformed tool call. Two attempts are the same
