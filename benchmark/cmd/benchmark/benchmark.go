@@ -15,6 +15,7 @@ import (
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/inferenceenv"
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/llamaenv"
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	ragagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent/rag"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
@@ -58,6 +59,13 @@ func runBenchmark(ctx context.Context, options runOptions, inputs []string, agen
 	deps, err := newRunnerDeps(options.config.Containers)
 	if err != nil {
 		return err
+	}
+	if len(options.continueFroms) > 0 {
+		for _, definition := range definitions {
+			if _, ok := options.continueFroms[definition.ID]; !ok {
+				return fmt.Errorf("no --continue-from record for scenario %q", definition.ID)
+			}
+		}
 	}
 	sampling, err := readSampling(ctx)
 	if err != nil {
@@ -124,12 +132,16 @@ func runBenchmark(ctx context.Context, options runOptions, inputs []string, agen
 				if store.HasAttempt(attempt, definition.ID, string(agentName)) {
 					continue
 				}
+				taskDeps := deps
+				if prefix, ok := options.continueFroms[definition.ID]; ok {
+					taskDeps.prefix = prefix
+				}
 				tasks = append(tasks, executor.Task{
 					ScenarioID: definition.ID,
 					Agent:      string(agentName),
 					Attempt:    attempt,
 					Run: func(ctx context.Context) (orchestration.RunResult, error) {
-						return newOrchestrationRunner(deps, definition, agentName, agentFactory, agentSlots).Run(ctx, definition)
+						return newOrchestrationRunner(taskDeps, definition, agentName, agentFactory, agentSlots).Run(ctx, definition)
 					},
 				})
 			}
@@ -215,6 +227,7 @@ type runnerDeps struct {
 	sandboxFactory      sandboxintegration.Factory
 	setupFactory        sandboxintegration.Factory
 	cleanupTimeout      time.Duration
+	prefix              *common.Prefix
 }
 
 func newRunnerDeps(containers benchmarkconfig.ContainersConfig) (runnerDeps, error) {
@@ -293,6 +306,7 @@ func newOrchestrationRunner(deps runnerDeps, definition scenario.Definition, age
 		AgentFactory:        agentFactory,
 		AgentSlots:          agentSlots,
 		Condition:           string(agentName),
+		Prefix:              deps.prefix,
 		CleanupTimeout:      deps.cleanupTimeout,
 		ClusterFactory: func(name string) (clusterintegration.Cluster, error) {
 			return kind.New(deps.executor, kind.Config{

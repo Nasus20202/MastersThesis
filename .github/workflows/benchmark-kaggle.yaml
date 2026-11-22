@@ -1,12 +1,14 @@
 name: Benchmark on Kaggle
 
 run-name: >-
-  Benchmark · ${{ inputs.model }} · agent=${{ inputs.agent }} · ×${{ inputs.repeat }} ·
-  ${{ inputs.scenario }}${{ inputs.tag && format(' [{0}]', inputs.tag) || '' }} · ${{ inputs.shards }} × ${{ inputs.benchmark_parallel }} parallel,
+  Benchmark · ${{ inputs.model }} · agent=${{ inputs.agent }} · ×${{ inputs.repeat }}${{ inputs.scenario && format(' · {0}', inputs.scenario) || '' }}${{ inputs.tag && format(' [{0}]', inputs.tag) || '' }}${{ inputs.continue_from && ' · continue' || '' }} ·
+  ${{ inputs.shards }} × ${{ inputs.benchmark_parallel }} parallel,
   ${{ inputs.agent_parallel && inputs.agent_parallel < inputs.benchmark_parallel && inputs.agent_parallel || inputs.benchmark_parallel }} agents
 
 # Runs the benchmark in shards against one KaggleInferenceServer session
 # (github.com/Nasus20202/KaggleInferenceServer), stopped after the last shard.
+# With continue_from it continues recorded attempts: the
+# records name their scenarios, so scenario may stay empty.
 # Requires the secrets KAGGLE_API_TOKEN, KIS_API_KEY and KIS_NTFY_TOPIC; KIS_TUNNEL_TOKEN
 # and KIS_TUNNEL_PUBLIC_URL are optional (a named Cloudflare tunnel).
 
@@ -19,8 +21,8 @@ on:
         options: [gemma-4-e2b, gemma-4-e4b, qwen35-4b, qwen35-9b]
         default: gemma-4-e4b
       scenario:
-        description: SCENARIO paths, space-separated, relative to benchmark/
-        default: scenarios/
+        description: SCENARIO paths, space-separated, relative to benchmark/; empty runs the corpus, or the records' scenarios with continue_from
+        default: ""
       tag:
         description: TAG selectors, space-separated, e.g. difficulty=hard area=networking
         default: ""
@@ -45,6 +47,9 @@ on:
         description: Parallel benchmark jobs
         type: number
         default: 16
+      continue_from:
+        description: CONTINUE_FROM recorded attempts to continue, space- or comma-separated, relative to the repository root; they name their scenarios and the served model continues them; empty runs the scenarios normally
+        default: ""
 
 permissions:
   contents: read
@@ -66,6 +71,7 @@ env:
   REPEAT: ${{ inputs.repeat }}
   CONFIG: ${{ inputs.config }}
   BENCHMARK_PARALLEL: ${{ inputs.benchmark_parallel }}
+  CONTINUE_FROM: ${{ inputs.continue_from }}
   AGENT_PARALLEL: ${{ inputs.agent_parallel || inputs.benchmark_parallel }}
   # Recorded with the session stats; the kis steps and services below name it too,
   # as docker:// and services cannot read env.
@@ -282,6 +288,10 @@ jobs:
           SERVER_STATS: benchmark/results/server-${{ strategy.job-index }}.json
           SHARDS: ${{ strategy.job-total }}
         run: |
+          if [[ -n "$CONTINUE_FROM" && "$AGENT" != "prompt" ]]; then
+            echo "::error::continuations use the prompt agent only; set agent=prompt"
+            exit 1
+          fi
           slots=$(jq .stats.slots "$SERVER_STATS")
           agents=$((AGENT_PARALLEL < slots / SHARDS ? AGENT_PARALLEL : slots / SHARDS))
           if ((agents < 1)); then

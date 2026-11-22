@@ -115,6 +115,27 @@ func (l *Loop) Run(ctx context.Context, task string) (Result, error) {
 	return l.run(ctx, task, []inference.Message{{Role: "user", Content: task}})
 }
 
+// Continue replays the tool calls of a recorded conversation in this run's
+// sandbox, so the cluster is in the state the recording left it in, and then
+// lets the model carry on from the recorded messages. The recorded tool
+// results stay as they were; the replay's own output is discarded. Turn and
+// tool-call limits count from the continuation.
+func (l *Loop) Continue(ctx context.Context, task string, prefix Prefix) (Result, error) {
+	replayed := 0
+	for _, message := range prefix.Messages {
+		for _, call := range message.ToolCalls {
+			l.executeToolCall(ctx, call)
+			replayed++
+		}
+	}
+	slog.With("component", "agent").InfoContext(ctx, "recorded tool calls replayed",
+		"source", prefix.Source, "messages", len(prefix.Messages), "tool_calls", replayed)
+	result, err := l.run(ctx, task, prefix.Messages)
+	result.ContinuedFrom = prefix.Source
+	result.PrefixMessages = len(prefix.Messages)
+	return result, err
+}
+
 func (l *Loop) run(ctx context.Context, task string, initialMessages []inference.Message) (result Result, err error) {
 	if strings.TrimSpace(task) == "" {
 		return Result{}, errors.New("agent task is required")

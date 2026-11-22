@@ -82,7 +82,14 @@ func (r Runner) runModelAgent(ctx context.Context, modelAgent rootagent.Agent, t
 			return common.Result{}, ctx.Err()
 		}
 	}
-	return modelAgent.Run(ctx, task)
+	if r.Prefix == nil {
+		return modelAgent.Run(ctx, task)
+	}
+	continuer, ok := modelAgent.(rootagent.Continuer)
+	if !ok {
+		return common.Result{}, errors.New("this agent cannot continue a recorded conversation")
+	}
+	return continuer.Continue(ctx, task, *r.Prefix)
 }
 
 func (r Runner) runPhaseSteps(ctx context.Context, phases []phase, kubeconfigPath string, executor command.Executor, logger *slog.Logger) error {

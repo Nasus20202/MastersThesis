@@ -14,5 +14,11 @@ type Agent interface {
 	Run(context.Context, string) (common.Result, error)
 }
 
+// Continuer is implemented by agents that can continue a recorded conversation
+// in a fresh cluster (the S2 training variant, #25).
+type Continuer interface {
+	Continue(context.Context, string, common.Prefix) (common.Result, error)
+}
+
 // Factory constructs an agent with the executor for the current sandbox run.
 type Factory func(sandboxintegration.Executor) (Agent, error)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	rootagent "github.com/Nasus20202/MastersThesis/benchmark/internal/agent"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/command"
 	clusterintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/cluster"
 	sandboxintegration "github.com/Nasus20202/MastersThesis/benchmark/internal/integrations/sandbox"
@@ -29,6 +30,7 @@ type Runner struct {
 	AgentFactory        rootagent.Factory
 	AgentSlots          chan struct{} // Shared across benchmark workers; nil disables the limit.
 	Condition           string
+	Prefix              *common.Prefix // continue this recorded conversation (S2) instead of starting one
 	Executor            command.Executor
 	CleanupTimeout      time.Duration
 }

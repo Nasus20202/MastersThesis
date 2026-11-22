@@ -8,6 +8,7 @@ import (
 
 	"github.com/Nasus20202/MastersThesis/benchmark/cmd/benchmark/ui"
 	benchmarkconfig "github.com/Nasus20202/MastersThesis/benchmark/cmd/internal/config"
+	"github.com/Nasus20202/MastersThesis/benchmark/internal/agent/common"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/executor"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/results"
 	"github.com/Nasus20202/MastersThesis/benchmark/internal/scenario"
@@ -22,6 +23,9 @@ type runOptions struct {
 	tags     scenario.TagFilter
 	config   benchmarkconfig.Config
 	terminal *ui.Terminal
+	// continueFroms are the recorded attempts of a continuation run, by
+	// scenario. Every task continues its own scenario's attempt.
+	continueFroms map[string]*common.Prefix
 }
 
 // startRun stamps the run identity and repository provenance onto metadata and

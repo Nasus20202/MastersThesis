@@ -57,6 +57,17 @@ type Result struct {
 	Error           string              `json:"error,omitempty"`
 	DurationSeconds float64             `json:"duration_seconds"`
 	ContextOverflow bool                `json:"context_overflow,omitempty"`
+	// ContinuedFrom and PrefixMessages are set when the run continued a
+	// recorded conversation: Messages[:PrefixMessages] are that recording.
+	ContinuedFrom  string `json:"continued_from,omitempty"`
+	PrefixMessages int    `json:"prefix_messages,omitempty"`
+}
+
+// Prefix is a recorded conversation a run continues: the messages up to the
+// point where another model stopped, and the record they came from.
+type Prefix struct {
+	Source   string
+	Messages []inference.Message
 }
 
 func (u *TokenUsage) add(usage *inference.Usage) {

@@ -27,6 +27,17 @@ func NewCondition(name string, client inference.Client, tools []Tool, config Con
 	return &Condition{name: name, loop: loop, systemPrompt: systemPrompt, formatTask: formatTask}, nil
 }
 
+// Continue carries on from a recorded conversation that already holds the
+// system prompt and the task, so the prefix is sent as it was recorded.
+func (c *Condition) Continue(ctx context.Context, task string, prefix Prefix) (Result, error) {
+	if c == nil || c.loop == nil {
+		return Result{}, errors.New("agent is not initialized")
+	}
+	result, err := c.loop.Continue(ctx, task, prefix)
+	result.Condition = c.name
+	return result, err
+}
+
 func (c *Condition) Run(ctx context.Context, task string) (Result, error) {
 	if c == nil || c.loop == nil {
 		return Result{}, errors.New("agent is not initialized")
