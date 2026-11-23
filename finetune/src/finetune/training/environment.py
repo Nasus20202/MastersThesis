@@ -18,6 +18,7 @@ PACKAGES = (
     "bitsandbytes",
     "accelerate",
     "flash-linear-attention",
+    "causal-conv1d",
     "triton",
 )
 
