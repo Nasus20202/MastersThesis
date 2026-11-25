@@ -1,4 +1,5 @@
-"""Training steps: AdamW with warm-up and the configured decay, one example per step."""
+"""Training steps: AdamW with warm-up, the configured decay and gradient
+clipping, one example per step."""
 
 from __future__ import annotations
 
@@ -14,6 +15,11 @@ from finetune.training.gpu import autocast, sync
 from finetune.training.lora import input_device
 from finetune.training.loss import loss_and_count
 from finetune.training.models import Settings, Step, Tokens
+
+
+def warmup_steps(ratio: float, total_steps: int) -> int:
+    """Warm-up length: ``ratio`` of the run's steps, rounded up, at least one."""
+    return max(math.ceil(ratio * total_steps), 1)
 
 
 def lr_scale(step: int, warmup_steps: int, total_steps: int, schedule: str) -> float:
@@ -40,12 +46,14 @@ class Trainer:
         self.device = input_device(model)
         params = [p for p in model.parameters() if p.requires_grad]
         self.base_lr = cfg.learning_rate if learning_rate is None else learning_rate
-        self.optimizer = torch.optim.AdamW(params, lr=self.base_lr, weight_decay=0.0)
+        self.params = params
+        self.optimizer = torch.optim.AdamW(params, lr=self.base_lr, weight_decay=cfg.weight_decay)
+        self.warmup_steps = warmup_steps(cfg.warmup_ratio, total_steps)
         self.steps = 0
 
     def step(self, example: Tokens) -> Step:
         self.model.train()
-        scale = lr_scale(self.steps, self.cfg.warmup_steps, self.total_steps, self.cfg.lr_schedule)
+        scale = lr_scale(self.steps, self.warmup_steps, self.total_steps, self.cfg.lr_schedule)
         for group in self.optimizer.param_groups:
             group["lr"] = self.base_lr * scale
         ids_t = torch.tensor(example.ids, device=self.device)
@@ -56,6 +64,7 @@ class Trainer:
             with autocast():
                 loss, count = loss_and_count(self.model, ids_t, labels_t)
             loss.backward()
+            grad_norm = torch.nn.utils.clip_grad_norm_(self.params, self.cfg.max_grad_norm)
             self.optimizer.step()
         finally:
             # Also after running out of memory, so the next attempt starts clean.
@@ -68,18 +77,29 @@ class Trainer:
             target_tokens=count,
             seconds=time.perf_counter() - started,
             finite=bool(torch.isfinite(loss.detach())),
+            grad_norm=float(grad_norm),
         )
 
 
 def train_steps(
-    trainer: Trainer, examples: list[Tokens], steps: int, seed: int, on_step: Callable
+    trainer: Trainer,
+    examples: list[Tokens],
+    steps: int,
+    seed: int,
+    on_step: Callable,
+    on_epoch: Callable | None = None,
 ) -> None:
-    """``steps`` steps over shuffled epochs of ``examples``."""
+    """``steps`` steps over shuffled epochs of ``examples``; ``on_epoch(n)``
+    after each complete epoch that is not the last step."""
     order = random.Random(seed)
     done = 0
+    epochs = 0
     while examples and done < steps:
         epoch = list(examples)
         order.shuffle(epoch)
         for example in epoch[: steps - done]:
             done += 1
             on_step(replace(trainer.step(example), step=done))
+        epochs += 1
+        if on_epoch and done < steps:
+            on_epoch(epochs)

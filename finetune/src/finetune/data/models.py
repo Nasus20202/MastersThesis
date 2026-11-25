@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -64,8 +64,11 @@ class Row:
 
 @dataclass(frozen=True)
 class Manifest:
-    """Attempt files to train on and to evaluate on."""
+    """One run: the attempt files to train and evaluate on, or the frozen
+    dataset to train on, and the variants to train."""
 
     path: Path
     train: list[Path]
     eval: list[Path]
+    rows: Path | None = None  # a frozen dataset that replaces ``train``
+    variants: list[str] = field(default_factory=list)  # empty: every variant

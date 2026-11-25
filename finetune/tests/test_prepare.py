@@ -137,3 +137,46 @@ def test_prepare_refuses_frozen_rows_without_the_needed_student(
         prepare.prepare(
             tmp_path / "out", inputs, [Variant("qwen35-4b", Precision.LORA)], 1, rows=directory
         )
+
+
+RUNS = ROOT / "finetune/manifests"
+
+
+@pytest.mark.parametrize("teacher", ["qwen35-9b", "deepseek-flash"])
+def test_run_manifests_name_their_dataset_evaluation_and_models(teacher):
+    run = manifest.read(RUNS / f"lora-{teacher}-data.yaml")
+    assert run.rows == ROOT / "finetune/datasets" / teacher
+    assert run.train == []
+    assert run.eval and all("validation/deepseek-flash" in str(p) for p in run.eval)
+    assert [Variant.parse(v).student for v in run.variants] == sorted(CONFIG.students)
+
+
+def test_manifest_lists_its_evaluation_in_a_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(manifest, "ROOT", tmp_path)
+    attempt = tmp_path / "attempt.json"
+    attempt.write_text(ATTEMPT.read_text())
+    (tmp_path / "evals").mkdir()
+    (tmp_path / "evals" / "manifest.yaml").write_text("eval:\n  - attempt.json\n")
+    path = tmp_path / "run.yaml"
+    path.write_text("eval: evals\n")
+    assert manifest.read(path).eval == [attempt]
+
+
+def test_manifest_refuses_rows_that_are_not_a_frozen_dataset(tmp_path):
+    path = tmp_path / "run.yaml"
+    path.write_text(f"rows: {tmp_path}\n")
+    with pytest.raises(ValueError, match="not a frozen dataset"):
+        manifest.read(path)
+
+
+def test_manifest_refuses_rows_together_with_train_attempts(tmp_path):
+    (tmp_path / "freeze.json").write_text("{}")
+    path = tmp_path / "run.yaml"
+    path.write_text(f"rows: {tmp_path}\ntrain:\n  - {ATTEMPT}\n")
+    with pytest.raises(ValueError, match="not both"):
+        manifest.read(path)
+
+
+def test_without_variants_every_variant_is_trained():
+    names = prepare.variant_names(manifest.read(POC_MANIFEST))
+    assert names == [v.name for v in prepare.VARIANTS]

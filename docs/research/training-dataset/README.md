@@ -91,7 +91,7 @@ A continuation inherits a long prefix, so more of them exceed the 16,384-token c
 
 - The review is model output, not the researcher's. Two false flags found in a spot check (commands missing from the sheet but present in the raw record) show the reviewers can be wrong in both directions, and the reviewers applied the forceful-write rule unevenly across batches. The accepted sheets were not re-checked; the researcher can overrule any verdict in the sheet and rebuild.
 - S2's prefixes come from one attempt per scenario and model of the October development suite, and replaying a prefix does not reproduce non-deterministic cluster state (pod names, timings).
-- Training reads a variant's frozen rows with `finetune.runs.prepare --rows` and refuses them when they no longer match the recorded revision, so the cut or the masked prefix reaches the trainer as reviewed; the manifest then supplies only the evaluation split.
+- Training reads a variant's frozen rows named by a run manifest's `rows` and refuses them when they no longer match the recorded revision, so the cut or the masked prefix reaches the trainer as reviewed; the manifest then supplies only the evaluation split.
 - Only the write commands are listed in a sheet; reads and shell-built files are not. A claim in a final report can be correct and still look unsupported on the sheet.
 - DeepSeek trajectories carry the teacher's reasoning only where the model returned it (73% of turns). Qwen's carry reasoning on every turn.
 - The 8 validation scenarios and the held-out set are excluded by construction; `finetune/tests/test_dataset.py` checks that no validation scenario is in a manifest.

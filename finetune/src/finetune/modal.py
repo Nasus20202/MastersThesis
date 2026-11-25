@@ -10,9 +10,8 @@ under ``<run>/``. Each container gets this checkout's ``finetune`` package and
 Every run costs money: start one only with the researcher's approval
 (AGENTS.md). From ``finetune/``:
 
-    uv run modal run -m finetune.modal --manifest <manifest.yaml> \
-        --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu L40S \
-        [--rows finetune/datasets/continuation/<teacher>/rendered]
+    uv run modal run --detach --name <manifest name> -m finetune.modal \
+        --manifest manifests/<name>.yaml [--steps 30] [--gpu L40S]
     uv run modal volume get finetune-results <run> <dir>
 """
 
@@ -27,7 +26,7 @@ import modal
 from finetune import config, logs
 from finetune.data import manifest as manifests
 from finetune.runs import prepare
-from finetune.runs.models import VARIANTS, Variant
+from finetune.runs.models import Variant
 
 SETTINGS = config.CONFIG.modal
 log = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ hf_cache = modal.Volume.from_name(SETTINGS.cache_volume, create_if_missing=True)
     timeout=SETTINGS.timeout_minutes * 60,
     volumes={str(RESULTS): results, "/hf": hf_cache},
 )
-def train_variant(run_id: str, variant: str, steps: int) -> None:
+def train_variant(run_id: str, variant: str, steps: int | None) -> None:
     from finetune.training import run
 
     logs.setup()
@@ -74,26 +73,20 @@ def train_variant(run_id: str, variant: str, steps: int) -> None:
 @app.local_entrypoint()
 def main(
     manifest: str,
-    variants: str = ",".join(v.name for v in VARIANTS),
     gpu: str = SETTINGS.gpu,
-    steps: int = config.CONFIG.training.steps,
-    rows: str = "",
+    steps: int = 0,  # 0: the configured epochs
 ) -> None:
-    names = variants.split(",")
+    """Trains the manifest's variants on its data; the run folder carries its name."""
+    run = manifests.read(Path(manifest))
+    names = prepare.variant_names(run)
     parsed = [Variant.parse(name) for name in names]
     if prepare.provenance().uncommitted_changes:
         raise SystemExit("uncommitted changes; commit them so the run is traceable")
-    run_id = datetime.datetime.now(datetime.UTC).strftime("run-%Y%m%d-%H%M%S")
+    started = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d-%H%M%S")
+    run_id = f"run-{started}-{Path(manifest).stem}"
     logs.setup()
     with tempfile.TemporaryDirectory() as tmp:
-        session = prepare.prepare(
-            Path(tmp),
-            manifests.read(Path(manifest)),
-            parsed,
-            steps,
-            gpu,
-            Path(rows) if rows else None,
-        )
+        session = prepare.prepare(Path(tmp), run, parsed, steps or None, gpu, run.rows)
         with results.batch_upload() as batch:
             batch.put_directory(tmp, f"/{run_id}")
     log.info(
@@ -104,7 +97,7 @@ def main(
         gpu,
     )
     outcomes = train_variant.with_options(gpu=gpu).starmap(
-        ((run_id, name, steps) for name in names), return_exceptions=True
+        ((run_id, name, steps or None) for name in names), return_exceptions=True
     )
     for name, outcome in zip(names, outcomes, strict=True):
         if outcome is None:

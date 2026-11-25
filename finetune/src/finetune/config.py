@@ -39,12 +39,14 @@ class LlamaCpp:
 
 @dataclass(frozen=True)
 class Training:
-    steps: int
     rank: int
     alpha: int
+    epochs: int
     learning_rate: float
-    warmup_steps: int
+    warmup_ratio: float
     lr_schedule: str
+    weight_decay: float
+    max_grad_norm: float
     seed: int
     max_len: int
     sweep: list[int]

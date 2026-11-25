@@ -11,7 +11,10 @@ One run, in order (``run``):
    never cut.
 4. **Evaluate** the target-token loss on the held-out trajectories, with and
    without the adapter.
-5. **Train** ``--steps`` steps, one trajectory per step, over shuffled epochs.
+5. **Train** ``--epochs`` shuffled passes over the kept trajectories, one
+   trajectory per step (or a fixed ``--steps``, for short checks).
+   After each epoch but the last, the held-out loss is measured again, to
+   show whether later epochs over-train (a diagnostic, not a selection).
 6. **Evaluate** again and save the adapter.
 
 The loss is the mean cross-entropy over target tokens (``finetune.data.rows``),
@@ -43,6 +46,7 @@ from finetune.training.gpu import allocated_gib, is_oom, oom_message, peak_gib, 
 from finetune.training.lora import adapted_modules, load, trainable_parameters
 from finetune.training.models import (
     TRAINING,
+    EpochEvaluation,
     ExampleCount,
     Job,
     Metrics,
@@ -147,14 +151,16 @@ def _run(job: Job, metrics: Metrics) -> None:
         metrics.save()
 
     # 5. Train.
-    trainer = Trainer(model, cfg, job.steps)
+    metrics.steps = job.steps if job.steps is not None else job.epochs * len(kept)
+    trainer = Trainer(model, cfg, metrics.steps)
+    log.info("training %d steps, warm-up %d", metrics.steps, trainer.warmup_steps)
 
     def on_step(entry: Step) -> None:
         metrics.train_log.append(entry)
         log.info(
             "step %d/%d: loss %.4f, %d tokens, %.1f s, peak %.1f GiB",
             entry.step,
-            job.steps,
+            metrics.steps,
             entry.loss,
             entry.tokens,
             entry.seconds,
@@ -162,9 +168,17 @@ def _run(job: Job, metrics: Metrics) -> None:
         )
         metrics.save()
 
+    def on_epoch(epoch: int) -> None:
+        if not kept_evals:
+            return
+        evaluation = evaluate(model, kept_evals)
+        metrics.eval_epochs.append(EpochEvaluation(epoch, trainer.steps, evaluation))
+        log.info("epoch %d: held-out loss %.4f", epoch, evaluation.with_adapter)
+        metrics.save()
+
     reset_peak()
     try:
-        train_steps(trainer, kept, job.steps, cfg.seed, on_step)
+        train_steps(trainer, kept, metrics.steps, cfg.seed, on_step, on_epoch)
     except (RuntimeError, torch.OutOfMemoryError) as error:
         if not is_oom(error):
             raise
@@ -199,7 +213,8 @@ def parse_args(argv: list[str] | None = None) -> Job:
     )
     parser.add_argument("--eval", type=Path, help="held-out JSONL for the evaluation loss")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--steps", type=int, default=TRAINING.steps)
+    parser.add_argument("--epochs", type=int, default=TRAINING.epochs)
+    parser.add_argument("--steps", type=int, help="a fixed step count instead of --epochs")
     parser.add_argument("--max-len", type=int, default=TRAINING.max_len)
     parser.add_argument(
         "--sweep", type=int_list, default=TRAINING.sweep, help="comma-separated lengths"
@@ -222,6 +237,7 @@ def parse_args(argv: list[str] | None = None) -> Job:
         student=args.student,
         checkpoint=args.checkpoint,
         eval=args.eval,
+        epochs=args.epochs,
         steps=args.steps,
         max_len=args.max_len,
         sweep=tuple(args.sweep),

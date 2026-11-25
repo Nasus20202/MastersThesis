@@ -246,6 +246,7 @@ def test_run_trains_evaluates_and_saves(tmp_path, checkpoint, rows, name):
     assert [r["status"] for r in saved["sweep"]] == ["ok", "ok"]
     assert saved["max_len"] == 100000
     assert all(e.finite for e in metrics.train_log)
+    assert all(e.grad_norm is not None and e.grad_norm > 0 for e in metrics.train_log)
     assert [e["step"] for e in saved["train_log"]] == list(range(1, 9))
     assert set(saved["parameter_dtypes"]) == {"torch.float32"}
     assert saved["error"] is None and saved["train_error"] is None
@@ -258,6 +259,11 @@ def test_run_trains_evaluates_and_saves(tmp_path, checkpoint, rows, name):
     assert before["with_adapter"] == pytest.approx(before["without_adapter"])
     assert after["with_adapter"] < after["without_adapter"]
     assert after["without_adapter"] == pytest.approx(before["without_adapter"], rel=1e-5)
+    # One evaluation example: its own loss is the mean, tagged with its source.
+    (example,) = after["per_example"]
+    assert example["source"] == rows[name].source != ""
+    assert example["with_adapter"] == pytest.approx(after["with_adapter"])
+    assert example["target_tokens"] > 0
     assert (out / "adapter" / "adapter_config.json").exists()
     assert (out / "adapter" / "adapter_model.safetensors").exists()
     log = (out / "log.txt").read_text()
@@ -272,6 +278,30 @@ def test_examples_longer_than_the_cap_are_dropped_not_truncated(tmp_path, checkp
     assert metrics.max_len == 128
     assert metrics.train_examples.kept == 0
     assert metrics.train_log == []
+
+
+def test_epochs_set_the_steps_and_each_but_the_last_is_evaluated(tmp_path, checkpoint, rows, name):
+    args = run_args(
+        tmp_path,
+        checkpoint,
+        rows,
+        name,
+        "--eval",
+        str(tmp_path / "train.jsonl"),
+        "--epochs",
+        "3",
+        "--max-len",
+        "100000",
+        "--sweep",
+        "64",
+    )
+    metrics = runner.run(args)
+    assert metrics.train_examples.kept == 1
+    assert metrics.steps == 3
+    assert [e.step for e in metrics.train_log] == [1, 2, 3]
+    assert [(e.epoch, e.step) for e in metrics.eval_epochs] == [(1, 1), (2, 2)]
+    saved = json.loads((tmp_path / "out" / "metrics.json").read_text())
+    assert len(saved["eval_epochs"]) == 2 and saved["eval_after"] is not None
 
 
 def test_cap_falls_to_the_longest_length_that_fitted(tmp_path, checkpoint, rows, name, monkeypatch):

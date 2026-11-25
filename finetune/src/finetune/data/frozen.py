@@ -44,7 +44,10 @@ def read(directory: Path) -> Dataset:
     """The rows of a frozen dataset, after checking they match its revision."""
     path = record(directory)
     saved = json.loads(path.read_text())
-    files = [ROOT / name for name in saved["files"]]
+    if "files" in saved:  # a variant records the files its revision covers
+        files = [ROOT / name for name in saved["files"]]
+    else:  # a teacher dataset: its manifest and renders (finetune.data.freeze)
+        files = [directory / "manifest.yaml", *sorted((directory / "rendered").glob("*.jsonl"))]
     if digest(files) != saved["revision"]:
         raise ValueError(f"{path} no longer matches its rows: freeze {directory} again")
     rows = {p.stem: read_rows(p) for p in sorted((directory / "rendered").glob("*.jsonl"))}

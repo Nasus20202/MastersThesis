@@ -42,6 +42,20 @@ def test_read_returns_each_students_rows_and_the_revision(tmp_path, monkeypatch)
     assert found.revision == json.loads((directory / "freeze.json").read_text())["revision"]
 
 
+def test_a_teacher_dataset_is_read_by_its_manifest_and_renders(tmp_path, monkeypatch):
+    example = Row("runs/run-1/a.json", "scenario", "text", [(0, 4)])
+    directory = write(tmp_path, monkeypatch, {"qwen35-4b": [example]})
+    record = directory / "freeze.json"
+    saved = json.loads(record.read_text())
+    del saved["files"]  # a teacher freeze records no file list
+    record.write_text(json.dumps(saved))
+
+    assert frozen.read(directory).rows["qwen35-4b"] == [example]
+    (directory / "manifest.yaml").write_text("teacher: edited\n")
+    with pytest.raises(ValueError, match="no longer matches"):
+        frozen.read(directory)
+
+
 def test_read_refuses_rows_that_no_longer_match_the_revision(tmp_path, monkeypatch):
     directory = write(tmp_path, monkeypatch, {"gemma-4-e2b": [Row("r", "s", "text", [(0, 1)])]})
     path = directory / "rendered" / "gemma-4-e2b.jsonl"

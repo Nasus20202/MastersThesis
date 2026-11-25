@@ -2,6 +2,12 @@
 
 This is a research project. The human researcher owns the methodology and coordinates the work.
 
+These rules apply everywhere. Before working in a directory, also follow its own instructions:
+
+- [benchmark/AGENTS.md](benchmark/AGENTS.md) — Go conventions of the benchmark runner.
+- [finetune/AGENTS.md](finetune/AGENTS.md) — Python conventions of fine-tuning and paid compute (Modal).
+- [docs/AGENTS.md](docs/AGENTS.md) — documentation, the decision log and studies.
+
 ## Workflow
 
 1. Start from an issue ticket on GitHub and move it to **In Progress**.
@@ -22,6 +28,8 @@ This is a research project. The human researcher owns the methodology and coordi
 ## Approval gate
 
 Research and technical decisions must be explicitly approved by the human researcher before they are implemented, executed, frozen, or recorded as approved. First present the proposed decision, affected scope, rationale and alternatives, then wait for explicit approval in the conversation. Do not infer approval from a ticket, prior discussion, an implementation request, or silence. Exploratory checks may inspect the current state, but must not change the agreed methodology or document an unapproved decision as accepted. If an implementation request contains an unstated research or technical choice, stop and ask for approval before making that choice.
+
+Keep decisions few and plain. Group related choices into one decision, explain each in everyday language rather than internal labels, and ask only about choices that change the research or its cost. Record only what the researcher agreed to.
 
 ## Useful commands
 

@@ -4,7 +4,7 @@ Rules for everything under `docs/`, in addition to the [repository instructions]
 
 ## Rules
 
-- Record every research and technical decision, including changes and reversals, in [decision-log.md](decision-log.md). Use a sequential `D-NNN` identifier, an ISO `YYYY-MM-DD` date, one of the four status values, a rationale or reason and a reference to the affected document; one row per decision. A row states only the decision and its reason; measured results, run details and implementation belong in the owning document.
+- Record every research and technical decision, including changes and reversals, in [decision-log.md](decision-log.md). Use a sequential `D-NNN` identifier, an ISO `YYYY-MM-DD` date, one of the four status values, a rationale or reason and a reference to the affected document; one row per decision. A row states only the decision and its reason in one or two short sentences; related choices share one row, and values, measured results, run details and implementation belong in the owning document.
 - Keep [decision-log.md](decision-log.md) as the single source of truth for open decisions. Do not repeat the same open-decision list in other documentation files; link to the decision log instead.
 - All records in [decision-log.md](decision-log.md) must be human-reviewed and approved before being added. Do not modify the file without explicit approval from the human researcher.
 - Only decisions not yet merged into the default branch can and should be modified. Once a decision is merged, it is frozen and cannot be changed without explicit approval.

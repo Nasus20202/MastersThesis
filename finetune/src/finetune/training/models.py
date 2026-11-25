@@ -25,8 +25,10 @@ class Settings:
     rank: int = TRAINING.rank
     alpha: int = TRAINING.alpha
     learning_rate: float = TRAINING.learning_rate
-    warmup_steps: int = TRAINING.warmup_steps
+    warmup_ratio: float = TRAINING.warmup_ratio
     lr_schedule: str = TRAINING.lr_schedule
+    weight_decay: float = TRAINING.weight_decay
+    max_grad_norm: float = TRAINING.max_grad_norm
     seed: int = TRAINING.seed
 
 
@@ -41,7 +43,8 @@ class Job:
     student: str | None = None
     checkpoint: Path | None = None  # local model directory, instead of a student (tests)
     eval: Path | None = None  # held-out rows for the evaluation loss
-    steps: int = TRAINING.steps
+    epochs: int = TRAINING.epochs
+    steps: int | None = None  # replaces ``epochs`` with a fixed step count (POC, tests)
     max_len: int = TRAINING.max_len
     sweep: tuple[int, ...] = tuple(TRAINING.sweep)
 
@@ -52,9 +55,10 @@ class Tokens:
 
     ids: list[int]
     labels: list[int]
+    source: str = ""  # the attempt file the row was rendered from
 
     def window(self, length: int) -> Tokens:
-        return Tokens(self.ids[:length], self.labels[:length])
+        return Tokens(self.ids[:length], self.labels[:length], self.source)
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,7 @@ class Step:
     target_tokens: int
     seconds: float
     finite: bool
+    grad_norm: float | None = None  # before clipping
     step: int = 0  # position in the run; 0 in the sweep
 
 
@@ -89,12 +94,33 @@ class SweepPoint:
 
 
 @dataclass(frozen=True)
+class ExampleLoss:
+    """Mean target-token loss of one held-out example."""
+
+    source: str  # its attempt file; the path names the teacher
+    target_tokens: int
+    with_adapter: float
+    without_adapter: float
+
+
+@dataclass(frozen=True)
 class Evaluation:
-    """Mean target-token loss on held-out examples."""
+    """Mean target-token loss on held-out examples, and each example's own, so
+    the loss can be split by teacher or scenario afterwards."""
 
     examples: int
     with_adapter: float
     without_adapter: float
+    per_example: list[ExampleLoss] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EpochEvaluation:
+    """The held-out loss after one epoch; the last epoch is ``eval_after``."""
+
+    epoch: int
+    step: int
+    evaluation: Evaluation
 
 
 @dataclass(frozen=True)
@@ -136,6 +162,7 @@ class Metrics:
     sweep: list[SweepPoint] = field(default_factory=list)
     max_len: int | None = None
     train_examples: ExampleCount | None = None
+    steps: int | None = None  # training steps planned: epochs x kept examples, or --steps
     eval_examples: ExampleCount | None = None
     eval_before: Evaluation | None = None
     train_log: list[Step] = field(default_factory=list)
@@ -143,6 +170,7 @@ class Metrics:
     train_peak_gib: float | None = None
     train_tokens_per_second: float | None = None
     train_seconds: float | None = None
+    eval_epochs: list[EpochEvaluation] = field(default_factory=list)  # all but the last
     eval_after: Evaluation | None = None
     error: str | None = None  # the exception that ended the run
 

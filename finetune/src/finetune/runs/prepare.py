@@ -75,7 +75,7 @@ def render_data(
         _write(folder / "eval.jsonl", rendered(tok, student, manifest.eval))
 
 
-def job(variant: Variant, data: Path, out: Path, steps: int) -> Job:
+def job(variant: Variant, data: Path, out: Path, steps: int | None = None) -> Job:
     """The training job of one variant on ``prepare``'s data."""
     return Job(
         settings=Settings(precision=variant.precision),
@@ -85,6 +85,14 @@ def job(variant: Variant, data: Path, out: Path, steps: int) -> Job:
         student=variant.student,
         steps=steps,
     )
+
+
+def repository_path(path: Path) -> str:
+    """``path`` relative to the repository when it lies inside it."""
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def provenance() -> Provenance:
@@ -106,7 +114,7 @@ def prepare(
     out: Path,
     manifest: Manifest,
     variants: list[Variant],
-    steps: int,
+    steps: int | None = None,
     gpu: str | None = None,
     rows: Path | None = None,
 ) -> Session:
@@ -130,7 +138,7 @@ def prepare(
     session = Session(
         provenance=provenance(),
         manifest=str(manifest.path.relative_to(ROOT)),
-        data_source=str(rows) if rows is not None else None,
+        data_source=repository_path(rows) if rows is not None else None,
         data_revision=dataset.revision if dataset else None,
         variants=[v.name for v in variants],
         gpu=gpu,
@@ -152,15 +160,19 @@ def main(argv: list[str] | None = None) -> None:
         "--variants",
         nargs="+",
         choices=[v.name for v in VARIANTS],
-        default=[v.name for v in VARIANTS],
-        help="default: all",
+        help="default: the manifest's, or all",
     )
-    parser.add_argument("--rows", type=Path, help="train from this frozen dataset instead")
-    parser.add_argument("--steps", type=int, default=CONFIG.training.steps)
+    parser.add_argument("--steps", type=int, help="a fixed step count instead of the epochs")
     args = parser.parse_args(argv)
     logs.setup()
-    variants = [Variant.parse(v) for v in args.variants]
-    prepare(args.out, manifests.read(args.manifest), variants, args.steps, rows=args.rows)
+    manifest = manifests.read(args.manifest)
+    variants = [Variant.parse(v) for v in args.variants or variant_names(manifest)]
+    prepare(args.out, manifest, variants, args.steps, rows=manifest.rows)
+
+
+def variant_names(manifest: Manifest) -> list[str]:
+    """The manifest's variants, or every variant when it names none."""
+    return manifest.variants or [v.name for v in VARIANTS]
 
 
 if __name__ == "__main__":
