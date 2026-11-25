@@ -15,8 +15,9 @@ The package has one subpackage per stage; each keeps its dataclasses in
 1. **Data** ([`data/`](src/finetune/data/)): a benchmark attempt becomes a
    chat conversation (`trajectories`), rendered once with the checkpoint's
    chat template (`render`), with the text the model generates when serving
-   marked as the loss target (`rows`). A manifest lists the attempts to train
-   and evaluate on (`manifest`); training on validation scenarios is refused.
+   marked as the loss target (`rows`). A manifest describes one run: a frozen
+   dataset or attempts to train on, the attempts to evaluate on and the
+   models (`manifest`); training on validation scenarios is refused.
 2. **Run inputs** ([`runs/prepare.py`](src/finetune/runs/prepare.py)): the
    manifest rendered for each model, with the commit and data hashes.
 3. **Training** ([`training/`](src/finetune/training/)): one model, one
@@ -38,8 +39,11 @@ make finetune-lint
 
 # Modal, from finetune/ (once: `uv run modal setup`). Costs money: only with
 # the researcher's approval.
-uv run modal run -m finetune.modal --manifest manifests/poc.yaml \
-  --variants qwen35-4b-lora,gemma-4-e4b-lora --gpu L40S
+# A manifest in manifests/ is one run: its data, evaluation and models.
+# --name labels the run in the Modal dashboard (use the manifest's name);
+# --detach keeps it running after the local process ends.
+uv run modal run --detach --name <name> -m finetune.modal \
+  --manifest manifests/<name>.yaml   # --steps 30 instead of the epochs (the POC)
 uv run modal volume get finetune-results <run> <dir>
 
 # Served perplexity of one adapter (local Vulkan GPU; needs the served GGUF

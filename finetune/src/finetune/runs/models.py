@@ -46,6 +46,6 @@ class Session:
     data_revision: str | None  # the revision that covers those rows
     variants: list[str]
     gpu: str | None
-    steps: int
+    steps: int | None  # a fixed step count instead of the configured epochs
     training: Training
     data: dict[str, str]  # data file -> SHA-256

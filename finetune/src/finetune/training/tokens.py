@@ -24,7 +24,7 @@ def tokenize(tok, row: Row) -> Tokens:
             j += 1
         if j < len(spans) and spans[j][0] <= start < spans[j][1]:
             labels[i] = ids[i]
-    return Tokens(ids, labels)
+    return Tokens(ids, labels, row.source)
 
 
 def read_examples(tok, path: Path) -> list[Tokens]:

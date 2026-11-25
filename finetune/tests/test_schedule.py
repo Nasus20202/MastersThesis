@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from finetune.training.trainer import lr_scale  # noqa: E402
+from finetune.training.trainer import lr_scale, warmup_steps  # noqa: E402
 
 
 def scales(schedule: str, warmup: int = 2, total: int = 10) -> list[float]:
@@ -34,3 +34,9 @@ def test_cosine_stays_in_range_when_steps_exceed_the_total():
 def test_unknown_schedule_is_rejected():
     with pytest.raises(ValueError):
         lr_scale(5, 2, 10, "linear")
+
+
+def test_warmup_is_a_share_of_the_run_rounded_up_and_at_least_one_step():
+    assert warmup_steps(0.05, 459) == 23
+    assert warmup_steps(0.05, 40) == 2
+    assert warmup_steps(0.05, 1) == 1

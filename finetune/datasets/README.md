@@ -8,6 +8,7 @@ One directory per teacher, built by `finetune.data.dataset` from benchmark runs 
 | `qwen35-9b/`      | the whole trajectories of Qwen3.5 9B on Kaggle                                                         |
 | `truncation/`     | the proposed truncation variant: cut points and the rendered cuts, per teacher                         |
 | `continuation/`   | the proposed continuation variant: the Gemma attempts to continue and each teacher's continuation runs |
+| `validation/`     | DeepSeek V4.1 Flash attempts on the validation scenarios, for the held-out loss only; never trained on |
 
 Both variants are derived from the teacher datasets: the truncation cuts each teacher's own trajectories, the continuation starts from one shared set of Gemma prefixes and runs with either teacher. Each variant records the dataset it was built from, by that dataset's revision, so a cut or a continuation can be traced back without copying the attempts. The ticket and the study call the two variants S1 and S2.
 

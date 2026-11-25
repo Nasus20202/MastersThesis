@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
 
 import torch
 
 from finetune.training.gpu import autocast, peak_gib
 from finetune.training.lora import input_device
 from finetune.training.loss import loss_and_count
-from finetune.training.models import Evaluation, Tokens
+from finetune.training.models import Evaluation, ExampleLoss, Tokens
 
 log = logging.getLogger(__name__)
 
@@ -20,8 +19,9 @@ def evaluate(model, examples: list[Tokens]) -> Evaluation:
     model.eval()
     device = input_device(model)
 
-    def mean_loss() -> float:
-        total = count = 0.0
+    def losses() -> list[tuple[float, int]]:
+        """Each example's mean loss and its number of target tokens."""
+        found = []
         for example in examples:
             with autocast():
                 loss, n = loss_and_count(
@@ -29,14 +29,25 @@ def evaluate(model, examples: list[Tokens]) -> Evaluation:
                     torch.tensor(example.ids, device=device),
                     torch.tensor(example.labels, device=device),
                 )
-            total += float(loss) * n
-            count += n
-        return total / max(count, 1)
+            found.append((float(loss), int(n)))
+        return found
+
+    def mean(found: list[tuple[float, int]]) -> float:
+        return sum(loss * n for loss, n in found) / max(sum(n for _, n in found), 1)
 
     log.info("evaluating on %d examples", len(examples))
-    result = Evaluation(len(examples), with_adapter=mean_loss(), without_adapter=0.0)
+    adapted = losses()
     with model.disable_adapter():
-        result = replace(result, without_adapter=mean_loss())
+        base = losses()
+    result = Evaluation(
+        len(examples),
+        with_adapter=mean(adapted),
+        without_adapter=mean(base),
+        per_example=[
+            ExampleLoss(e.source, n, a, b)
+            for e, (a, n), (b, _) in zip(examples, adapted, base, strict=True)
+        ],
+    )
     log.info(
         "evaluation loss %.4f with the adapter, %.4f without; peak %.1f GiB",
         result.with_adapter,

@@ -95,7 +95,7 @@ The adaptation methods may add the following components:
 - prompt condition: an approved system prompt,
 - skill condition: prepared procedural skill content,
 - RAG condition: an embedding and retrieval pipeline over the frozen common experiment corpus recorded in [sources.md](sources.md),
-- fine-tuning condition: a LoRA adapter per adapted model, trained on Modal from code kept in this repository, and its training tooling (D-053, D-055); not implemented yet,
+- fine-tuning condition: a LoRA adapter per adapted model, trained with transformers + PEFT on Modal from the code in `finetune/` (D-052, D-053, D-059), on trajectories of two teachers: Qwen3.5 9B on Kaggle and DeepSeek V4.1 Flash through its official API with the `benchmark/model-profiles/deepseek-flash.env` profile (D-054); serving the adapters in the benchmark is not implemented yet,
 - harness condition: the skill and retrieval components together, plus checks and tools implemented in the runner (D-048); no external knowledge access; not implemented yet.
 
 These components are benchmark conditions, not separate execution stacks. They reuse the common runner, environment and result format.
