@@ -58,7 +58,7 @@ def load(
         model = prepare_model_for_kbit_training(
             model,
             use_gradient_checkpointing=True,
-            gradient_checkpointing_kwargs={"use_reentrant": False},
+            activation_checkpointing_kwargs={"use_reentrant": False},
         )
         frozen_matrices_to(model, dtype)
     model.activation_checkpointing_enable(activation_checkpointing_kwargs={"use_reentrant": False})
