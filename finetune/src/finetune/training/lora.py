@@ -61,7 +61,7 @@ def load(
             gradient_checkpointing_kwargs={"use_reentrant": False},
         )
         frozen_matrices_to(model, dtype)
-    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.activation_checkpointing_enable(activation_checkpointing_kwargs={"use_reentrant": False})
     model.enable_input_require_grads()
     model = get_peft_model(
         model,
