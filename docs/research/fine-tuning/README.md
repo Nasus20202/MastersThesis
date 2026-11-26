@@ -3,8 +3,32 @@
 ## Summary
 
 This study trains the LoRA adapters of the fine-tuned condition (D-053) and
-compares the two teachers' datasets (D-054). The method below is fixed before
-the first training run; results follow after the runs.
+compares the two teachers' datasets (D-054). The method below was fixed before
+the first training run. Four adapters trained on the Qwen3.5 9B teacher's
+trajectories were trained, published and run on the benchmark (ticket #27); the
+DeepSeek V4.1 Flash teacher's adapters are not trained yet, so question 1
+compares no teachers yet.
+
+- **On scenarios never trained on, the adapters do not yet show a gain that
+  holds across models.** Pooled over the four models the adapter scores 0.056
+  higher than its base (95% interval −0.043 to +0.149); Qwen3.5 4B gains
+  0.174 (+0.042 to +0.306), the other three do not separate from their bases.
+- **The adapters change when the agent stops.** The Gemma bases stop without a
+  full repair in 19 of 24 (E2B) and 12 of 24 (E4B) attempts and never reach the
+  turn limit; their adapters stop that way in 2 and 3 and reach the turn limit in
+  14 and 8, with 3 to 4 times as many turns. The Qwen bases already keep working,
+  and their turn counts do not change.
+- **On the scenarios it was trained on, the Gemma 4 E4B adapter gains clearly.**
+  In a single run of all 46 scenarios it scores 0.204 above its base on the 38
+  trained-on scenarios (+0.033 to +0.377), against +0.035 on the validation
+  scenarios: it learned mostly the training scenarios. The other models have
+  no base run on the trained-on scenarios.
+- **One attempt per scenario is too few on the validation scenarios.** The
+  single-attempt runs differ from the 3-attempt runs by up to 0.57 (Qwen3.5 4B:
+  0.292 against 0.861).
+- **The held-out loss rises after epoch 1 for every model**, so 3 epochs
+  over-train by that measure (question 3). Training took 4.4 hours and cost
+  $10.21 (question 4).
 
 ## Question
 
@@ -91,62 +115,53 @@ and Gemma 4 E2B are guesses.
 
 ## Results
 
-### Qwen3.5 9B teacher
+Each teacher's adapters have their own results file: training run, published
+adapters, validation, stopping, trained-on scenarios, draft acceptance and the
+evidence of their runs. [`results.py`](results.py) computes the benchmark
+tables from the raw attempts.
 
-One Modal run, `run-20261126-002517-lora-qwen35-9b-data`, from commit
-`f1230bee` with `finetune/manifests/lora-qwen35-9b-data.yaml`: 4 variants, all
-153 examples kept, 459 steps each, no errors. Modal assigned A100 80 GB
-cards to the 40 GB request.
+| Teacher dataset     | Adapters                   | Results                                                |
+| ------------------- | -------------------------- | ------------------------------------------------------ |
+| Qwen3.5 9B          | trained, published and run | [results-qwen35-9b-data.md](results-qwen35-9b-data.md) |
+| DeepSeek V4.1 Flash | not trained yet            | —                                                      |
 
-Held-out loss on the 16 DeepSeek V4.1 Flash validation attempts that fit the
-cap (mean cross-entropy over the assistant tokens; lower is better):
+## Conclusions
 
-| Model       | Base model | Epoch 1 | Epoch 2 | Epoch 3 | Tokens/s | Training, min | Peak GiB |
-| ----------- | ---------: | ------: | ------: | ------: | -------: | ------------: | -------: |
-| Gemma 4 E2B |      1.831 |   1.472 |   1.499 |   1.551 |    1,928 |            31 |     16.5 |
-| Gemma 4 E4B |      1.663 |   1.376 |   1.405 |   1.466 |    1,425 |            41 |     23.8 |
-| Qwen3.5 4B  |      1.098 |   1.096 |   1.127 |   1.150 |      762 |            81 |     18.6 |
-| Qwen3.5 9B  |      1.022 |   1.060 |   1.088 |   1.113 |      721 |            85 |     30.1 |
+- The Qwen3.5 9B-teacher adapters do not give a gain on unseen scenarios that
+  holds across the four models: the pooled validation difference is +0.056
+  (−0.043 to +0.149), and only Qwen3.5 4B's gain excludes zero. Where a base
+  comparison on the trained-on scenarios exists (E4B), the gain is there and
+  is larger, so the adapters mainly reproduce the training scenarios.
+- The clearest effect is on Gemma's stopping: the adapters no longer stop
+  early, on trained-on and unseen scenarios alike. They work 3 to 4 times longer
+  and reach the turn limit instead, which costs context and time but does not
+  raise the score on the unseen scenarios by much.
+- The validation measure needs 3 attempts per scenario: single attempts move a
+  model's validation score by up to 0.57.
+- Question 1 compares no teachers yet, because only the Qwen3.5 9B teacher's
+  adapters exist. Which teacher's adapters go to the final experiment is open
+  (D-060, [decision log](../../decision-log.md)).
 
-- **Over-training (question 3).** For every model the held-out loss is lowest
-  after epoch 1 and rises in epochs 2 and 3. The Gemma adapters stay below
-  their base model; the Qwen adapters end above it on DeepSeek's solutions.
-  The adapters after epoch 3 are the ones kept (D-062).
-- **Cost (question 4).** Modal billed $10.21 for `train_variant` ($9.49 GPU,
-  $0.44 CPU, $0.29 memory; the image build added $0.01), above the estimate of
-  about $6.50 (up to $9). The log times, from container start to the saved
-  adapter, were 35, 47, 89 and 95 minutes (4.4 hours); the bill covers 4.52
-  A100 40 GB hours, which gives $2.26 per hour for the 2 cores and 8 GiB the
-  run requested. The run asked for and was billed as `A100_40GB`, although the
-  logged devices have 79.3 GiB (A100 80 GB), so the cost uses the 40 GB rate.
-  Modal's list prices on 2026-11-26 ([modal.com/pricing](https://modal.com/pricing)):
-  A100 40 GB $0.000583 per second ($2.10/h), CPU $0.0000131 per core-second,
-  memory $0.00000222 per GiB-second, billed at the larger of the request and
-  the use.
-- **Qwen speed.** The Qwen students trained at 762 and 721 tokens/s; the proof
-  of concept's A100 runs of Qwen3.5 4B recorded 2,161 and 2,380
-  ([raw](../fine-tuning-proof-of-concept/raw/)). The run's
-  environment (Python 3.15, CUDA 13.2, since the dependency update `54fbb242`)
-  locks no `triton`, which the flash-linear-attention kernels need, so the
-  linear-attention layers most likely ran the reference PyTorch code. Gemma,
-  which has no linear attention, was at the proof of concept's speed.
+## Limitations
 
-### Published adapters
-
-Each private repository holds `adapter_model.safetensors`,
-`adapter_config.json`, `adapter-f16.gguf` (converted with the pinned llama.cpp
-image) and `metrics.json`.
-
-| Repository                                   | Revision                                   | SHA-256, `adapter-f16.gguf`                                        | SHA-256, `adapter_model.safetensors`                               |
-| -------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `Nasus20202/gemma-4-e2b-lora-qwen35-9b-data` | `c8c9c31d29476ce04c2b0f9ac303fdd70f0152cf` | `ae61fc84381f948948e981eda4c512ef5c0b0dd236db56f7d5842939796ef50e` | `8599787892b1e9b7f2c1260757019505a064061841144da88aff2a039c092b2f` |
-| `Nasus20202/gemma-4-e4b-lora-qwen35-9b-data` | `b1a8f38558f550f3664b90af1e0af86d474fb4bd` | `c8611f84d2e2b0b92890c425e631dcb9a80c3cc5f6d8d4628cff4ecf51b3df10` | `9ce2fc5f806f90b16a7f8ccb033036ecf01f337f261aee0ee7508a78af51a62d` |
-| `Nasus20202/qwen35-4b-lora-qwen35-9b-data`   | `45faaf766c3c0fe63a052d18470394be811a91cd` | `23cb6a3aacbb6005ce9235db5c5781fea124724cee409b912b60b892adf44e36` | `dfdf606d63efbddcf46140305163799a59d51fb97c2b3e673998aee565b5c82c` |
-| `Nasus20202/qwen35-9b-lora-qwen35-9b-data`   | `355b8890eccd6874dd77817c1271f42ae4fb5adf` | `6d852c009fb1cc4342e973471eac8d51b260e062d1736119f2e5442bba258a93` | `ad862a22b4944796497560012e4c777b7275564e2b1ddb293fffeb6c7c3f410a` |
+- 8 validation scenarios with 3 attempts each: one scenario moves a macro score
+  by up to 0.125, and most per-model intervals include zero.
+- The first sweep has one attempt per scenario, and a base run for Gemma 4 E4B
+  only. The development-suite prompt results
+  ([Kaggle development suite](../kaggle-development-suite/README.md)) are no
+  base for the other three: they predate the scenario changes of 2026-11-18
+  (D-051), and the E4B base scored 0.674 there against 0.623 here.
+- Two of the Qwen3.5 9B adapter's 24 validation attempts ended on HTTP 525
+  errors of the inference endpoint; the results report them as recorded, with a
+  sensitivity check without them.
+- "Stopped without full success" stands in for the stopping study's final
+  reports on an unverified repair, and the turns after a verified repair are
+  not computed.
+- Only the Qwen3.5 9B teacher's adapters are trained and run.
 
 ## Evidence
 
-- [raw/run-20261126-002517-lora-qwen35-9b-data/](raw/run-20261126-002517-lora-qwen35-9b-data/):
-  `session.json` (commit, data revision, settings) and each variant's
-  `metrics.json` (training log, sweep, held-out losses per epoch and per
-  attempt) and `log.txt`.
+Each results file lists its training run and benchmark runs, with links to
+[raw/](raw/). The base models' runs do not depend on a teacher; they are
+listed in [results-qwen35-9b-data.md](results-qwen35-9b-data.md#evidence) and
+serve as the base for both teachers' adapters.
