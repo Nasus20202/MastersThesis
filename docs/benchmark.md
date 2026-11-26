@@ -71,7 +71,7 @@ Every condition has bash and the file tools in the sandbox. The conditions diffe
 | Fine-tuning | The prompt condition on a model with a LoRA adapter trained on agent trajectories from the development scenarios; all four models (D-053, D-054)                                                                                                                   |
 | Harness     | The skills and `search_docs` together under one combined prompt, plus a check before finishing, a patch syntax check, a server-side dry-run before writes, a `rollout_wait` tool, a resource inspection tool and a loop notice. No live external knowledge (D-048) |
 
-The fine-tuning and Harness conditions are not implemented yet. Each run records the prompt, tools, skills, retrieval configuration and model artifact it used.
+The Harness condition is not implemented yet. The fine-tuning condition is run with the model profiles `<model>-lora-<adapter>` (for example `gemma-4-e4b-lora-qwen35-9b-data`), which keep the base model's file and hash and add the adapter's repository, revision, file and SHA-256; the prompt agent is used. Each run records the prompt, tools, skills, retrieval configuration and model artifact it used.
 
 ## Runtime comparisons
 
