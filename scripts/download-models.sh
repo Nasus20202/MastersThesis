@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Downloads the configured model artifact and, when the profile declares one,
-# the multi-token prediction drafter GGUF. Both files are checksum-verified.
+# Downloads the configured model artifact and, when the profile declares them,
+# the multi-token prediction drafter GGUF and the LoRA adapter GGUF. Every file
+# is checksum-verified. An adapter in a private repository needs HF_TOKEN.
 
 set -euo pipefail
 
@@ -34,6 +35,16 @@ if [[ -n "$draft_repository" ]]; then
   : "${LLAMA_MODEL_DRAFT_REVISION:?LLAMA_MODEL_DRAFT_REVISION is required when the profile declares a drafter}"
   : "${LLAMA_MODEL_DRAFT_FILE:?LLAMA_MODEL_DRAFT_FILE is required when the profile declares a drafter}"
   : "${LLAMA_MODEL_DRAFT_SHA256:?LLAMA_MODEL_DRAFT_SHA256 is required when the profile declares a drafter}"
+fi
+
+# A LoRA adapter is optional and selected by the model profile.
+adapter_repository=${LLAMA_ADAPTER_REPOSITORY:-}
+if [[ -n "$adapter_repository" ]]; then
+  : "${LLAMA_ADAPTER_REVISION:?LLAMA_ADAPTER_REVISION is required when the profile declares an adapter}"
+  : "${LLAMA_ADAPTER_FILE:?LLAMA_ADAPTER_FILE is required when the profile declares an adapter}"
+  : "${LLAMA_ADAPTER_SHA256:?LLAMA_ADAPTER_SHA256 is required when the profile declares an adapter}"
+  : "${LLAMA_ADAPTER_DIR:?LLAMA_ADAPTER_DIR is required when the profile declares an adapter}"
+  : "${LLAMA_MODEL_NAME:?LLAMA_MODEL_NAME is required when the profile declares an adapter}"
 fi
 
 printf '[download-models] repository: %s\n' "$LLAMA_MODEL_REPOSITORY"
@@ -86,6 +97,35 @@ if [[ -n "$draft_repository" ]]; then
   fi
 
   printf '[download-models] draft download complete; SHA-256 verified\n'
+fi
+
+if [[ -n "$adapter_repository" ]]; then
+  printf '[download-models] adapter repository: %s\n' "$adapter_repository"
+  printf '[download-models] adapter revision: %s\n' "$LLAMA_ADAPTER_REVISION"
+  printf '[download-models] adapter file: %s\n' "$LLAMA_ADAPTER_FILE"
+  printf '[download-models] adapter destination: benchmark/%s\n' "$LLAMA_ADAPTER_DIR"
+
+  mkdir -p "$LLAMA_ADAPTER_DIR"
+  "$hf_command" download \
+    "$adapter_repository" \
+    "$LLAMA_ADAPTER_FILE" \
+    --revision "$LLAMA_ADAPTER_REVISION" \
+    --local-dir "$LLAMA_ADAPTER_DIR"
+
+  # Every adapter repository holds the same file name, so the file is stored
+  # under the profile's model name; the router preset refers to that path.
+  adapter_path="$LLAMA_ADAPTER_DIR/$LLAMA_MODEL_NAME.gguf"
+  mv -f "$LLAMA_ADAPTER_DIR/$LLAMA_ADAPTER_FILE" "$adapter_path"
+  rmdir --ignore-fail-on-non-empty "$LLAMA_ADAPTER_DIR/$(dirname -- "$LLAMA_ADAPTER_FILE")" 2>/dev/null || true
+
+  actual_adapter_sha256=$(sha256sum "$adapter_path" | awk '{print $1}')
+  if [[ "$actual_adapter_sha256" != "$LLAMA_ADAPTER_SHA256" ]]; then
+    printf '[download-models] error: SHA-256 mismatch for %s (expected %s, got %s)\n' \
+      "$LLAMA_ADAPTER_FILE" "$LLAMA_ADAPTER_SHA256" "$actual_adapter_sha256" >&2
+    exit 1
+  fi
+
+  printf '[download-models] adapter download complete; SHA-256 verified\n'
 fi
 
 # The retrieval embedding model is independent of the selected chat profile.

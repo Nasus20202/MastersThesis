@@ -13,6 +13,8 @@ type Metadata struct {
 	Artifact        string            `json:"artifact,omitempty"`
 	Quantization    string            `json:"quantization,omitempty"`
 	SHA256          string            `json:"sha256,omitempty"`
+	Adapter         string            `json:"adapter,omitempty"`
+	AdapterSHA256   string            `json:"adapter_sha256,omitempty"`
 	RuntimeSettings map[string]string `json:"runtime_settings,omitempty"`
 }
 

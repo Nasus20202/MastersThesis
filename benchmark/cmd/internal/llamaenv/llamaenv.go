@@ -36,6 +36,12 @@ func NewChatClient() (llama.Adapter, error) {
 		Quantization: env(envLlamaModelQuant),
 		SHA256:       env(envLlamaModelSHA256),
 	}
+	// An adapted profile names its adapter, which the server loads next to the
+	// base model file: record it with the model hash.
+	if env(envLlamaAdapterRepo) != "" {
+		metadata.Adapter = artifact(envLlamaAdapterRepo, envLlamaAdapterRevision, envLlamaAdapterFile)
+		metadata.AdapterSHA256 = env(envLlamaAdapterSHA256)
+	}
 	// A server at LLAMA_BASE_URL is started elsewhere, so the LLAMA_* runtime
 	// variables do not describe it.
 	if baseURL := env(envLlamaBaseURL); baseURL != "" {
