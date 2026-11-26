@@ -65,7 +65,8 @@ def train_variant(run_id: str, variant: str, steps: int | None) -> None:
     logs.setup()
     out = RESULTS / run_id
     try:
-        run.run(prepare.job(Variant.parse(variant), out / "data", out / variant, steps))
+        job = prepare.job(Variant.parse(variant), out / "data", out / variant, steps)
+        run.run(job, saved=results.commit)  # each epoch's adapter, in case of a cut-off
     finally:
         results.commit()  # the run's log and metrics, also after a failure
 

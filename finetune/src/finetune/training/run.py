@@ -15,6 +15,8 @@ One run, in order (``run``):
    trajectory per step (or a fixed ``--steps``, for short checks).
    After each epoch but the last, the held-out loss is measured again, to
    show whether later epochs over-train (a diagnostic, not a selection).
+   The adapter of each such epoch is saved too (``adapter-epoch-N/``), so a
+   run that is cut off keeps its finished epochs.
 6. **Evaluate** again and save the adapter.
 
 The loss is the mean cross-entropy over target tokens (``finetune.data.rows``),
@@ -23,7 +25,7 @@ recomputed in the backward pass, so the full logits matrix (sequence x
 vocabulary, 262K for Gemma) is never held in memory.
 
 Outputs in ``--out``: ``metrics.json``, rewritten after every phase so that a
-failure keeps what was measured, and ``adapter/``.
+failure keeps what was measured, ``adapter-epoch-N/`` and ``adapter/``.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ import random
 import resource
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 
 import torch
@@ -62,8 +65,9 @@ from finetune.training.trainer import Trainer, train_steps
 log = logging.getLogger(__name__)
 
 
-def run(job: Job) -> Metrics:
-    """One training run (module docstring)."""
+def run(job: Job, saved: Callable[[], None] = lambda: None) -> Metrics:
+    """One training run (module docstring); ``saved()`` after each epoch's
+    adapter is written, to persist it (the Modal volume commit)."""
     random.seed(job.settings.seed)
     torch.manual_seed(job.settings.seed)
     job.out.mkdir(parents=True, exist_ok=True)
@@ -72,7 +76,7 @@ def run(job: Job) -> Metrics:
         log.info("job %s", job)
         log.info("environment %s", metrics.environment)
         try:
-            _run(job, metrics)
+            _run(job, metrics, saved)
         except BaseException as error:
             metrics.error = "".join(traceback.format_exception_only(error)).strip()[-2000:]
             log.exception("run failed")
@@ -88,7 +92,7 @@ def host_peak_gib() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
 
 
-def _run(job: Job, metrics: Metrics) -> None:
+def _run(job: Job, metrics: Metrics, saved: Callable[[], None]) -> None:
     cfg = job.settings
     if job.student:
         student = STUDENTS[job.student]
@@ -169,6 +173,9 @@ def _run(job: Job, metrics: Metrics) -> None:
         metrics.save()
 
     def on_epoch(epoch: int) -> None:
+        model.save_pretrained(job.out / f"adapter-epoch-{epoch}")
+        log.info("epoch %d: adapter saved", epoch)
+        saved()
         if not kept_evals:
             return
         evaluation = evaluate(model, kept_evals)

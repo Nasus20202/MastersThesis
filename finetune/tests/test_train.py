@@ -266,6 +266,10 @@ def test_run_trains_evaluates_and_saves(tmp_path, checkpoint, rows, name):
     assert example["target_tokens"] > 0
     assert (out / "adapter" / "adapter_config.json").exists()
     assert (out / "adapter" / "adapter_model.safetensors").exists()
+    # One example, 8 steps: 8 epochs, and every epoch but the last keeps its adapter.
+    assert sorted(p.name for p in out.glob("adapter-epoch-*")) == [
+        f"adapter-epoch-{n}" for n in range(1, 8)
+    ]
     log = (out / "log.txt").read_text()
     assert "sweep: 128 tokens fit" in log and "step 8/8" in log and "adapter saved" in log
 
