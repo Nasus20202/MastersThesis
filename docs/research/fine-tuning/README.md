@@ -176,7 +176,7 @@ KIS 1.4.0 image. The score of an attempt is the weighted share of its passed
 checks; the macro score is the mean over scenarios of the scenario's mean
 score. Differences are adapter minus base, with the 95% paired bootstrap interval over
 scenarios of [`benchmark/cmd/analyze`](../../../benchmark/cmd/analyze)
-(10,000 draws, seed 1); [`pooled.py`](pooled.py) reproduces every number here
+(10,000 draws, seed 1); [`results.py`](results.py) reproduces every number here
 from the raw attempts and pools the four models.
 
 | Model       | Arm     | Macro score | Full success | Mean turns | Turn limit | Stopped without full success | Context or server error | Mean peak context, tokens |
@@ -265,7 +265,7 @@ fixed before training. Each adapter ran the prompt agent once on all 46
 development scenarios: the 38 trained-on scenarios and the 8 validation
 scenarios. Only Gemma 4 E4B also has a base run of the same sweep. The Qwen3.5
 9B teacher has no trajectory on `readonly-rootfs`, so its adapters trained on
-37 of the 38. [`sweep.py`](sweep.py) computes the tables from the raw attempts;
+37 of the 38. [`results.py`](results.py) computes the tables from the raw attempts;
 the intervals are those of `benchmark/cmd/analyze` (paired bootstrap over
 scenarios, 10,000 draws, seed 1).
 
@@ -432,7 +432,7 @@ to change the cost of a run.
 - Benchmark runs of the "Benchmark on Kaggle" workflow (`benchmark-kaggle.yaml`,
   prompt agent, main at `e26dda31`), each under `raw/benchmark/<run id>/` with the
   attempts, `run.json`, `results.json` and the Kaggle session statistics in
-  `server/`. [`pooled.py`](pooled.py) and [`sweep.py`](sweep.py) read them.
+  `server/`. [`results.py`](results.py) reads them.
 
 | Workflow run | Model       | Arm     | Scenarios × attempts                   | Run                                                                         |
 | ------------ | ----------- | ------- | -------------------------------------- | --------------------------------------------------------------------------- |
