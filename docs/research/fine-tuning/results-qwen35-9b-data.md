@@ -39,10 +39,13 @@ cap (mean cross-entropy over the assistant tokens; lower is better):
 - **Qwen speed.** The Qwen students trained at 762 and 721 tokens/s; the proof
   of concept's A100 runs of Qwen3.5 4B recorded 2,161 and 2,380
   ([raw](../fine-tuning-proof-of-concept/raw/)). The run's
-  environment (Python 3.15, CUDA 13.2, since the dependency update `54fbb242`)
-  locks no `triton`, which the flash-linear-attention kernels need, so the
-  linear-attention layers most likely ran the reference PyTorch code. Gemma,
-  which has no linear attention, was at the proof of concept's speed.
+  environment moved to Python 3.15 with the dependency update `54fbb242`;
+  there `flash-linear-attention` fails at import (torch 2.14 has no
+  `torch.compile` on Python 3.15), so transformers ran the linear-attention
+  layers in its reference PyTorch code. Gemma, which has no linear attention,
+  was at the proof of concept's speed. The DeepSeek-teacher Qwen adapters were
+  trained on Python 3.14 with the kernels
+  ([results-deepseek-flash-data.md](results-deepseek-flash-data.md)).
 
 ## Published adapters
 
