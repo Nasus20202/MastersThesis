@@ -114,5 +114,8 @@ def tiny_gemma(vocab):
         final_logit_softcapping=30.0,
         hidden_size_per_layer_input=8,
         vocab_size_per_layer_input=vocab,
+        # Gemma 4 otherwise gives full-attention layers a 512-wide head, which
+        # makes this tiny model's CPU attention about 30 times slower.
+        per_layer_config={},
     )
     return Gemma4ForCausalLM(config)
