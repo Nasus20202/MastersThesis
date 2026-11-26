@@ -120,10 +120,10 @@ adapters, validation, stopping, trained-on scenarios, draft acceptance and the
 evidence of their runs. [`results.py`](results.py) computes the benchmark
 tables from the raw attempts.
 
-| Teacher dataset     | Adapters                   | Results                                                |
-| ------------------- | -------------------------- | ------------------------------------------------------ |
-| Qwen3.5 9B          | trained, published and run | [results-qwen35-9b-data.md](results-qwen35-9b-data.md) |
-| DeepSeek V4.1 Flash | not trained yet            | —                                                      |
+| Teacher dataset     | Adapters                   | Results                                                          |
+| ------------------- | -------------------------- | ---------------------------------------------------------------- |
+| Qwen3.5 9B          | trained, published and run | [results-qwen35-9b-data.md](results-qwen35-9b-data.md)           |
+| DeepSeek V4.1 Flash | trained and published      | [results-deepseek-flash-data.md](results-deepseek-flash-data.md) |
 
 ## Conclusions
 
