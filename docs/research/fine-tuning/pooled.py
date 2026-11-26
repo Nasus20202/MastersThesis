@@ -42,18 +42,19 @@ MODELS = {
 }
 
 
-def attempts(runs, drop_server_errors=False):
+def attempts(runs, drop_server_errors=False, scenarios=VALIDATION):
     """scenario -> list of attempt dicts. Attempts that ended on an HTTP 5xx
     answer of the inference endpoint (not the model's doing) can be dropped."""
-    out = {s: [] for s in VALIDATION}
+    out = {s: [] for s in scenarios}
     for run in runs:
-        for scenario in VALIDATION:
+        for scenario in scenarios:
             for path in sorted((RAW / run / scenario / "prompt").glob("0*.json")):
                 attempt = json.loads(path.read_text())
                 grading = attempt["grading"]
                 agent = attempt["agent"]
                 if drop_server_errors and agent.get("error", "").startswith("llama server returned 5"):
                     continue
+                timings = [r["response"].get("timings", {}) for r in agent.get("responses", [])]
                 out[scenario].append(
                     {
                         "score": grading["score"],
@@ -61,23 +62,25 @@ def attempts(runs, drop_server_errors=False):
                         "turns": agent.get("turns", 0),
                         "termination": agent.get("termination", ""),
                         "peak": agent.get("token_usage", {}).get("peak_context_tokens", 0),
+                        "drafted": sum(t.get("draft_n", 0) for t in timings),
+                        "accepted": sum(t.get("draft_n_accepted", 0) for t in timings),
                     }
                 )
     return out
 
 
 def scenario_means(data):
-    return {s: statistics.mean(a["score"] for a in data[s]) for s in VALIDATION if data[s]}
+    return {s: statistics.mean(a["score"] for a in rows) for s, rows in data.items() if rows}
 
 
 def scenario_differences(adapter, base):
     """Per scenario, the adapter's mean score minus the base's."""
     a, b = scenario_means(adapter), scenario_means(base)
-    return [a[s] - b[s] for s in VALIDATION if s in a and s in b]
+    return [a[s] - b[s] for s in a if s in b]
 
 
 def summary(data):
-    rows = [a for s in VALIDATION for a in data[s]]
+    rows = [a for s in data for a in data[s]]
     means = scenario_means(data)
     return {
         "attempts": len(rows),
@@ -88,6 +91,8 @@ def summary(data):
         "limit": sum(a["termination"] == "turn_limit" for a in rows),
         "stopped": sum(a["termination"] == "completed" and not a["full"] for a in rows),
         "overflow": sum(a["termination"] in ("token_limit", "inference_error") for a in rows),
+        # accepted over drafted tokens of the multi-token-prediction head, over all responses
+        "draft": sum(a["accepted"] for a in rows) / max(1, sum(a["drafted"] for a in rows)),
     }
 
 
@@ -114,14 +119,14 @@ def main():
 def report(rng, resamples, drop):
     data = {name: (attempts(a, drop), attempts(b, drop)) for name, (a, b) in MODELS.items()}
 
-    print("| Model | Arm | Attempts | Macro score | Full success | Mean turns | Turn limit | Stopped without full success | Context or server error | Mean peak context |")
-    print("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    print("| Model | Arm | Attempts | Macro score | Full success | Mean turns | Turn limit | Stopped without full success | Context or server error | Mean peak context | Draft acceptance |")
+    print("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for name, (adapter, base) in data.items():
         for arm, d in (("adapter", adapter), ("base", base)):
             s = summary(d)
             print(
                 f"| {name} | {arm} | {s['attempts']} | {s['macro']:.3f} | {s['full']}/{s['attempts']} | "
-                f"{s['turns']:.1f} | {s['limit']} | {s['stopped']} | {s['overflow']} | {s['peak']:,.0f} |"
+                f"{s['turns']:.1f} | {s['limit']} | {s['stopped']} | {s['overflow']} | {s['peak']:,.0f} | {s['draft']:.3f} |"
             )
 
     print()
