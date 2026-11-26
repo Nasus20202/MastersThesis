@@ -66,7 +66,10 @@ each of the 8 validation scenarios, which are never trained on
 `hostpath-fsgroup` out. One teacher's attempts serve both adapters as the same
 reference: for the Qwen-trained adapter they also show whether what it learned
 carries over to another teacher's solutions. The loss shows whether later
-epochs over-train; it does not select anything.
+epochs over-train; it does not select anything. The same run on Qwen3.5 9B (Kaggle,
+`finetune/datasets/validation/qwen35-9b/manifest.yaml`, the failed setups
+rerun one at a time) gave 19 clean attempts, 2 or 3 per scenario; they were
+collected after the Qwen-teacher training run started and are not part of it.
 
 **Validation.** Each adapter and each base model runs the frozen prompt agent
 on the 8 validation scenarios, 3 attempts each. Reported per model: score, the
