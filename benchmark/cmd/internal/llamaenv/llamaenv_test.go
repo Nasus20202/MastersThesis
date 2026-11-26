@@ -60,6 +60,29 @@ func TestModelArtifactAndRuntimeSettings(t *testing.T) {
 	assert.Equal(t, "draft-hash", settings[envLlamaDraftSHA256])
 }
 
+func TestChatClientRecordsTheAdapter(t *testing.T) {
+	t.Setenv(envLlamaModelName, "gemma-ft")
+	t.Setenv(envLlamaBaseURL, "http://127.0.0.1:8090")
+	t.Setenv(envLlamaModelSHA256, "base-hash")
+	t.Setenv(envLlamaAdapterRepo, "me/adapter")
+	t.Setenv(envLlamaAdapterRevision, "adapter-revision")
+	t.Setenv(envLlamaAdapterFile, "adapter-f16.gguf")
+	t.Setenv(envLlamaAdapterSHA256, "adapter-hash")
+
+	adapted, err := NewChatClient()
+	require.NoError(t, err)
+	metadata := adapted.Metadata()
+	assert.Equal(t, "me/adapter@adapter-revision/adapter-f16.gguf", metadata.Adapter)
+	assert.Equal(t, "adapter-hash", metadata.AdapterSHA256)
+	assert.Equal(t, "base-hash", metadata.SHA256)
+
+	t.Setenv(envLlamaAdapterRepo, "")
+	base, err := NewChatClient()
+	require.NoError(t, err)
+	assert.Empty(t, base.Metadata().Adapter)
+	assert.Empty(t, base.Metadata().AdapterSHA256)
+}
+
 func TestNewEmbeddingClientRecordsArtifact(t *testing.T) {
 	t.Setenv(envEmbeddingModelName, "")
 	_, err := NewEmbeddingClient()
