@@ -4,20 +4,27 @@
 
 This study trains the LoRA adapters of the fine-tuned condition (D-053) and
 compares the two teachers' datasets (D-054). The method below was fixed before
-the first training run. Four adapters trained on the Qwen3.5 9B teacher's
-trajectories were trained, published and run on the benchmark (ticket #27); the
-DeepSeek V4.1 Flash teacher's adapters are not trained yet, so question 1
-compares no teachers yet.
+the first training run. The eight adapters (four models on each teacher's
+trajectories) were trained, published and run on the benchmark (ticket #27).
 
 - **On scenarios never trained on, the adapters do not yet show a gain that
-  holds across models.** Pooled over the four models the adapter scores 0.056
-  higher than its base (95% interval −0.043 to +0.149); Qwen3.5 4B gains
-  0.174 (+0.042 to +0.306), the other three do not separate from their bases.
+  holds across models.** Pooled over the four models the Qwen3.5 9B teacher's
+  adapter scores 0.056 higher than its base (95% interval −0.043 to +0.149);
+  Qwen3.5 4B gains 0.174 (+0.042 to +0.306), the other three do not separate
+  from their bases. The DeepSeek V4.1 Flash teacher's adapters score 0.010
+  lower (−0.137 to +0.116), and no interval of a single model excludes zero.
+- **Neither teacher is shown better.** The DeepSeek teacher's adapters score
+  0.066 below the Qwen teacher's on the same scenarios (−0.168 to +0.031), equal
+  or lower for each model (question 1). They also lost 19 of 96 attempts to the
+  context window (the Qwen teacher's: 3 of 96), because they write about twice
+  as much per turn.
 - **The adapters change when the agent stops.** The Gemma bases stop without a
   full repair in 19 of 24 (E2B) and 12 of 24 (E4B) attempts and never reach the
-  turn limit; their adapters stop that way in 2 and 3 and reach the turn limit in
-  14 and 8, with 3 to 4 times as many turns. The Qwen bases already keep working,
-  and their turn counts do not change.
+  turn limit; the Qwen teacher's adapters stop that way in 2 and 3 and reach the
+  turn limit in 14 and 8, with 3 to 4 times as many turns; the DeepSeek
+  teacher's stop in 15 and 6, never reach the turn limit and use 1.6 to 1.7 times
+  as many turns. The Qwen bases already keep working: the Qwen teacher's adapters
+  do not change their turn counts, the DeepSeek teacher's halve them.
 - **On the scenarios it was trained on, the Gemma 4 E4B adapter gains clearly.**
   In a single run of all 46 scenarios it scores 0.204 above its base on the 38
   trained-on scenarios (+0.033 to +0.377), against +0.035 on the validation
@@ -26,9 +33,11 @@ compares no teachers yet.
 - **One attempt per scenario is too few on the validation scenarios.** The
   single-attempt runs differ from the 3-attempt runs by up to 0.57 (Qwen3.5 4B:
   0.292 against 0.861).
-- **The held-out loss rises after epoch 1 for every model**, so 3 epochs
-  over-train by that measure (question 3). Training took 4.4 hours and cost
-  $10.21 (question 4).
+- **The held-out loss rises after the best epoch for every model** (epoch 1 for
+  the Qwen teacher's adapters, epoch 2 for the DeepSeek teacher's), so 3 epochs
+  over-train by that measure (question 3). The Qwen teacher's adapters took 4.4
+  hours and cost $10.21; the DeepSeek teacher's cost $14.98 including a
+  cancelled run and Qwen speed checks (question 4).
 
 ## Question
 
@@ -123,7 +132,7 @@ tables from the raw attempts.
 | Teacher dataset     | Adapters                   | Results                                                          |
 | ------------------- | -------------------------- | ---------------------------------------------------------------- |
 | Qwen3.5 9B          | trained, published and run | [results-qwen35-9b-data.md](results-qwen35-9b-data.md)           |
-| DeepSeek V4.1 Flash | trained and published      | [results-deepseek-flash-data.md](results-deepseek-flash-data.md) |
+| DeepSeek V4.1 Flash | trained, published and run | [results-deepseek-flash-data.md](results-deepseek-flash-data.md) |
 
 ## Conclusions
 
@@ -138,9 +147,17 @@ tables from the raw attempts.
   raise the score on the unseen scenarios by much.
 - The validation measure needs 3 attempts per scenario: single attempts move a
   model's validation score by up to 0.57.
-- Question 1 compares no teachers yet, because only the Qwen3.5 9B teacher's
-  adapters exist. Which teacher's adapters go to the final experiment is open
-  (D-060, [decision log](../../decision-log.md)).
+- The DeepSeek V4.1 Flash teacher's adapters do not give a gain on unseen
+  scenarios either (pooled −0.010, −0.137 to +0.116), and they score no higher
+  than the Qwen3.5 9B teacher's (pooled −0.066, −0.168 to +0.031): question 1
+  shows no better teacher. Their held-out loss on DeepSeek's solutions is far
+  lower and does not predict the score.
+- The DeepSeek teacher's adapters stop early less often but work half as long as
+  the Qwen teacher's and write twice as much per turn, so 19 of 96 attempts end
+  on the 32,768-token window, mostly on `hostpath-fsgroup`,
+  `stale-image-ifnotpresent` and `unschedulable-cpu-request`.
+- Which teacher's adapters go to the final experiment is open (D-060,
+  [decision log](../../decision-log.md)).
 
 ## Limitations
 
@@ -157,7 +174,11 @@ tables from the raw attempts.
 - "Stopped without full success" stands in for the stopping study's final
   reports on an unverified repair, and the turns after a verified repair are
   not computed.
-- Only the Qwen3.5 9B teacher's adapters are trained and run.
+- The DeepSeek teacher's adapters have no trained-on sweep, and the teacher
+  comparison was not part of the method fixed before training. It also differs
+  in the Python version of the Qwen3.5 4B and 9B training (3.15 without the
+  `flash-linear-attention` kernels for the Qwen teacher, 3.14 with them), and in
+  the attempts lost to the context window.
 
 ## Evidence
 
