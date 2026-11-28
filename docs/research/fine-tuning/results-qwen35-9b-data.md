@@ -155,7 +155,7 @@ score change is positive for three adapters and the largest for a Qwen adapter.
 This run was added after the validation runs and was not part of the method
 fixed before training. Each adapter ran the prompt agent once on all 46
 development scenarios: the 38 trained-on scenarios and the 8 validation
-scenarios. Only Gemma 4 E4B also has a base run of the same sweep. The Qwen3.5
+scenarios. Each base model ran the same sweep, once (see the evidence below). The Qwen3.5
 9B teacher has no trajectory on `readonly-rootfs`, so its adapters trained on
 37 of the 38. [`results.py`](results.py) computes the tables from the raw attempts;
 the intervals are those of `benchmark/cmd/analyze` (paired bootstrap over
@@ -164,86 +164,109 @@ scenarios, 10,000 draws, seed 1).
 | Model       | Arm     | Scenarios     | Macro score | Full success | Mean turns | Turn limit | Stopped without full success | Context or server error | Mean peak context, tokens |
 | ----------- | ------- | ------------- | ----------: | -----------: | ---------: | ---------: | ---------------------------: | ----------------------: | ------------------------: |
 | Gemma 4 E2B | adapter | 38 trained-on |       0.667 |        24/38 |       34.4 |         16 |                            1 |                       2 |                    13,943 |
+| Gemma 4 E2B | base    | 38 trained-on |       0.362 |        12/38 |        9.4 |          0 |                           26 |                       0 |                     5,977 |
 | Gemma 4 E2B | adapter | 8 validation  |       0.417 |          3/8 |       40.9 |          5 |                            0 |                       0 |                    16,016 |
+| Gemma 4 E2B | base    | 8 validation  |       0.125 |          1/8 |       11.6 |          0 |                            7 |                       0 |                     6,584 |
 | Gemma 4 E4B | adapter | 38 trained-on |       0.822 |        31/38 |       27.0 |          8 |                            0 |                       1 |                    10,890 |
 | Gemma 4 E4B | base    | 38 trained-on |       0.618 |        21/38 |       10.9 |          0 |                           17 |                       0 |                     6,139 |
 | Gemma 4 E4B | adapter | 8 validation  |       0.500 |          4/8 |       37.9 |          4 |                            0 |                       0 |                    17,856 |
 | Gemma 4 E4B | base    | 8 validation  |       0.646 |          4/8 |        9.9 |          0 |                            4 |                       0 |                     5,767 |
 | Qwen3.5 4B  | adapter | 38 trained-on |       0.851 |        30/38 |       25.8 |          4 |                            3 |                       1 |                    11,230 |
+| Qwen3.5 4B  | base    | 38 trained-on |       0.848 |        30/38 |       36.5 |         15 |                            2 |                       0 |                    14,030 |
 | Qwen3.5 4B  | adapter | 8 validation  |       0.292 |          2/8 |       41.2 |          5 |                            0 |                       1 |                    20,494 |
+| Qwen3.5 4B  | base    | 8 validation  |       0.688 |          5/8 |       41.1 |          3 |                            1 |                       0 |                    17,064 |
 | Qwen3.5 9B  | adapter | 38 trained-on |       0.961 |        36/38 |       22.1 |          3 |                            1 |                       0 |                     9,648 |
+| Qwen3.5 9B  | base    | 38 trained-on |       0.982 |        36/38 |       22.4 |          1 |                            2 |                       0 |                     9,541 |
 | Qwen3.5 9B  | adapter | 8 validation  |       1.000 |          8/8 |       23.9 |          0 |                            0 |                       0 |                    13,250 |
+| Qwen3.5 9B  | base    | 8 validation  |       0.812 |          6/8 |       24.9 |          1 |                            1 |                       0 |                    13,488 |
 
-On all 46 the adapters score 0.623 (E2B), 0.766 (E4B, base 0.623), 0.754
-(Qwen3.5 4B) and 0.967 (Qwen3.5 9B). All four context or server errors are
-requests above the 32,768-token window; none is an HTTP 5xx error.
+On all 46 the adapters score 0.623 (E2B), 0.766 (E4B), 0.754 (Qwen3.5 4B) and
+0.967 (Qwen3.5 9B), against 0.321, 0.623, 0.820 and 0.952 for the bases. All
+four context or server errors of the adapters are requests above the
+32,768-token window; none is an HTTP 5xx error.
 
-| Gemma 4 E4B, adapter minus base | Difference | 95% interval     | Scenarios higher / equal / lower |
-| ------------------------------- | ---------: | ---------------- | -------------------------------: |
-| 38 trained-on                   |     +0.204 | +0.033 to +0.377 |                      13 / 22 / 3 |
-| 8 validation, one attempt       |     −0.146 | −0.458 to +0.167 |                        1 / 4 / 3 |
-| All 46                          |     +0.143 | −0.014 to +0.299 |                      14 / 26 / 6 |
+| Model                   | Scenarios                 | Adapter minus base | 95% interval     | Scenarios higher / equal / lower |
+| ----------------------- | ------------------------- | -----------------: | ---------------- | -------------------------------- |
+| Gemma 4 E2B             | all 46                    |             +0.303 | +0.156 to +0.449 | 17 / 26 / 3                      |
+| Gemma 4 E2B             | 38 trained-on             |             +0.305 | +0.140 to +0.476 | 14 / 21 / 3                      |
+| Gemma 4 E2B             | 8 validation, one attempt |             +0.292 | +0.042 to +0.625 | 3 / 5 / 0                        |
+| Gemma 4 E4B             | all 46                    |             +0.143 | −0.018 to +0.301 | 14 / 26 / 6                      |
+| Gemma 4 E4B             | 38 trained-on             |             +0.204 | +0.029 to +0.375 | 13 / 22 / 3                      |
+| Gemma 4 E4B             | 8 validation, one attempt |             −0.146 | −0.479 to +0.167 | 1 / 4 / 3                        |
+| Qwen3.5 4B              | all 46                    |             −0.066 | −0.199 to +0.066 | 6 / 30 / 10                      |
+| Qwen3.5 4B              | 38 trained-on             |             +0.003 | −0.129 to +0.137 | 5 / 27 / 6                       |
+| Qwen3.5 4B              | 8 validation, one attempt |             −0.396 | −0.771 to +0.000 | 1 / 3 / 4                        |
+| Qwen3.5 9B              | all 46                    |             +0.015 | −0.057 to +0.087 | 4 / 40 / 2                       |
+| Qwen3.5 9B              | 38 trained-on             |             −0.021 | −0.092 to +0.032 | 2 / 34 / 2                       |
+| Qwen3.5 9B              | 8 validation, one attempt |             +0.188 | +0.000 to +0.438 | 2 / 6 / 0                        |
+| All four models, pooled | all 46                    |             +0.099 | +0.033 to +0.164 | —                                |
+| All four models, pooled | 38 trained-on             |             +0.123 | +0.053 to +0.193 | —                                |
+| All four models, pooled | 8 validation, one attempt |             −0.016 | −0.167 to +0.141 | —                                |
 
-Score per scenario, one attempt each (E4B: base → adapter):
+Score per scenario, one attempt each, base → adapter:
 
-| Scenario                         | Gemma 4 E2B | Gemma 4 E4B | Qwen3.5 4B | Qwen3.5 9B |
-| -------------------------------- | ----------: | ----------: | ---------: | ---------: |
-| automount-token-disabled         |        0.00 | 0.00 → 1.00 |       0.00 |       1.00 |
-| basic-deploy-service             |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| bind-precreated-pv               |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| configmap-update-needs-reload    |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| daemonset-missing-toleration     |        1.00 | 0.00 → 0.00 |       1.00 |       1.00 |
-| deprecated-api-group             |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| gateway-httproute-basic          |        0.00 | 0.25 → 0.25 |       0.50 |       1.00 |
-| gateway-route-misconfig          |        1.00 | 0.00 → 1.00 |       1.00 |       1.00 |
-| headless-service-dns             |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| image-pull-failure               |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| immutable-configmap              |        1.00 | 0.33 → 1.00 |       1.00 |       1.00 |
-| ingress-path-routing             |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| job-backoff-exhausted            |        0.00 | 0.00 → 1.00 |       1.00 |       1.00 |
-| limitrange-defaults              |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| liveness-restart-loop            |        1.00 | 1.00 → 0.00 |       1.00 |       1.00 |
-| networkpolicy-blocked            |        0.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| networkpolicy-cross-namespace    |        0.00 | 1.00 → 0.00 |       0.00 |       0.00 |
-| networkpolicy-egress-dns         |        0.00 | 0.00 → 0.00 |       0.00 |       1.00 |
-| node-selector-no-match           |        1.00 | 0.00 → 1.00 |       1.00 |       1.00 |
-| nonroot-securitycontext          |        0.00 | 0.00 → 1.00 |       1.00 |       1.00 |
-| oom-memory-limit                 |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| overprivileged-serviceaccount    |        0.50 | 0.00 → 1.00 |       1.00 |       1.00 |
-| private-registry-pull-secret     |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| psa-restricted-namespace         |        0.33 | 0.67 → 1.00 |       1.00 |       1.00 |
-| pvc-pending                      |        1.00 | 1.00 → 0.00 |       1.00 |       1.00 |
-| qos-guaranteed-requests          |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| readiness-probe-breaks-endpoints |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| readonly-rootfs (no Qwen data)   |        0.00 | 0.00 → 0.00 |       0.00 |       0.50 |
-| resourcequota-blocked            |        1.00 | 0.75 → 1.00 |       1.00 |       1.00 |
-| rollback-bad-release             |        0.00 | 0.50 → 1.00 |       1.00 |       1.00 |
-| secret-ref-mismatch              |        1.00 | 0.00 → 1.00 |       0.67 |       1.00 |
-| service-targetport-mismatch      |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| sidecar-shared-volume            |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| startup-probe-slow-app           |        1.00 | 0.00 → 1.00 |       1.00 |       1.00 |
-| statefulset-headless-service     |        0.00 | 0.00 → 1.00 |       0.50 |       1.00 |
-| statefulset-volumeclaim          |        0.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| stuck-terminating-pod            |        1.00 | 1.00 → 1.00 |       0.67 |       1.00 |
-| taint-toleration-placement       |        0.50 | 1.00 → 1.00 |       1.00 |       1.00 |
-| _validation scenarios_           |             |             |            |            |
-| antiaffinity-unschedulable       |        1.00 | 0.00 → 0.00 |       0.00 |       1.00 |
-| configmap-missing-key            |        1.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| container-crash-loop             |        0.00 | 1.00 → 0.00 |       0.00 |       1.00 |
-| dns-name-resolution              |        0.00 | 1.00 → 1.00 |       1.00 |       1.00 |
-| hostpath-fsgroup                 |        0.33 | 0.33 → 0.00 |       0.00 |       1.00 |
-| missing-rbac-binding             |        0.00 | 1.00 → 1.00 |       0.00 |       1.00 |
-| stale-image-ifnotpresent         |        0.00 | 0.33 → 1.00 |       0.33 |       1.00 |
-| unschedulable-cpu-request        |        0.00 | 0.50 → 0.00 |       0.00 |       1.00 |
+| Scenario                                | Gemma 4 E2B | Gemma 4 E4B |  Qwen3.5 4B |  Qwen3.5 9B |
+| --------------------------------------- | ----------: | ----------: | ----------: | ----------: |
+| automount-token-disabled                | 0.00 → 0.00 | 0.00 → 1.00 | 1.00 → 0.00 | 1.00 → 1.00 |
+| basic-deploy-service                    | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| bind-precreated-pv                      | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| configmap-update-needs-reload           | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| daemonset-missing-toleration            | 0.00 → 1.00 | 0.00 → 0.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| deprecated-api-group                    | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| gateway-httproute-basic                 | 0.25 → 0.00 | 0.25 → 0.25 | 1.00 → 0.50 | 1.00 → 1.00 |
+| gateway-route-misconfig                 | 0.00 → 1.00 | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| headless-service-dns                    | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| image-pull-failure                      | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| immutable-configmap                     | 0.33 → 1.00 | 0.33 → 1.00 | 0.33 → 1.00 | 1.00 → 1.00 |
+| ingress-path-routing                    | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| job-backoff-exhausted                   | 1.00 → 0.00 | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| limitrange-defaults                     | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| liveness-restart-loop                   | 0.00 → 1.00 | 1.00 → 0.00 | 0.00 → 1.00 | 1.00 → 1.00 |
+| networkpolicy-blocked                   | 0.00 → 0.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| networkpolicy-cross-namespace           | 0.00 → 0.00 | 1.00 → 0.00 | 1.00 → 0.00 | 1.00 → 0.00 |
+| networkpolicy-egress-dns                | 0.00 → 0.00 | 0.00 → 0.00 | 0.80 → 0.00 | 0.80 → 1.00 |
+| node-selector-no-match                  | 0.00 → 1.00 | 0.00 → 1.00 | 0.00 → 1.00 | 1.00 → 1.00 |
+| nonroot-securitycontext                 | 0.00 → 0.00 | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| oom-memory-limit                        | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| overprivileged-serviceaccount           | 0.50 → 0.50 | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| private-registry-pull-secret            | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| psa-restricted-namespace                | 0.33 → 0.33 | 0.67 → 1.00 | 0.33 → 1.00 | 1.00 → 1.00 |
+| pvc-pending                             | 0.00 → 1.00 | 1.00 → 0.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| qos-guaranteed-requests                 | 0.33 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| readiness-probe-breaks-endpoints        | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| readonly-rootfs (no teacher data)       | 0.00 → 0.00 | 0.00 → 0.00 | 0.00 → 0.00 | 1.00 → 0.50 |
+| resourcequota-blocked                   | 1.00 → 1.00 | 0.75 → 1.00 | 0.25 → 1.00 | 1.00 → 1.00 |
+| rollback-bad-release                    | 0.00 → 0.00 | 0.50 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| secret-ref-mismatch                     | 0.00 → 1.00 | 0.00 → 1.00 | 1.00 → 0.67 | 1.00 → 1.00 |
+| service-targetport-mismatch             | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| sidecar-shared-volume                   | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| startup-probe-slow-app                  | 0.00 → 1.00 | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| statefulset-headless-service            | 0.00 → 0.00 | 0.00 → 1.00 | 0.50 → 0.50 | 1.00 → 1.00 |
+| statefulset-volumeclaim                 | 0.00 → 0.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| stuck-terminating-pod                   | 0.00 → 1.00 | 1.00 → 1.00 | 1.00 → 0.67 | 1.00 → 1.00 |
+| taint-toleration-placement              | 1.00 → 0.50 | 1.00 → 1.00 | 1.00 → 1.00 | 0.50 → 1.00 |
+| antiaffinity-unschedulable (validation) | 0.00 → 1.00 | 0.00 → 0.00 | 0.00 → 0.00 | 1.00 → 1.00 |
+| configmap-missing-key (validation)      | 1.00 → 1.00 | 1.00 → 1.00 | 0.50 → 1.00 | 0.50 → 1.00 |
+| container-crash-loop (validation)       | 0.00 → 0.00 | 1.00 → 0.00 | 1.00 → 0.00 | 1.00 → 1.00 |
+| dns-name-resolution (validation)        | 0.00 → 0.00 | 1.00 → 1.00 | 1.00 → 1.00 | 1.00 → 1.00 |
+| hostpath-fsgroup (validation)           | 0.00 → 0.33 | 0.33 → 0.00 | 1.00 → 0.00 | 0.00 → 1.00 |
+| missing-rbac-binding (validation)       | 0.00 → 0.00 | 1.00 → 1.00 | 1.00 → 0.00 | 1.00 → 1.00 |
+| stale-image-ifnotpresent (validation)   | 0.00 → 0.00 | 0.33 → 1.00 | 1.00 → 0.33 | 1.00 → 1.00 |
+| unschedulable-cpu-request (validation)  | 0.00 → 1.00 | 0.50 → 0.00 | 0.00 → 0.00 | 1.00 → 1.00 |
 
-- **The E4B adapter gains on the scenarios it was trained on, not on the
-  others.** On the 38 trained-on scenarios it scores 0.204 above its base, and
-  the interval excludes zero. On the 8 validation scenarios it gains 0.035 over
-  3 attempts and loses 0.146 in the sweep's single attempt. The two scenario
-  sets are about equally hard for the base (0.618 and 0.646 in the sweep), so
-  for E4B the adapter learned mostly the training scenarios. The other three
-  models have no base sweep, so their trained-on scores show only how well each
-  adapter solves the scenarios it was trained on.
+- **The Gemma adapters gain on the scenarios they were trained on; the Qwen
+  adapters do not, because their bases already solve those scenarios.** On the 38
+  trained-on scenarios Gemma 4 E2B gains 0.305 and Gemma 4 E4B 0.204, and both
+  intervals exclude zero. Qwen3.5 4B (+0.003) and 9B (−0.021) do not separate
+  from their bases, which already score 0.848 and 0.982 there. Pooled over the
+  four models the adapters gain 0.123 (+0.053 to +0.193) on the trained-on
+  scenarios and lose 0.016 (−0.167 to +0.141) on the validation scenarios in
+  the sweep's single attempt.
+- **For both Gemma models the trained-on gain is several times the validation
+  gain.** Over 3 attempts the validation gains are 0.069 (E2B) and 0.035 (E4B),
+  against 0.305 and 0.204 on the trained-on scenarios. The two scenario sets are
+  about equally hard for the E4B base (0.618 and 0.646 in the sweep), so the
+  Gemma adapters learned mostly the training scenarios.
 - **Where E4B gains and loses.** It gains on 13 trained-on scenarios, 9 of them
   from 0. It loses on 3 (`liveness-restart-loop`, `networkpolicy-cross-namespace`,
   `pvc-pending`); on each the base made a full repair in 7 to 10 turns, while the
@@ -256,10 +279,13 @@ Score per scenario, one attempt each (E4B: base → adapter):
   turns listing resources before it reached the RBAC objects. Qwen3.5 9B solved
   `unschedulable-cpu-request` in the single attempt, where two of its three
   validation attempts had ended on HTTP 525 errors.
-- **The stopping change holds on the trained-on scenarios.** The E4B base ended
-  17 of 38 with its own report and less than full marks, the adapter none; the
-  adapter reached the turn limit 8 times and used 2.5 times the turns. The E2B
-  adapter reached the turn limit in 16 of 38.
+- **The stopping change holds on the trained-on scenarios, and for Qwen it
+  runs the other way.** The E2B and E4B bases ended 26 and 17 of 38 with their
+  own report and less than full marks, the adapters 1 and 0; the adapters
+  reached the turn limit 16 and 8 times, the bases never, and the E4B adapter
+  used 2.5 times the turns. Qwen3.5 4B's base reached the turn limit in 15 of 38
+  and its adapter in 4 (36.5 against 25.8 turns); Qwen3.5 9B's base in 1 and its
+  adapter in 3.
 - **`readonly-rootfs`, not in the Qwen teacher's data,** stays at 0 for every
   model except Qwen3.5 9B (0.50).
 
@@ -269,15 +295,15 @@ The share of the multi-token-prediction head's drafted tokens that the model
 accepted, over all responses of the arm (`draft_n_accepted` over `draft_n` of
 llama.cpp's per-response timings):
 
-| Model       | Validation, base | Validation, adapter | First sweep, base | First sweep, adapter |
-| ----------- | ---------------: | ------------------: | ----------------: | -------------------: |
-| Gemma 4 E2B |            0.405 |               0.397 |                 — |                0.438 |
-| Gemma 4 E4B |            0.535 |               0.508 |             0.578 |                0.527 |
-| Qwen3.5 4B  |            0.615 |               0.612 |                 — |                0.632 |
-| Qwen3.5 9B  |            0.678 |               0.655 |                 — |                0.683 |
+| Model       | Validation, base | Validation, adapter | Sweep, base | Sweep, adapter |
+| ----------- | ---------------: | ------------------: | ----------: | -------------: |
+| Gemma 4 E2B |            0.405 |               0.397 |       0.425 |          0.438 |
+| Gemma 4 E4B |            0.535 |               0.508 |       0.578 |          0.527 |
+| Qwen3.5 4B  |            0.615 |               0.612 |       0.639 |          0.632 |
+| Qwen3.5 9B  |            0.678 |               0.655 |       0.694 |          0.683 |
 
-Each adapter accepts fewer drafts than its base on the same scenarios, by
-0.003 to 0.051. A likely cause is that the drafts come from the base model's
+On the validation scenarios each adapter accepts fewer drafts than its base, by
+0.003 to 0.051 (the sweeps: by 0.007 to 0.051, except Gemma 4 E2B, 0.013 more). A likely cause is that the drafts come from the base model's
 prediction head, which the adapter was not trained on. The loss is too small
 to change the cost of a run.
 
@@ -308,6 +334,15 @@ to change the cost of a run.
 | 45782063459  | Gemma 4 E2B | adapter | 46 × 1                                 | [run-2026-11-26-09-10-02-271Z](raw/benchmark/run-2026-11-26-09-10-02-271Z/) |
 | 45857870095  | Qwen3.5 4B  | adapter | 46 × 1                                 | [run-2026-11-26-17-55-55-486Z](raw/benchmark/run-2026-11-26-17-55-55-486Z/) |
 | 45872770169  | Qwen3.5 9B  | adapter | 46 × 1                                 | [run-2026-11-26-18-54-30-234Z](raw/benchmark/run-2026-11-26-18-54-30-234Z/) |
+| 46090791919  | Gemma 4 E2B | base    | 46 × 1                                 | [run-2026-11-28-03-02-06-835Z](raw/benchmark/run-2026-11-28-03-02-06-835Z/) |
+| 46103788997  | Qwen3.5 4B  | base    | 46 × 1                                 | [run-2026-11-28-08-01-55-125Z](raw/benchmark/run-2026-11-28-08-01-55-125Z/) |
+| 46103791587  | Qwen3.5 9B  | base    | 46 × 1                                 | [run-2026-11-28-08-50-19-962Z](raw/benchmark/run-2026-11-28-08-50-19-962Z/) |
+
+The three base sweeps of 2026-11-28 ran from branch `docs/26-deepseek-teacher-results`
+at `d215150f`, after the first dispatch of four Qwen sweeps (16 shards) failed in
+seconds because a Qwen session has 14 slots; those four runs hold no attempts and
+were repeated with 12 shards. They also serve as the base of the DeepSeek
+teacher's adapters.
 
 A workflow run marked failed or cancelled can still hold every attempt: a
 failed shard is usually one attempt ended by the context window, and a

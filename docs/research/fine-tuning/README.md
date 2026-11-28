@@ -25,11 +25,16 @@ trajectories) were trained, published and run on the benchmark (ticket #27).
   teacher's stop in 15 and 6, never reach the turn limit and use 1.6 to 1.7 times
   as many turns. The Qwen bases already keep working: the Qwen teacher's adapters
   do not change their turn counts, the DeepSeek teacher's halve them.
-- **On the scenarios it was trained on, the Gemma 4 E4B adapter gains clearly.**
-  In a single run of all 46 scenarios it scores 0.204 above its base on the 38
-  trained-on scenarios (+0.033 to +0.377), against +0.035 on the validation
-  scenarios: it learned mostly the training scenarios. The other models have
-  no base run on the trained-on scenarios.
+- **On the scenarios they were trained on, the Gemma adapters gain clearly and
+  the Qwen adapters do not.** In a single run of all 46 scenarios the Qwen
+  teacher's adapters score 0.305 (Gemma 4 E2B) and 0.204 (E4B) above their bases
+  on the 38 trained-on scenarios, against +0.069 and +0.035 on the validation
+  scenarios over 3 attempts: they learned mostly the training scenarios. The
+  Qwen3.5 4B and 9B bases already score 0.848 and 0.982 there, and the adapters
+  do not separate from them. Pooled over the four models the gain is 0.123
+  (+0.053 to +0.193) for the Qwen teacher's adapters and 0.007 (−0.075 to +0.086)
+  for the DeepSeek teacher's, which score 0.122 below the Qwen teacher's on the
+  scenarios both trained on (−0.202 to −0.043).
 - **One attempt per scenario is too few on the validation scenarios.** The
   single-attempt runs differ from the 3-attempt runs by up to 0.57 (Qwen3.5 4B:
   0.292 against 0.861).
@@ -138,9 +143,11 @@ tables from the raw attempts.
 
 - The Qwen3.5 9B-teacher adapters do not give a gain on unseen scenarios that
   holds across the four models: the pooled validation difference is +0.056
-  (−0.043 to +0.149), and only Qwen3.5 4B's gain excludes zero. Where a base
-  comparison on the trained-on scenarios exists (E4B), the gain is there and
-  is larger, so the adapters mainly reproduce the training scenarios.
+  (−0.043 to +0.149), and only Qwen3.5 4B's gain excludes zero. On the
+  trained-on scenarios the Gemma adapters gain 0.305 (E2B) and 0.204 (E4B), several
+  times their validation gains, so they mainly reproduce the training scenarios;
+  the Qwen adapters do not gain there, because their bases already score 0.848
+  and 0.982.
 - The clearest effect is on Gemma's stopping: the adapters no longer stop
   early, on trained-on and unseen scenarios alike. They work 3 to 4 times longer
   and reach the turn limit instead, which costs context and time but does not
@@ -156,6 +163,11 @@ tables from the raw attempts.
   the Qwen teacher's and write twice as much per turn, so 19 of 96 attempts end
   on the 32,768-token window, mostly on `hostpath-fsgroup`,
   `stale-image-ifnotpresent` and `unschedulable-cpu-request`.
+- On the trained-on scenarios the DeepSeek teacher's adapters gain 0.007 over
+  their bases pooled and score 0.122 below the Qwen teacher's adapters (−0.202 to
+  −0.043; only Gemma 4 E2B's interval alone excludes zero). Together with the
+  validation result this leaves the Qwen3.5 9B teacher no worse and, on the
+  scenarios both trained on, better; the decision stays with the researcher.
 - Which teacher's adapters go to the final experiment is open (D-060,
   [decision log](../../decision-log.md)).
 
@@ -163,19 +175,19 @@ tables from the raw attempts.
 
 - 8 validation scenarios with 3 attempts each: one scenario moves a macro score
   by up to 0.125, and most per-model intervals include zero.
-- The first sweep has one attempt per scenario, and a base run for Gemma 4 E4B
-  only. The development-suite prompt results
+- The sweeps have one attempt per scenario, and a single attempt moves a
+  validation score by up to 0.57. The development-suite prompt results
   ([Kaggle development suite](../kaggle-development-suite/README.md)) are no
-  base for the other three: they predate the scenario changes of 2026-11-18
-  (D-051), and the E4B base scored 0.674 there against 0.623 here.
+  base: they predate the scenario changes of 2026-11-18 (D-051), and the E4B base
+  scored 0.674 there against 0.623 here.
 - Two of the Qwen3.5 9B adapter's 24 validation attempts ended on HTTP 525
   errors of the inference endpoint; the results report them as recorded, with a
   sensitivity check without them.
 - "Stopped without full success" stands in for the stopping study's final
   reports on an unverified repair, and the turns after a verified repair are
   not computed.
-- The DeepSeek teacher's adapters have no trained-on sweep, and the teacher
-  comparison was not part of the method fixed before training. It also differs
+- The teacher comparison and the sweeps were not part of the method fixed before
+  training. The comparison also differs
   in the Python version of the Qwen3.5 4B and 9B training (3.15 without the
   `flash-linear-attention` kernels for the Qwen teacher, 3.14 with them), and in
   the attempts lost to the context window.
