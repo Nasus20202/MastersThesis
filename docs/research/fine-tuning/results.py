@@ -6,12 +6,11 @@ Reads the raw attempts under raw/benchmark/<run-id>/<scenario>/prompt/NNN.json.
 1. Validation runs (8 scenarios, 3 attempts): per model (adapter and base), per
    scenario, and pooled over the four models; then the same without the
    attempts that ended on an HTTP 5xx answer of the inference endpoint.
-2. First sweeps (46 scenarios, 1 attempt): per model, split into the 38
-   trained-on and the 8 validation scenarios, against the base where a base
-   sweep exists (Qwen3.5 9B teacher only).
+2. Sweeps (46 scenarios, 1 attempt): per model, split into the 38 trained-on
+   and the 8 validation scenarios, against the base sweep of the same model.
 3. With --teacher deepseek-flash-data: the validation tables of the DeepSeek
-   V4.1 Flash teacher's adapters, and their difference to the Qwen3.5 9B
-   teacher's adapters on the same scenarios.
+   V4.1 Flash teacher's adapters, their difference to the Qwen3.5 9B teacher's
+   adapters on the same scenarios, and the sweep tables of those adapters.
 
 The paired bootstrap resamples the scenarios with replacement, as
 benchmark/cmd/analyze does (10,000 draws, seed 1); the pooled difference is the
@@ -157,6 +156,10 @@ def main():
         report(rng, args.resamples, False, DEEPSEEK_RUNS)
         print()
         teacher_report(random.Random(args.seed), args.resamples)
+        print()
+        sweep_report(random.Random(args.seed), args.resamples, DEEPSEEK_SWEEP_RUNS)
+        print()
+        sweep_teacher_report(random.Random(args.seed), args.resamples)
         return
 
     for drop in (False, True):
@@ -168,7 +171,12 @@ def main():
             )
             print()
     print()
-    sweep_report(random.Random(args.seed), args.resamples)
+    sweep_report(
+        random.Random(args.seed),
+        args.resamples,
+        QWEN_SWEEP_RUNS,
+        UNTRAINED_BY_QWEN_TEACHER,
+    )
 
 
 def report(rng, resamples, drop, runs=None):
@@ -259,16 +267,65 @@ def teacher_report(rng, resamples):
     print(f"| All four models, pooled | {point:+.3f} | [{lo:+.3f}, {hi:+.3f}] |")
 
 
-# First sweeps: model -> (adapter run, base run or None).
-SWEEP_RUNS = {
-    "Gemma 4 E2B": ("run-2026-11-26-09-10-02-271Z", None),
-    "Gemma 4 E4B": ("run-2026-11-26-08-04-10-096Z", "run-2026-11-26-08-39-29-198Z"),
-    "Qwen3.5 4B": ("run-2026-11-26-17-55-55-486Z", None),
-    "Qwen3.5 9B": ("run-2026-11-26-18-54-30-234Z", None),
+def sweep_teacher_report(rng, resamples):
+    """DeepSeek-teacher adapter minus Qwen-teacher adapter on the sweeps. The
+    trained-on group leaves out the scenario the Qwen teacher has no data for."""
+    every = scenarios_of(next(iter(DEEPSEEK_SWEEP_RUNS.values())))
+    groups = {
+        "37 trained-on by both": [
+            s for s in every if s not in VALIDATION and s != UNTRAINED_BY_QWEN_TEACHER
+        ],
+        "8 validation, one attempt": VALIDATION,
+    }
+    print("| Model | Scenarios | DeepSeek minus Qwen3.5 9B teacher | 95% CI |")
+    print("| --- | --- | ---: | --- |")
+    draws = {group: {} for group in groups}
+    points = {group: [] for group in groups}
+    for name, deepseek_run in DEEPSEEK_SWEEP_RUNS.items():
+        for group, scen in groups.items():
+            pool = scenario_differences(
+                attempts([deepseek_run], scenarios=scen),
+                attempts([QWEN_SWEEP_RUNS[name]], scenarios=scen),
+            )
+            draws[group][name] = [
+                statistics.mean(rng.choice(pool) for _ in pool)
+                for _ in range(resamples)
+            ]
+            points[group].append(statistics.mean(pool))
+            lo, hi = ci(draws[group][name])
+            print(
+                f"| {name} | {group} | {statistics.mean(pool):+.3f} | [{lo:+.3f}, {hi:+.3f}] |"
+            )
+    for group in groups:
+        pooled = [statistics.mean(d) for d in zip(*draws[group].values())]
+        lo, hi = ci(pooled)
+        print(
+            f"| All four models, pooled | {group} | {statistics.mean(points[group]):+.3f} | [{lo:+.3f}, {hi:+.3f}] |"
+        )
+
+
+# Sweeps (46 scenarios, 1 attempt). The base sweeps serve both teachers' adapters.
+BASE_SWEEP_RUNS = {
+    "Gemma 4 E2B": "run-2026-11-28-03-02-06-835Z",
+    "Gemma 4 E4B": "run-2026-11-26-08-39-29-198Z",
+    "Qwen3.5 4B": "run-2026-11-28-08-01-55-125Z",
+    "Qwen3.5 9B": "run-2026-11-28-08-50-19-962Z",
+}
+QWEN_SWEEP_RUNS = {
+    "Gemma 4 E2B": "run-2026-11-26-09-10-02-271Z",
+    "Gemma 4 E4B": "run-2026-11-26-08-04-10-096Z",
+    "Qwen3.5 4B": "run-2026-11-26-17-55-55-486Z",
+    "Qwen3.5 9B": "run-2026-11-26-18-54-30-234Z",
+}
+DEEPSEEK_SWEEP_RUNS = {
+    "Gemma 4 E2B": "run-2026-11-28-02-35-38-738Z",
+    "Gemma 4 E4B": "run-2026-11-28-01-51-06-597Z",
+    "Qwen3.5 4B": "run-2026-11-28-05-23-34-958Z",
+    "Qwen3.5 9B": "run-2026-11-28-06-58-36-772Z",
 }
 
 # The Qwen3.5 9B teacher has no trajectory on readonly-rootfs, so its adapters
-# trained on 37 of the 38 (training-dataset study).
+# trained on 37 of the 38 (training-dataset study); DeepSeek covers all 38.
 UNTRAINED_BY_QWEN_TEACHER = "readonly-rootfs"
 
 
@@ -276,9 +333,8 @@ def scenarios_of(run):
     return sorted(p.parent.parent.name for p in (RAW / run).glob("*/prompt/0*.json"))
 
 
-def sweep_report(rng, resamples):
-
-    every = scenarios_of(next(iter(SWEEP_RUNS.values()))[0])
+def sweep_report(rng, resamples, adapter_runs, untrained=None):
+    every = scenarios_of(next(iter(adapter_runs.values())))
     trained = [s for s in every if s not in VALIDATION]
     groups = {"all 46": every, "38 trained-on": trained, "8 validation": VALIDATION}
     data = {
@@ -289,7 +345,8 @@ def sweep_report(rng, resamples):
             )
             for group, scen in groups.items()
         }
-        for name, (a, b) in SWEEP_RUNS.items()
+        for name, a in adapter_runs.items()
+        for b in [BASE_SWEEP_RUNS[name]]
     }
 
     print(
@@ -312,20 +369,27 @@ def sweep_report(rng, resamples):
         "| Model | Scenarios | Adapter minus base | 95% CI | Higher / equal / lower |"
     )
     print("| --- | --- | ---: | --- | --- |")
+    draws = {group: {} for group in groups}
+    points = {group: [] for group in groups}
     for name, by_group in data.items():
         for group, (adapter, base) in by_group.items():
-            if base is None:
-                continue
             pool = scenario_differences(adapter, base)
-            draws = [
+            draws[group][name] = [
                 statistics.mean(rng.choice(pool) for _ in pool)
                 for _ in range(resamples)
             ]
-            lo, hi = ci(draws)
+            points[group].append(statistics.mean(pool))
+            lo, hi = ci(draws[group][name])
             counts = f"{sum(d > 0 for d in pool)} / {sum(d == 0 for d in pool)} / {sum(d < 0 for d in pool)}"
             print(
                 f"| {name} | {group} | {statistics.mean(pool):+.3f} | [{lo:+.3f}, {hi:+.3f}] | {counts} |"
             )
+    for group in groups:
+        pooled = [statistics.mean(d) for d in zip(*draws[group].values())]
+        lo, hi = ci(pooled)
+        print(
+            f"| All four models, pooled | {group} | {statistics.mean(points[group]):+.3f} | [{lo:+.3f}, {hi:+.3f}] | |"
+        )
 
     print()
     print("Score per scenario (one attempt; base → adapter where a base sweep exists):")
@@ -343,8 +407,8 @@ def sweep_report(rng, resamples):
         mark = (
             " (validation)"
             if s in VALIDATION
-            else " (not in Qwen-teacher data)"
-            if s == UNTRAINED_BY_QWEN_TEACHER
+            else " (no teacher data)"
+            if s == untrained
             else ""
         )
         print(f"| {s}{mark} | " + " | ".join(cells) + " |")
